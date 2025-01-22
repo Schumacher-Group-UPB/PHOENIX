@@ -8,7 +8,7 @@ PHOENIX is a high-performance, CUDA-accelerated solver for the nonlinear two-dim
 
 The project comes with a variety of examples, including Jupyter Notebooks and MATLAB files, that demonstrate how to use PHOENIX in scientific research. You can explore these examples in the [examples folder](/examples/). Simply download one of the precompiled binaries from the [latest release](https://github.com/Schumacher-Group-UPB/PHOENIX/releases/) and place it in the same folder as the example you wish to run. Make sure to edit the configuration files to match your executable.
 
-If you would like to use PHOENIX or if you should be missing certain functionalities in the code, please do not hesitate to contact us via Email: jawi1@campus.uni-paderborn.de
+If you would like to use PHOENIX or if you should be missing certain functionalities in the code, please do not hesitate to contact us by Email: jawi1@campus.uni-paderborn.de.
 We'd appreciate your feedback and should you need technical support we would be happy to help.
 
 ## Table of Contents
