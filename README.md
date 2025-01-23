@@ -4,9 +4,9 @@
 # Highly optimized Solver for the Nonlinear 2D Schrödinger Equation (GPU or CPU)
 [![arXiv](https://img.shields.io/badge/arXiv-2411.18341-b31b1b.svg)](https://arxiv.org/abs/2411.18341)
 
-PHOENIX is a high-performance, CUDA-accelerated solver for the nonlinear two-dimensional Schrödinger equation. Originally designed for simulating polariton condensates, it has a broad range of applications. 
+PHOENIX is a high-performance, solver for the nonlinear two-dimensional Schrödinger equation that can operate on CPUs and GPUs (CUDA-accelerated). Originally designed for simulating exciton-polariton condensates, it has a broad range of applications in fields of nonlinear optics and atomic condensates. 
 
-The project comes with a variety of examples, including Jupyter Notebooks and MATLAB files, that demonstrate how to use PHOENIX in scientific research. You can explore these examples in the [examples folder](/examples/). Simply download one of the precompiled binaries from the [latest release](https://github.com/Schumacher-Group-UPB/PHOENIX/releases/) and place it in the same folder as the example you wish to run. Make sure to edit the configuration files to match your executable.
+The project comes with a variety of examples, including Jupyter Notebooks and Matlab files, that demonstrate how to use PHOENIX in scientific research. You can explore these examples in the [examples folder](/examples/). Simply download one of the precompiled binaries from the [latest release](https://github.com/Schumacher-Group-UPB/PHOENIX/releases/) and place it in the same folder as the example you wish to run. Make sure to edit the configuration files to match your executable.
 
 If you would like to use PHOENIX or if you are missing certain functionalities in the code, please do not hesitate to [contact us by Email](mailto:jawi1@campus.uni-paderborn.de).
 We'd appreciate your feedback and should you need technical support we would be happy to help.
@@ -37,7 +37,7 @@ To run PHOENIX, the following components are required:
 
 ### Mandatory
 - **Windows**: [MSVC](https://visualstudio.microsoft.com/de/downloads/)  
-  **Linux**: [GCC](https://gcc.gnu.org/)
+  **Linux or Mac**: [GCC](https://gcc.gnu.org/)
 - [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)  
   Ensure the `nvcc` compiler is installed and added to your PATH.
   
@@ -71,7 +71,7 @@ To run PHOENIX, the following components are required:
 
 If the precompiled versions don’t meet your needs, or you wish to modify the source code, you can build PHOENIX yourself.
 
-### Build with SFML Rendering
+### Build with SFML Rendering (to generate "live" output)
 1. **Clone the Repository**
    ```bash
    git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
