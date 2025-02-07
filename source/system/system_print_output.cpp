@@ -1,6 +1,9 @@
 #include <ctime>
 #include <iomanip> // std::setprecision, std::setw, std::setfill
 #include <algorithm>
+#include <ranges> // std::views::split
+#include <any>
+#include <map>
 #include "system/system_parameters.hpp"
 #include "cuda/cuda_matrix_base.hpp"
 #include "misc/commandline_io.hpp"
@@ -24,7 +27,7 @@ static size_t getConsoleWidth() {
     return w.ws_col;
 }
 #endif
-static size_t console_width = std::max<size_t>( getConsoleWidth(), 100 );
+static size_t console_width = std::min<size_t>( std::max<size_t>( getConsoleWidth(), 100 ), 500 );
 
 // File-Local Configuration
 static char major_seperator = '=';
@@ -88,8 +91,405 @@ void print_name() {
     std::cout << EscapeSequence::ORANGE << PHOENIX::CLIO::centerStringRaw( ss.str(), console_width ) << EscapeSequence::RESET << std::endl;
 }
 
-void PHOENIX::SystemParameters::printHelp() {
+// We use a semi-automated approach to generate the help, documentation and final output.
+// We use a custom struct for this that includes the name, key, description, use case examples and so on.
+// We can then add new parameters to the struct. Outputting is required to be added manually, but this way we define everything
+// relevant to the variable in a single scruct, allowing for easy access, modification and expansions.
+// We use a std::map<std::string, ArgInfo> to store the parameters and their information, which unfortunately cannot be made constexpr.
+// This also gives us the ability to print expecptions to the ArgInfo in different ways if we want that.
+
+struct ArgInfo {
+    std::string name = "";
+    std::string key = "";
+    std::string unit = "";
+    std::string short_description = "";
+    std::string long_description = "";
+    std::string short_usecase = "";
+    std::string long_usecase = "";
+
+    void print( const std::any& default_value, bool verbose = true ) const {
+        const size_t L1 = std::min<size_t>( 0.3 * console_width - 1, 50 );
+        const size_t L2 = std::min<size_t>( 0.3 * console_width - 1, 50 );
+        const size_t L3 = console_width - 15 - L2 - L1;
+
+        std::string default_str = "";
+
+        if ( default_value.type() == typeid( int ) ) {
+            default_str = "Default is " + std::to_string( std::any_cast<int>( default_value ) ) + unit;
+        } else if ( default_value.type() == typeid( PHOENIX::Type::real ) ) {
+            default_str = "Default is " + std::to_string( std::any_cast<PHOENIX::Type::real>( default_value ) ) + unit;
+        } else if ( default_value.type() == typeid( PHOENIX::Type::complex ) ) {
+            default_str = "Default is " + std::to_string( PHOENIX::CUDA::real( std::any_cast<PHOENIX::Type::complex>( default_value ) ) ) + "+i" + std::to_string( PHOENIX::CUDA::imag( std::any_cast<PHOENIX::Type::complex>( default_value ) ) ) + unit;
+        } else if ( default_value.type() == typeid( std::string ) ) {
+            default_str = "Default is '" + std::any_cast<std::string>( default_value ) + "'" + unit;
+        }
+
+        bool include_dot = ( verbose ? long_description : short_description ).back() != '.';
+        bool first = false;
+        for ( auto description : ( verbose ? long_description : short_description ) | std::views::split( '\n' ) ) {
+            if ( !first ) {
+                std::cout << PHOENIX::CLIO::unifyLength( name, key, std::string{ std::ranges::begin( description ), std::ranges::end( description ) } + ( include_dot ? ". " : " " ) + default_str, L1, L2, L3 ) << std::endl;
+                first = true;
+            } else {
+                std::cout << PHOENIX::CLIO::unifyLength( "", "", std::string{ std::ranges::begin( description ), std::ranges::end( description ) }, L1, L2, L3 ) << std::endl;
+            }
+        }
+        for ( auto usecase : ( verbose ? long_usecase : short_usecase ) | std::views::split( '\n' ) ) {
+            std::cout << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "", "", "Example: " + std::string{ std::ranges::begin( usecase ), std::ranges::end( usecase ) }, L1, L2, L3 ) << EscapeSequence::RESET << std::endl;
+        }
+    }
+
+    void print_markdown( const std::any& default_value ) const {
+    }
+
+    void print_usecase( const std::any& default_value, bool verbose = true, bool markdown = false ) const {
+        if ( markdown )
+            print_markdown( default_value );
+        else
+            print( default_value, verbose );
+    }
+};
+
+// TODO: arginfo weg, map von map.
+// clang-format off
+const std::map<std::string_view, ArgInfo> arguments{
+    { "path", 
+        { 
+            .name{ "--path" }, 
+            .key{ "<string>" }, 
+            .short_description{ "Working folder" }, 
+            .long_description{ "Target working folder for PHOENIX generated data. If this folder does not yet exist, PHOENIX will try and create it" }, 
+            .short_usecase{ "--path 'path/to/folder'" }, 
+            .long_usecase{ "--path 'path/to/folder'" } 
+        } 
+    },
+    { "config",
+        { 
+            .name{ "--config" },
+            .key{ "<string>" },
+            .short_description{ "Loads configuration from file" },
+            .long_description{ "Loads commandline arguments from a configuration file. Multiple configurations can be superimposed by using multiple config flags. Note: the different configuration files can overwrite previous parameters" },
+            .short_usecase{ "--config 'path/to/config.txt'" },
+            .long_usecase{ "--config 'path/to/config.txt'\n--config 'path/to/basic_config.txt' --config 'path/to/specific_superimposed_config.txt'" } 
+        }
+    },
+    { "output",
+        { 
+            .name{ "--output" },
+            .key{ "<string...>" },
+            .short_description{ "Output Options. Comma-separated list." },
+            .long_description{ "Comma-separated list of things to output. Available: mat, scalar, fft, pump, mask, psi, n. Options with _plus or _minus are also supported." },
+            .short_usecase{ "--output all\n--output wavefunction,scalar,fft" },
+            .long_usecase{ "--output all (outputs all matrices and scalar data)\n--output wavefunction,fft (outputs wavefunctions and scalar data for both plus and minus modes)\n--output scalar (only output scalar data, no matrices)\n--output wavefunction_plus,fft_minus (output wavefunction of plus mode and fft matrix if minus mode)" } 
+        } 
+    },
+    { "outEvery", 
+        { 
+            .name{ "--outEvery" }, 
+            .key{ "<float>" }, 
+            .unit{ "ps" }, 
+            .short_description{ "Output Modulus" }, 
+            .long_description{ "Output plots and scalar data every [x] ps. Set this value to be smaller than the timestep dt to output every iteration" }, 
+            .short_usecase{ "--outEvery 10.0" }, 
+            .long_usecase{ "--outEvery 10.0\n--outEvery 0.001 (output every iteration)" } 
+        } 
+    },
+    { "historyMatrix",
+        { 
+            .name{ "--historyMatrix" },
+            .key{ "<int> <int> <int> <int> <int>" },
+            .short_description{ "Output Matrices at different times with startx, endx, starty, endy, and matrix increment. Saved in 'timeoutput' subfolder" },
+            .long_description{ "Outputs matrices specified in --output. Matrices are saved in the 'timeoutput' subfolder. The arguments in order include startx, endx, starty, endy, and matrix increment. The increment is used to decrease the matrix size. This feature significantly slows down the execution time due to the constant I/O, so use this carefully." },
+            .short_usecase{ "--historyMatrix 0 100 0 100 1" },
+            .long_usecase{ "--historyMatrix 0 100 0 100 1 (outputs a 100x100 submatrix)\n--historyMatrix 0 100 0 100 5 (outputs a 20x20 matrix from the 100x100 submatrix)\n--historyMatrix 250 350 250 350 1 (outputs a submatrix from inside the total matrix)" } 
+        } 
+    },
+    { "historyTime",
+        { 
+            .name{ "--historyTime" },
+            .key{ "<float> <int>" },
+            .short_description{ "Output Matrices after time, freq with decreased frequency. Saved in 'timeoutput' subfolder." },
+            .long_description{ "Outputs matrices specified in --output after starting time, then every multiple*outEvery times. Matrices are saved in the 'timeoutput' subfolder. The increment uses multiples of --outEvery to decrease the output frequency. The increment can NOT be used to increase the output frequency again. Use smaller values for --outEvery instead to increase the output frequency. This parameter doesn't do anything if no --historyMatrix was specified." },
+            .short_usecase{ "--historyTime 1000.0 2" },
+            .long_usecase{ "--historyTime 1000.0 2 (output matrices after 1000ps every 2*outEvery ps)\n--historyTime 0 1 (output matrices after right from the start every outEvery ps)" } 
+        } 
+    },
+    { "norender", 
+        { 
+            .name{ "-norender" }, 
+            .key{ "no arguments" }, 
+            .short_description{ "Disables all live graphical output" }, 
+            .long_description{ "Disables all live graphical output if passed" }, 
+            .short_usecase{ "-norender" }, .long_usecase{ "-norender" } 
+        } 
+    },
+    { "N", 
+        { 
+            .name{ "--gridsize, --N" }, 
+            .key{ "<int> <int>" }, 
+            .short_description{ "Grid Dimensions" }, 
+            .long_description{ "Grid Dimensions (N x N). The grid is used for the spatial discretization of the wavefunction." }, 
+            .short_usecase{ "--N 100 100" }, 
+            .long_usecase{ "--N 100 100 (sets the grid to 100x100)\n--N 500 1000 (sets the grid to 500x1000)" } 
+        } 
+    },
+    { "subgrids",
+        { 
+            .name{ "--subgrids, --sg" },
+            .key{ "<int> <int>" },
+            .short_description{ "Subgrid Dimensions" },
+            .long_description{ "Subgrid Dimensions (N x N). Need to integer devide Nx,Ny. By default, the subgrids are determined automatically. The subgrids are used for the parallelization of the wavefunction. For GPUs, lower number of subgrids are advised. For CPUs, the number of subgrids should ideally match the number of cores used." },
+            .short_usecase{ "--subgrids 2 2" },
+            .long_usecase{ "--subgrids 2 2 (results in 2*2 = 4 subgrids)\n--subgrids 1 5 (results in 1*5 = 5 subgrids)" } 
+        } 
+    },
+    { "tstep", 
+        { 
+            .name{ "--tstep, --dt" }, 
+            .key{ "<double>" }, 
+            .unit{ "ps" }, 
+            .short_description{ "Timestep" }, 
+            .long_description{ "Timestep. It's advised to leave this parameter at its magic timestep default." }, 
+            .short_usecase{ "--tstep 0.1" }, 
+            .long_usecase{ "--tstep 0.1 (sets the timestep to 0.1ps)" } 
+        } 
+    },
+    { "tmax", 
+        { 
+            .name{ "--tmax, --tend" }, 
+            .key{ "<double>" }, 
+            .unit{ "ps" }, 
+            .short_description{ "Timelimit" }, 
+            .long_description{ " Timelimit. " }, 
+            .short_usecase{ "--tmax 1000" }, 
+            .long_usecase{ "--tmax 1000 (sets the simulation time to 1000ps)" } 
+        } 
+    },
+    { "iterator", 
+        { 
+            .name{ "--iterator, -rk4, -ssfm" }, 
+            .key{ "<string>" }, 
+            .short_description{ "RK4 or SSFM" }, 
+            .long_description{ "Iterator to use. Can be either 'rk4' or 'ssfm'. -rk4 and -ssfm can be used instead." }, 
+            .short_usecase{ "--iterator rk4" }, 
+            .long_usecase{ "--iterator rk4 (sets the iterator to RK4)\n--iterator ssfm (sets the iterator to SSFM)\n-ssfm (use SSFM iterator instead)" } 
+        } 
+    },
+    { "imagTime", 
+        { 
+            .name{ "--imagTime" }, 
+            .key{ "<double>" }, 
+            .short_description{ "Use imaginary time propagation with normalization constant" }, 
+            .long_description{ "Use imaginary time propagation with normalization constant." }, 
+            .short_usecase{ "--imagTime 1" }, 
+            .long_usecase{ "--imagTime 1 (sets the imaginary time amplitude to 1)\n--imagTime 10 (sets the normalization constant to 10)" } 
+        } 
+    },
+    { "boundary", 
+        { 
+            .name{ "--boundary" }, 
+            .key{ "<string> <string>" }, 
+            .short_description{ "Boundary conditions for x and y" }, 
+            .long_description{ "Boundary conditions for x and y. Can be either 'periodic' or 'zero'." }, 
+            .short_usecase{ "--boundary periodic zero" }, 
+            .long_usecase{ "--boundary periodic periodic (sets periodic boundary conditions in x and y)\n--boundary periodic zero( sets periodic boundary conditions in x and zero boundary conditions in y ) " } 
+        } 
+    },
+    { "tetm", 
+        { 
+            .name{ "-tetm" }, 
+            .key{ "no arguments" }, 
+            .short_description{ "Enables TE/TM splitting" }, 
+            .long_description{ "Enables TE/TM splitting. This will split the wavefunction into TE and TM modes." }, 
+            .short_usecase{ "-tetm" }, 
+            .long_usecase{ "-tetm" } 
+        } 
+    },
+    { "gammaC", 
+        { 
+            .name{ "--gammaC, --gamma_C, --gamma_c, --gammac" }, 
+            .key{ "<double>" }, 
+            .unit{ "ps^-1" }, 
+            .short_description{ "Damping Coefficient" }, 
+            .long_description{ "Damping coefficient for the wavefunction." }, 
+            .short_usecase{ "--gammaC 0.1" }, 
+            .long_usecase{ "--gammaC 0.1 (sets the damping coefficient to 0.1ps^-1)" } 
+        } 
+    },
+    { "gammaR", 
+        { 
+            .name{ "--gammaR, --gamma_R, --gamma_r, --gammar" }, 
+            .key{ "<double>" }, 
+            .unit{ "ps^-1" }, 
+            .short_description{ "Reservoir Damping Coefficient" }, 
+            .long_description{ "Damping coefficient for the reservoir." }, 
+            .short_usecase{ "--gammaR 0.1" }, 
+            .long_usecase{ "--gammaR 0.1 (sets the radiative damping coefficient to 0.1 ps^-1)" } 
+        } 
+    },
+    { "gc", 
+        { 
+            .name{ "--gc, --g_c" }, 
+            .key{ "<double>" }, 
+            .unit{ "eV mum^2" }, 
+            .short_description{ "Nonlinear Coefficient" }, 
+            .long_description{ "Nonlinear coefficient for the wavefunction." }, 
+            .short_usecase{ "--gc 0.1" }, 
+            .long_usecase{ "--gc 0.1 (sets the nonlinear coefficient to 0.1 eV mum^2)" } 
+        } 
+    },
+    { "gr", 
+        { 
+            .name{ "--gr, --g_r" }, 
+            .key{ "<double>" }, 
+            .unit{ "eV mum^2" }, 
+            .short_description{ "Reservoir Nonlinear Coefficient" }, 
+            .long_description{ "Nonlinear coefficient for the reservoir." }, 
+            .short_usecase{ "--gr 0.1" }, 
+            .long_usecase{ "--gr 0.1 (sets the reservoir nonlinear coefficient to 0.1 eV mum^2)" } 
+        } 
+    },
+    { "R", 
+        { 
+            .name{ "--R" }, 
+            .key{ "<double>" }, 
+            .unit{ "ps^-1 mum^2" }, 
+            .short_description{ "Relaxation Rate" }, 
+            .long_description{ "Relaxation rate for the wavefunction." }, 
+            .short_usecase{ "--R 0.1" }, 
+            .long_usecase{ "--R 0.1 (sets the relaxation rate to 0.1 ps^-1 mum^2)" } 
+        } 
+    },
+    { "g_pm", 
+        { 
+            .name{ "--g_pm, --g_PM, --gpm" }, 
+            .key{ "<double>" }, 
+            .short_description{ "TE/TM Splitting" }, 
+            .long_description{ "Nonlinear coefficient for TE/TM splitting." }, 
+            .short_usecase{ "--g_pm 0.1" }, 
+            .long_usecase{ "--g_pm 0.1 (sets the TE/TM splitting coefficient to 0.1)" } 
+        } 
+    },
+    { "deltaLT", 
+        { 
+            .name{ "--deltaLT, --delta_LT, --deltalt, --dlt" }, 
+            .key{ "<double>" }, 
+            .unit{ "eV" }, 
+            .short_description{ "TE/TM Splitting Energy" }, 
+            .long_description{ "Energy difference for TE/TM splitting." }, 
+            .short_usecase{ "--deltaLT 0.1" }, 
+            .long_usecase{ "--deltaLT 0.1 (sets the TE/TM splitting energy difference to 0.1 eV)" } 
+        } 
+    },
+    { "L", 
+        { 
+            .name{ "--L, --gridlength, --xmax" }, 
+            .key{ "<double> <double>" }, 
+            .unit{ "mum" }, 
+            .short_description{ "System Size" }, 
+            .long_description{ "System size in x and y direction. For a given L, the grid spans from -L/2:L/2." }, 
+            .short_usecase{ "--L 1 1" }, 
+            .long_usecase{ "--L 1 1 (sets the system size to 1x1 mum)" } 
+        } 
+    },
+    { "meff", 
+        { 
+            .name{ "--m_eff, --meff" }, 
+            .key{ "<double>" }, 
+            .short_description{ "Effective Mass" }, 
+            .long_description{ "Effective mass for the wavefunction." }, 
+            .short_usecase{ "--meff 0.1" }, 
+            .long_usecase{ "--meff 0.1 (sets the effective mass to 0.1)" } 
+        } 
+    },
+    { "hbar_scaled", 
+        { 
+            .name{ "--hbar_scaled, --hbarscaled, --hbars" }, 
+            .key{ "<double>" }, 
+            .unit{ "" }, 
+            .short_description{ "Scaled hbar" }, 
+            .long_description{ "Scaled hbar value. This value is calculated automatically from the effective mass and the hbar value." }, 
+            .short_usecase{ "--hbar_scaled 0.1" }, 
+            .long_usecase{ "--hbar_scaled 0.1 (sets the scaled hbar value to 0.1)" } 
+        } 
+    },
+    { "hbar", 
+        { 
+            .name{ "--hbar" }, 
+            .key{ "<double>" }, 
+            .unit{ "" }, 
+            .short_description{ "SI hbar" }, 
+            .long_description{ "SI hbar value." }, 
+            .short_usecase{ "--hbar 1" }, 
+            .long_usecase{ "--hbar 1 (sets the SI hbar value to 1)" } 
+        } 
+    },
+    { "m_e", 
+        { 
+            .name{ "--m_e, --me, --electron_mass" }, 
+            .key{ "<double>" }, 
+            .unit{ "" }, 
+            .short_description{ "Electron mass" }, 
+            .long_description{ "Electron mass value." }, 
+            .short_usecase{ "--m_e 1" }, 
+            .long_usecase{ "--m_e 1 (sets the electron mass to 1)" } 
+        } 
+    },
+    { "e", 
+        { 
+            .name{ "--e, --electron_charge" }, 
+            .key{ "<double>" }, 
+            .unit{ "" }, 
+            .short_description{ "Electron charge" }, 
+            .long_description{ "Electron charge value." }, 
+            .short_usecase{ "--e 1" }, 
+            .long_usecase{ "--e 1 (sets the electron charge to 1)" } 
+        } 
+    },
+    { "envelope",
+        { 
+            .name{ "--[envelope]" },
+            .key{ "<double> <string> <double> <double> <double> <double> <string> <double> <double> <string>" },
+            .short_description{ "Time INdependent Envelope Syntax. Envelopes can be --pump, --pulse, --fftMask, --initialWavefunction, --initialReservoir, --potential. Keys are amplitude, behaviour (add, multiply, replace, adaptive, complex), widthX, widthY, posX, posY, pol (plus, minus, both), exponent, charge, type (gauss, ring)" },
+            .long_description{ "Time INdependent Envelope Syntax. This is the general syntax for any of the available envelopes, which includes: --pump, --pulse, --fftMask, --initialWavefunction, --initialReservoir, --potential. Each Envelope is defined by a set of spatial parameters:\namplitude: numerical value\nbehaviour: Method to apply this envelope to its group. Envelopes that have the same temporal properties (see later) are grouped together and are superimposed upon running PHOENIX. The "
+                            "methods here include:\n- add - Adds the envelope to its group\n- multiply - Multiplies the current group matrix with this envelope\n- replace - Replaces "
+                            "the current group matrix with this envelope\n- adaptive - Sets the amplitude of each cell to the current value of the group matrix. This is usefull to e.g.cut out parts of the matrix.\n- complex - Multiply this envelope with i\nwidthX: With in X direction\nwidthY: Width in Y direction\nposX: Position in X direction\nposY: Position in Y direction\npol: Polarization of this envelope. This value can be either 'plus', 'minus' or 'both', applying to the plus or minus "
+                            "component, respectively.\nexponent: Gaussian exponent. Larger values result in steeper Gaussians.\ncharge: Topological Charge of this envelope. This value results in a complex phase winding and should only be used for complex envelopes. Can be either int or 'none'\ntype: Type of this envelope. Can be a superposition of the following:\n- gauss: Gaussian envelope\n- ring: Ring envelope\n- noDivide: No renormalization using the width. This prohibits the division of the "
+                            "amplitude by its width.\n- local: Use local space (-1:1) instead of (-L/2:L/2). Convinient for e.g. FFT filter envelopes." },
+            .short_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide" },
+            .long_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide (basic Gaussian envelope)\n--[envelope] 15 add 20 10 50 0 both 3 none ring+noDivide (steeper ring envelope, asymmetrical, shifted to x,y = 50,0)\n--[envelope] 1 add 0.3 0.3 0 0 plus 1 none local+noDivide (local mapped envelope from -1:1 instead of -L/2:L/2, plus component only)" } 
+        } 
+    },
+    { "envelope_time",
+        {
+             .name{ "--[envelope]" },
+            .key{ "<double> <string> <double> <double> <double> <double> <string> <double> <double> <string> time <double> <double> <double>" },
+            .short_description{ "Time Dependent Envelope Syntax. Additional keys are t0, sigma, freq." },
+            .long_description{ "Time Dependent Envelope Syntax. The spatial parameters are equivalent to the previous envelope and temporal parameters are indicated with the additional 'time' keyword. The available keys include:\nkind: Type of oscillator. Can be either of iexp ~exp(iwt/sigma), cos ~ cos(wt/sigma) or gauss ~ exp(-t/sigma)^w. In the latter, frequency becomes the power of the function instead.\nt0: Center time.\nfreq: Frequency (w) of the oscillator or power of the function." },
+            .short_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide time iexp 200 50 0.1" },
+            .long_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide time iexp 200 50 0 (Example from before, with complex oscillator, centered at 200ps with width 50ps and f=0 for no oscillator component.\n--[envelope] 15 add 10 10 0 0 both 1 3 gauss+noDivide time iexp 0 1e5 0.1 (Envelope with topological charge = 3, no center with t0 = 0, high sigma for constant temporal envelope, and frequency f=0.1THz. This envelope will be constant of amplitude and oscillate with a given "
+                        "frequency)" } 
+        } 
+    },
+    { "envelope_loaded",
+        { 
+            .name{ "--[envelope]" },
+            .key{ "load <string> <double> <string> <string> time load <string>" },
+            .short_description{ "Loaded Envelope Syntax. Space and Time can be loaded." },
+            .long_description{ "Loaded Envelope Syntax. Both the spatial as well as the temporal components can be loaded from files, indicated by replacing the respective set of parameters with 'load ...'. Loading a spatial matrix requires a matrix input, loading temporal input requires a t:value pair per line in the file. The final temporal envelope is then linearly interpolated from the input points. The remaining parameters are:\nSpatial "
+                            "Component:\npath: Path to the spatial envelope.\namp: Scaling amplitude. The loaded envelope will be multiplied by this value.\nBehaviour: Same as before.\npol: Polarization. Same as before.\nTemporal Components:\npath: Parth to the spatial envelope." },
+            .short_usecase{ "--[envelope] load 'path/to/spatial/envelope' 1 add both load 'path/to/temporal/envelope'" },
+            .long_usecase{ "--[envelope] load 'path/to/spatial/envelope' 1 add both load 'path/to/temporal/envelope' (loads a spatial and temporal envelope from the given paths)" } 
+        } 
+    },
+};
+// clang-format on
+
+void PHOENIX::SystemParameters::printHelp( bool verbose, bool markdown ) {
     print_name();
+    const size_t L1 = std::min<size_t>( 0.3 * console_width - 1, 50 );
+    const size_t L2 = std::min<size_t>( 0.3 * console_width - 1, 50 );
+    const size_t L3 = console_width - 15 - L2 - L1;
 
     std::cout << PHOENIX::CLIO::fillLine( console_width, major_seperator ) << "\n"; // Horizontal Separator
 
@@ -105,96 +505,93 @@ void PHOENIX::SystemParameters::printHelp() {
 #endif
 
     std::cout << EscapeSequence::BOLD << PHOENIX::CLIO::fillLine( console_width, major_seperator ) << EscapeSequence::RESET << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "Option", "Inputs", "Description\n" ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "Option", "Inputs", "Description\n", L1, L2, L3 ) << std::endl;
     std::cout << EscapeSequence::BOLD << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << EscapeSequence::RESET << std::endl;
 
     // Program Options
-    std::cout << PHOENIX::CLIO::unifyLength( "--path", "<string>", "Working folder. Default is '" + filehandler.outputPath + "'" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--name", "<string>", "File prefix. Default is '" + filehandler.outputName + "'" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--config", "<string>", "Loads configuration from file. Multiple configurations can be superimposed." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --config path/to/config.txt loads commandline arguments from config.txt" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--outEvery", "<float>", "Output every x ps. Default is every " + std::to_string( output_every ) + " ps" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --outEvery 10.0 outputs every 10ps." ) << std::endl;
+    arguments.at( "path" ).print_usecase( filehandler.outputPath, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "config" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "outEvery" ).print_usecase( output_every, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--output", "<string...>", "Comma-separated list of things to output. Available: mat, scalar, fft, pump, mask, psi, n. Options with _plus or _minus are also supported." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Examples: --output all, --output wavefunction, --output fft,scalar." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--historyMatrix", "<int> <int> <int> <int> <int>", "Outputs matrices specified in --output with startx, endx, starty, endy index, and increment." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --historyMatrix 0 100 0 100 1 outputs matrices from 0 to 100 in x and y." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --historyMatrix 0 100 0 100 5 outputs matrices from 0 to 100 in x and y with a step of 5." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--historyTime", "<float> <int>", "Outputs matrices specified in --output after starting time, then every multiple*outEvery times." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --historyTime 1000.0 2 outputs matrices after t = 1000ps every 2*outEvery ps." ) << std::endl;
+    arguments.at( "output" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "historyMatrix" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "historyTime" ).print_usecase( "", verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "-norender", "no arguments", "Disables all live graphical output if passed." ) << std::endl;
-
+    std::cout << PHOENIX::CLIO::unifyLength( "Numerical parameters", "", "", L1, L2, L3 ) << std::endl;
+    arguments.at( "N" ).print_usecase( std::to_string( p.N_c ) + " " + std::to_string( p.N_r ), verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "subgrids" ).print_usecase( std::to_string( p.subgrids_columns ) + " " + std::to_string( p.subgrids_rows ), verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "tstep" ).print_usecase( magic_timestep, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "tmax" ).print_usecase( t_max, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "iterator" ).print_usecase( iterator, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "imagTime" ).print_usecase( imag_time_amplitude, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "boundary" ).print_usecase( std::string( "x: " ) + ( p.periodic_boundary_x ? "periodic" : "zero" ) + " y: " + ( p.periodic_boundary_y ? "periodic" : "zero" ), verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "Numerical parameters", "", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--N", "<int> <int>", "Grid Dimensions (N x N). Default is " + std::to_string( p.N_c ) + " x " + std::to_string( p.N_r ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --N 100 100 sets the grid to 100x100. --N 500 1000 sets the grid to 500x1000." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--subgrids", "<int> <int>", "Subgrid Dimensions (N x N). Need to integer devide Nx,Ny. Default is " + std::to_string( p.subgrids_columns ) + " x " + std::to_string( p.subgrids_rows ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --subgrids 2 2 results in 2*2 = 4 subgrids. --subgrids 1 5 results in 1*5 = 5 subgrids." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--tstep", "<double>", "Timestep. Default is " + PHOENIX::CLIO::to_str( magic_timestep ) + " ps. It's advised to leave this parameter at its default value." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --tstep 0.1 sets the timestep to 0.1ps." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--tmax", "<double>", "Timelimit. Default is " + PHOENIX::CLIO::to_str( t_max ) + " ps" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --tmax 1000 sets the simulation time to 1000ps." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--iterator", "<string>", "RK4 or SSFM" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --iterator rk4 sets the iterator to RK4. --iterator ssfm sets the iterator to SSFM." ) << std::endl;
-    //std::cout << PHOENIX::CLIO::unifyLength( "-rk45", "no arguments", "Shortcut to use RK45" ) << std::endl;
-    //std::cout << PHOENIX::CLIO::unifyLength( "--rk45dt", "<double> <double>", "dt_min and dt_max for RK45 method" ) << std::endl;
-    //std::cout << PHOENIX::CLIO::unifyLength( "--tol", "<double>", "RK45 Tolerance. Default is " + PHOENIX::CLIO::to_str( tolerance ) + " ps" ) << std::endl;
-    //std::cout << PHOENIX::CLIO::unifyLength( "-ssfm", "no arguments", "Shortcut to use SSFM" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--imagTime", "<double>", "Use imaginary time propagation with normalization constant. Default is " + PHOENIX::CLIO::to_str( imag_time_amplitude ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --imagTime 1 sets the imaginary time amplitude to 1, --imagTime 10 sets the normalization constant to 10." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--boundary", "<string> <string>", "Boundary conditions for x and y: 'periodic' or 'zero'" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "...", "...", "Example: --boundary periodic zero sets periodic boundary conditions in x and zero boundary conditions in y." ) << std::endl;
 
+    std::cout << PHOENIX::CLIO::unifyLength( "System Parameters", "", "", L1, L2, L3 ) << std::endl;
+    arguments.at( "gammaC" ).print_usecase( p.gamma_c, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "gammaR" ).print_usecase( p.gamma_r, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "gc" ).print_usecase( p.g_c, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "gr" ).print_usecase( p.g_r, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "R" ).print_usecase( p.R, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "tetm" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "g_pm" ).print_usecase( p.g_pm, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "deltaLT" ).print_usecase( p.delta_LT, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "L" ).print_usecase( "x: " + std::to_string( p.L_x ) + " y: " + std::to_string( p.L_y ), verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "System Parameters", "", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--gammaC", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.gamma_c ) + " ps^-1" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--gammaR", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.gamma_r / p.gamma_c ) + "*gammaC" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--gc", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.g_c ) + " eV mum^2" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--gr", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.g_r / p.g_c ) + "*gc" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--meff", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.m_eff ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--R", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.R ) + " ps^-1 mum^2" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--g_pm", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.g_pm / p.g_c ) + "*gc. Effective in a system with TE/TM splitting." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--deltaLT", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.delta_LT ) + " eV. Effective in a system with TE/TM splitting." ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--L", "<double> <double>", "Default is " + PHOENIX::CLIO::to_str( p.L_x ) + ", " + PHOENIX::CLIO::to_str( p.L_y ) + " mum" ) << std::endl;
-
+    std::cout << PHOENIX::CLIO::unifyLength( "SI Scalings", "", "", L1, L2, L3 ) << std::endl;
+    arguments.at( "hbar" ).print_usecase( p.h_bar, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "m_e" ).print_usecase( p.m_e, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "e" ).print_usecase( p.e_e, verbose, markdown );
+    std::cout << PHOENIX::CLIO::unifyLength( "Alternative Scaled Values", "", "", L1, L2, L3 ) << std::endl;
+    arguments.at( "meff" ).print_usecase( p.m_eff, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "hbar_scaled" ).print_usecase( p.h_bar_s, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "Envelopes", "", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "Syntax for spatial and temporal envelopes or loading external files:", "", "" ) << std::endl;
 
-    // Envelope Syntax
-    std::cout << PHOENIX::CLIO::unifyLength( "--envelope", "<double> <string> <double> <double> <double> <double> <string> <double> <double> <string> time <double> <double> <double>",
-                                             "amplitude, behaviour (add, multiply, replace, adaptive, complex), widthX, widthY, posX, posY, pol (plus, minus, both), exponent, charge, type (gauss, ring), "
-                                             "time: kind (gauss, cos, iexp), t0, frequency, sigma" )
-              << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "Envelopes", "", "", L1, L2, L3 ) << std::endl;
+    //std::cout << PHOENIX::CLIO::unifyLength( "Syntax for spatial and temporal envelopes or loading external files:", "", "" ) << std::endl;
+    arguments.at( "envelope" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
+    arguments.at( "envelope_time" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
+    arguments.at( "envelope_loaded" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
 
-    std::cout << PHOENIX::CLIO::unifyLength( "--envelope", "load <string> <double> <string> <string> time <string> <double> <double> <double>", "path, amplitude, behaviour, pol (plus, minus, both). For time: path" ) << std::endl;
-
-    std::cout << "Possible Envelopes include:" << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--pump", "Spatial and Temporal ~cos(wt)", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--potential", "Spatial and Temporal ~cos(wt)", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--initialState", "Spatial", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--initialReservoir", "Spatial", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--pulse", "Spatial and Temporal ~exp(iwt)", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--fftMask", "Spatial", "" ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "Possible Envelopes include", "", "", L1, L2, L3 ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--pump", "Spatial and Temporal ~cos(wt)", "", L1, L2, L3 ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--potential", "Spatial and Temporal ~cos(wt)", "", L1, L2, L3 ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--initialState", "Spatial", "", L1, L2, L3 ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--initialReservoir", "Spatial", "", L1, L2, L3 ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--pulse", "Spatial and Temporal ~exp(iwt)", "", L1, L2, L3 ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--fftMask", "Spatial", "", L1, L2, L3 ) << std::endl;
 
     // Additional Parameters
     std::cout << "Additional Parameters:" << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--fftEvery", "<int>", "Apply FFT Filter every x ps" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--initRandom", "<double>", "Amplitude. Randomly initialize Psi" ) << std::endl;
-
-    std::cout << PHOENIX::CLIO::fillLine( console_width, major_seperator ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "SI Scalings", "", "" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "Flag", "Inputs", "Description" ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--hbar", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.h_bar ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--e", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.e_e ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--me", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.m_e ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--hbarscaled", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.h_bar_s ) ) << std::endl;
-    std::cout << PHOENIX::CLIO::unifyLength( "--meff", "<double>", "Default is " + PHOENIX::CLIO::to_str( p.m_eff ) ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--fftEvery", "<int>", "Apply FFT Filter every x ps", L1, L2, L3 ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--initRandom", "<double>", "Amplitude. Randomly initialize Psi", L1, L2, L3 ) << std::endl;
 
 #ifdef USE_CPU
-    std::cout << PHOENIX::CLIO::unifyLength( "--threads", "<int>", "Default is " + std::to_string( omp_max_threads ) + " Threads" ) << std::endl;
+    std::cout << PHOENIX::CLIO::unifyLength( "--threads", "<int>", "Default is " + std::to_string( omp_max_threads ) + " Threads", L1, L2, L3 ) << std::endl;
 #endif
 
     std::cout << PHOENIX::CLIO::fillLine( console_width, major_seperator ) << std::endl;

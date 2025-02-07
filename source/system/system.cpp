@@ -167,9 +167,11 @@ void PHOENIX::SystemParameters::calculateAuto() {
 
 PHOENIX::SystemParameters::SystemParameters( int argc, char** argv ) : SystemParameters() {
     // Check if help is requested
-    if ( PHOENIX::CLIO::findInArgv( "--help", argc, argv ) != -1 || PHOENIX::CLIO::findInArgv( "-h", argc, argv ) != -1 ) {
+    bool verbose_help = PHOENIX::CLIO::findInArgv( "--helpVerbose", argc, argv ) != -1 || PHOENIX::CLIO::findInArgv( "-hv", argc, argv ) != -1;
+    if ( PHOENIX::CLIO::findInArgv( "--help", argc, argv ) != -1 || PHOENIX::CLIO::findInArgv( "-h", argc, argv ) != -1 || verbose_help ) {
+        bool generate_markdown = PHOENIX::CLIO::findInArgv( "--markdown", argc, argv ) != -1 || PHOENIX::CLIO::findInArgv( "-mk", argc, argv ) != -1;
         calculateAuto();
-        printHelp();
+        printHelp( verbose_help, generate_markdown );
         exit( 0 );
     }
 

@@ -35,6 +35,7 @@
 #include "misc/timeit.hpp"
 #include "misc/sfml_helper.hpp"
 #include "solver/gpu_solver.hpp"
+
 #ifdef BENCH
     #ifdef LIKWID
         #include <likwid.h>

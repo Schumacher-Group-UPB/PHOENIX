@@ -122,7 +122,7 @@ class SystemParameters {
     void calculateAuto();
     void validateInputs();
 
-    void printHelp();
+    void printHelp( bool verbose, bool markdown );
     void printSummary( std::map<std::string, std::vector<double>> timeit_times, std::map<std::string, double> timeit_times_total );
     void printCMD( double complete_duration, double complete_iterations );
     void finishCMD();

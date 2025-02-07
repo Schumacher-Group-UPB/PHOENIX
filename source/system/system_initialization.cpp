@@ -37,7 +37,7 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     if ( ( index = PHOENIX::CLIO::findInArgv( { "g_pm", "gpm", "g_PM" }, argc, argv, 0, "--" ) ) != -1 ) {
         p.g_pm = PHOENIX::CLIO::getNextInput( argv, argc, "gm", ++index );
     }
-    if ( ( index = PHOENIX::CLIO::findInArgv( { "deltaLT", "deltalt", "dlt" }, argc, argv, 0, "--" ) ) != -1 ) {
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "deltaLT", "delta_LT", "deltalt", "dlt" }, argc, argv, 0, "--" ) ) != -1 ) {
         p.delta_LT = PHOENIX::CLIO::getNextInput( argv, argc, "deltaLT", ++index );
     }
 
@@ -186,18 +186,18 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     if ( ( index = PHOENIX::CLIO::findInArgv( "--hbar", argc, argv ) ) != -1 ) {
         p.h_bar = PHOENIX::CLIO::getNextInput( argv, argc, "hbar", ++index );
     }
-    if ( ( index = PHOENIX::CLIO::findInArgv( "--e", argc, argv ) ) != -1 ) {
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "electron_charge", "e" }, argc, argv, 0, "--" ) ) != -1 ) {
         p.e_e = PHOENIX::CLIO::getNextInput( argv, argc, "e", ++index );
     }
-    if ( ( index = PHOENIX::CLIO::findInArgv( "--me", argc, argv ) ) != -1 ) {
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "me", "m_e", "electron_mass" }, argc, argv, 0, "--" ) ) != -1 ) {
         p.m_e = PHOENIX::CLIO::getNextInput( argv, argc, "me", ++index );
     }
     // We can also directly set h_bar_scaled, which will result in hbar, e and me to be ignored
-    if ( ( index = PHOENIX::CLIO::findInArgv( "--hbarscaled", argc, argv ) ) != -1 ) {
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "hbarscaled", "hbar_scaled", "hbars" }, argc, argv, 0, "--" ) ) != -1 ) {
         p.h_bar_s = PHOENIX::CLIO::getNextInput( argv, argc, "hbars", ++index );
     }
     // Same goes for the scaled mass.
-    if ( ( index = PHOENIX::CLIO::findInArgv( "--meff", argc, argv ) ) != -1 )
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "meff", "m_eff" }, argc, argv, 0, "--" ) ) != -1 )
         p.m_eff = PHOENIX::CLIO::getNextInput( argv, argc, "m_eff", ++index );
 
     //////////////////////////////
