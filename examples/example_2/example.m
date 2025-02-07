@@ -1,6 +1,52 @@
 clear;    
-optimizer = 0;        %find the exceptional point using a optimizer algorythm
+%% Setting up the required directories and check for executable and GPU device (if required)
+% Define the filename of your PHOENIX release
+filename = 'phoenix_32.exe';
 
+% Specify a custom directory
+customDir = pwd;
+
+if exist(fullfile(customDir, filename), 'file') == 2
+    disp(['The file "', filename, '" is present in the directory.']);
+else
+    disp(['The file "', filename, '" is not found in the directory.']);
+end
+
+% Define loads directory path
+directoryPath_load = 'data/loads/';
+
+% Create loads directory
+if ~exist(directoryPath_load, 'dir')
+    % Create the directory
+    mkdir(directoryPath_load);
+    disp(['Directory "', directoryPath_load, '" has been created.']);
+end
+
+% Define result directory path
+directoryPath_result = 'data/results/';
+
+% Create results directory
+if ~exist(directoryPath_result, 'dir')
+    % Create the directory
+    mkdir(directoryPath_result);
+    disp(['Directory "', directoryPath_result, '" has been created.']);
+end
+delete([directoryPath_result,'timeoutput\*.txt']);
+
+% Get GPU device table
+gpuTable = gpuDeviceTable;
+
+% Check if the GPU device table is empty
+if isempty(gpuTable)
+    disp('No GPU device detected. Please use the CPU version of Phoenix.');
+else
+    disp('GPU device detected. Proceeding with GPU-based Phoenix.');
+end
+
+%% Set if you want to run the optimizer algorithm
+optimizer = 1;        %find the exceptional point using a optimizer algorythm
+
+%% Setting up parameters and matrices
 % time evolution settings
 dt=0.02;
 tmax=1500;
@@ -11,8 +57,6 @@ sample_t0=500;
 N=200;  dxy=0.1;  L=N*dxy;
 x=sparse(dxy*(-N/2+1:N/2)).';
 y=sparse(dxy*(-N/2+1:N/2)).';
-kx=(2*pi*(-N/2+1:N/2)/L).';
-ky=(2*pi*(-N/2+1:N/2)/L).';
 
 % parameter definition
 hbar = 6.582119569E-1;  
@@ -35,7 +79,7 @@ dis=4;                  %potential well separation
 P1 =12;                 %pump intensity 1
 p1w=1.0;                %pump width 1
 p2w=p1w;                %pump width 2
-lambda_min=2;           %set lower bound for P2
+lambda_min=1;           %set lower bound for P2
 lambda_max=6;           %set upper bound for P2
 
 for i=1:N
@@ -66,15 +110,15 @@ reservoir(1:N,1:N) = real(n);
 reservoir(N+1:2*N,1:N) = imag(n);
 
 header = {'#' 'SIZE' num2str(N) num2str(N) num2str(L) num2str(L) num2str(dxy) num2str(dxy)};
-writecell(header,'data/load/potential_plus.txt','Delimiter',' ');
-writecell(header,'data/load/wavefunction_plus.txt','Delimiter',' ');
-writecell(header,'data/load/reservoir_plus.txt','Delimiter',' ');
+writecell(header,[directoryPath_load,'potential_plus.txt'],'Delimiter',' ');
+writecell(header,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ');
+writecell(header,[directoryPath_load,'reservoir_plus.txt'],'Delimiter',' ');
 
-writematrix(wavefunction,'data/load/wavefunction_plus.txt','Delimiter',' ','WriteMode','append');
-writematrix(reservoir,'data/load/reservoir_plus.txt','Delimiter',' ','WriteMode','append');
+writematrix(wavefunction,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ','WriteMode','append');
+writematrix(reservoir,[directoryPath_load,'reservoir_plus.txt'],'Delimiter',' ','WriteMode','append');
 
 % fprintf can be used to controll the number of digits to remain in the floating point limits
-fileID = fopen('data/load/potential_plus.txt', 'a'); % Open the file in append mode
+fileID = fopen([directoryPath_load,'potential_plus.txt'], 'a'); % Open the file in append mode
 % Write the data with space delimiter
 for row = 1:size(potential, 1)
     fprintf(fileID, '%.5f ', potential(row, :)); % Use %g for formatting
@@ -89,7 +133,7 @@ E2 = zeros(lambda_max-lambda_min+1,1);
 
 for lambda=lambda_min:lambda_max
     % create pump
-    writecell(header,'data/load/pump_plus.txt','Delimiter',' ');
+    writecell(header,[directoryPath_load,'pump_plus.txt'],'Delimiter',' ');
     P=zeros(N,N);
     P2 =lambda;  
     for i=1:N
@@ -101,41 +145,48 @@ for lambda=lambda_min:lambda_max
     pump(1:N,1:N) = real(P);
     pump(N+1:2*N,1:N) = imag(P);
 
-    writematrix(pump,'data/load/pump_plus.txt','Delimiter',' ','WriteMode','append')
+    writematrix(pump,[directoryPath_load,'pump_plus.txt'],'Delimiter',' ','WriteMode','append')
 
-    % create runstring
-    str1 = 'phoenix_gpu_fp32.exe ';                                                                                                 
+    %% Execute PHOENIX
+    str1 = [filename, ' '];                                                                                                
     str2 = ['--N ',num2str(N),' ',num2str(N),' --L ',num2str(L),' ',num2str(L),' --boundary periodic periodic '];
     str3 = ['--tmax ',num2str(tmax),' --tstep ',num2str(dt),' --outEvery 1 --fftMask 1.0 add 0.2 0.2 0 0 both 6 none gauss+noDivide+local --fftEvery ',num2str(dt),' '];  
     str4 = ['--historyMatrix 0 ',num2str(N),' 0 ',num2str(N),' 1 --output wavefunction --outEvery ',num2str(FFT_sample_rate),' ']; 
-    str5 = '--potential load data/load/potential_plus.txt 1 add both --initialState load data/load/wavefunction_plus.txt 1 add both --pump load data/load/pump_plus.txt 1 add both ';                                                                            
+    str5 = ['--potential load ',directoryPath_load,'potential_plus.txt 1 add both --initialState load ',directoryPath_load,'wavefunction_plus.txt 1 add both --pump load ',directoryPath_load,'pump_plus.txt 1 add both '];                                                                            
     str6 = ['--gammaC ',num2str(gammaC),' --gammaR ',num2str(gammaR),' --gc ',num2str(gc),' --gr ',num2str(gr),' --meff ',num2str(mc),' --hbarscaled ',num2str(hbar),' --R ',num2str(R),' '];                            
-    str7 = '--path data/results/'; 
-    
-    % execute PHOENIX
-    inputstr = [str1,str2,str3,str4,str5,str6,str7];
-    [~,cmdout] = system(inputstr,'CUDA_VISIBLE_DEVICES','0');
+    str7 = ['--path ',directoryPath_result]; 
 
-    htmlString = removeAnsiCodes(cmdout);
-    disp(htmlString(end-2630:end));    
+    inputstr = [str1,str2,str3,str4,str5,str6,str7];
+    [~,cmdout] = system(inputstr);
     
+    % in cmdout you can view the output of PHOENIX
+    phoenix_output = removeAnsiCodes(cmdout);
+    disp(phoenix_output);
+
+    % Check if PHOENIX was completed successfully
+    if contains(phoenix_output, ' Runtime Statistics ')
+        disp('PHOENIX ran successfully.');
+    else
+        disp('Warning: PHOENIX did not run successfully.');
+    end
+    
+    %% Post-processing
     % post-processing: calculate mode spectrum
-    psi = readmatrix('data/results/wavefunction_plus.txt');
+    psi = readmatrix([directoryPath_result,'wavefunction_plus.txt']);
     psi=psi(1:N,1:N)+1i*psi(N+1:2*N,1:N);
     Y1 = abs(reshape(psi,N,N)).^2;
     %integrated_densities(lambda+1,1)=max(max(Y1));
     pump_intensitys_scaned(lambda+1,1)=P2;
 
-    projectdir = 'data/results/timeoutput/';
+    projectdir = [directoryPath_result,'timeoutput/'];
     dinfo = dir( fullfile(projectdir, '*.txt'));
     nfiles = length(dinfo);
     filenames = fullfile(projectdir, {dinfo.name});
     y1_centralcut_x_t = zeros(nfiles-sample_t0, N);
     y1sum=zeros(N,N);
     for K = 0 : nfiles-1-sample_t0
-        thisfile = ['data/results/timeoutput/wavefunction_plus_',num2str(K+sample_t0),'.000000.txt'];
+        thisfile = [directoryPath_result,'timeoutput/wavefunction_plus_',num2str(K+sample_t0),'.000000.txt'];
         thisdata = readmatrix(thisfile);
-        %y1_centralcut_x_t(K+1, :) = thisdata(1,:)+1i*thisdata(2,:);
         y1_centralcut_x_t(K+1, :) = thisdata(N/2,:)+1i*thisdata(3*N/2,:);
         Y1 = abs(thisdata(1:N,:)+1i*thisdata(N+1:2*N,:)).^2;
         y1sum = y1sum + Y1;
@@ -176,11 +227,14 @@ set(gca,'XLim',[0 max(pump_intensitys_scaned)]);set(gca,'fontsize',24);
 set(gcf,'position',[x0,y0,width,height]);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Optimizer
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % this part of the code uses an local optimizer algorithm to localize the exceptional point
-
-options = optimset('Display','iter','PlotFcns',@optimplotfval,'TolX',1E-1);
-EP_loc = fminbnd(@costfunction,0,20,options);
-
+if optimizer == 1
+    options = optimset('Display','iter','PlotFcns',@optimplotfval,'TolX',1E-1);
+    EP_loc = fminbnd(@costfunction,0,20,options);
+end
+%%
 function cleanedString = removeAnsiCodes(inputString)
     % Use regexprep to remove ANSI escape codes
     cleanedString = strrep(inputString, '[90m#[0m', ' ');
@@ -243,8 +297,13 @@ d = [ ir-1; 1-ic ];
 B = repmat( [ sr; sc ].', min(m,n),1 );
 T = spdiags( B,d,m,n );
 end
-
 function cost = costfunction(X)
+% Define the filename of your PHOENIX release
+filename = 'phoenix_64.exe';
+% Define the directory path
+directoryPath_load = 'data/loads/';
+% Define the directory path
+directoryPath_result = 'data/results/';
 
 % system discretisation
 N=200;                  %grid size
@@ -260,47 +319,48 @@ FFT_sample_rate=1;      %sample rate for wave-profile (affects the frequency ran
 sample_t0=1500;         %off-set for FFT-sampling to ensure convergence of the system before the sampling
 
 % parameter definition
-mc = 0.5*5.864E-4;      %effective polariton mass (0.5E-4*me)
+hbar = 6.582119569E-1;  
+mc = 0.5*5.864E-1;      %effective polariton mass (0.5E-4*me)
 gammaC = 0.16;          %polariton loss rate
-gammaR = 1.5*gammaC;    %reservoir loss rate
-R = 0.01;               %condensation rate
-gc = 6E-6;              %polariton-polariton interaction strength
-gr = 2*gc;              %polariton-reservoir interaction strength
+gammaR = 1.5*gammaC;    %reservoir loss rate    
+R = 0.01;               %condensation rate 
+gc = 6E-3;              %polariton-polariton interaction strength
+gr = 2*gc;              %polariton-reservoir interaction strength     
 
 dis=4;                  %potential well separation
 P1 =12;                 %pump intensity 1
 p1w=1.0;                %pump width 1
 p2w=p1w;                %pump width 2
 
-pump = writepump(X,N,L,dxy,x,y,dis,P1,p1w,p2w);
-delete('output\timeoutput\*.txt');
+pump = writepump(X,N,L,dxy,x,y,dis,P1,p1w,p2w,directoryPath_load);
+delete([directoryPath_result,'timeoutput\*.txt']);
 
-%create runstring
-str1 = 'phoenix_gpu_fp32.exe ';                                                                                                 
+%% Execute PHOENIX
+str1 = [filename, ' '];
 str2 = ['--N ',num2str(N),' ',num2str(N),' --L ',num2str(L),' ',num2str(L),' --boundary periodic periodic '];
-str3 = ['--tmax ',num2str(tmax),' --tstep ',num2str(dt),' --outEvery 1 --fftMask 1.0 add 0.2 0.2 0 0 both 6 none gauss+noDivide+local --fftEvery ',num2str(dt),' '];  
-str4 = ['--historyMatrix 0 ',num2str(N),' 0 ',num2str(N),' 1 --output wavefunction --outEvery ',num2str(FFT_sample_rate),' ']; 
-str5 = '--potential load data/load/potential_plus.txt 1 add both --initialState load data/load/wavefunction_plus.txt 1 add both --pump load data/load/pump_plus.txt 1 add both ';                                                                            
-str6 = ['--gammaC ',num2str(gammaC),' --gammaR ',num2str(gammaR),' --gc ',num2str(gc),' --gr ',num2str(gr),' --meff ',num2str(mc),' --hbarscaled ',num2str(hbar),' --R ',num2str(R),' '];                            
-str7 = '--path data/results/'; 
+str3 = ['--tmax ',num2str(tmax),' --tstep ',num2str(dt),' --outEvery 1 --fftMask 1.0 add 0.2 0.2 0 0 both 6 none gauss+noDivide+local --fftEvery ',num2str(dt),' '];
+str4 = ['--historyMatrix 0 ',num2str(N),' 0 ',num2str(N),' 1 --output wavefunction --outEvery ',num2str(FFT_sample_rate),' '];
+str5 = ['--potential load ',directoryPath_load,'potential_plus.txt 1 add both --initialState load ',directoryPath_load,'wavefunction_plus.txt 1 add both --pump load ',directoryPath_load,'pump_plus.txt 1 add both '];
+str6 = ['--gammaC ',num2str(gammaC),' --gammaR ',num2str(gammaR),' --gc ',num2str(gc),' --gr ',num2str(gr),' --meff ',num2str(mc),' --hbarscaled ',num2str(hbar),' --R ',num2str(R),' '];
+str7 = ['--path ',directoryPath_result];
 
 % execute PHOENIX
 inputstr = [str1,str2,str3,str4,str5,str6,str7];
-[~,cmdout] = system(inputstr,'CUDA_VISIBLE_DEVICES','0');
+[~,~] = system(inputstr,'CUDA_VISIBLE_DEVICES','0');
 
 %post-processing: localize exceptional point
-projectdir = 'output\timeoutput\';
+projectdir = [directoryPath_result,'timeoutput/'];
 dinfo = dir( fullfile(projectdir, '*.txt'));
 nfiles = length(dinfo);
 filenames = fullfile(projectdir, {dinfo.name});
 y1sum=zeros(N,N);
 for K = 0 : nfiles-1-sample_t0
-    thisfile = ['output\timeoutput\wavefunction_plus_',num2str(K+sample_t0),'.txt'];
+    thisfile =  [directoryPath_result,'timeoutput\wavefunction_plus_',num2str(K+sample_t0),'.000000.txt'];
     thisdata = readmatrix(thisfile);
     Y1 = abs(thisdata(1:N,:)+1i*thisdata(N+1:2*N,:)).^2;
     y1sum = y1sum + Y1;
 end
-psi = readmatrix('output\wavefunction_plus.txt');
+psi = readmatrix([directoryPath_result,'wavefunction_plus.txt']);
 psi=psi(1:N,1:N)+1i*psi(N+1:2*N,1:N);
 Y1 = abs(reshape(psi,N,N)).^2;
 figure(1);
@@ -312,9 +372,9 @@ cost = sum(sum(y1sum));
 end
 
 %post-processing: adapt the pump with the optimizer
-function P = writepump(lambda,N,L,dxy,x,y,dis,P1,p1w,p2w)
+function P = writepump(lambda,N,L,dxy,x,y,dis,P1,p1w,p2w,directoryPath_load)
 header = {'#' 'SIZE' num2str(N) num2str(N) num2str(L) num2str(L) num2str(dxy) num2str(dxy)};
-writecell(header,'loads/pump_plus.txt','Delimiter',' ');
+writecell(header,[directoryPath_load,'pump_plus.txt'],'Delimiter',' ');
 P=zeros(N,N);
 P2 =lambda;
 for i=1:N
@@ -324,5 +384,5 @@ for i=1:N
 end
 pump(1:N,1:N) = real(P);
 pump(N+1:2*N,1:N) = imag(P);
-writematrix(pump,'loads/pump_plus.txt','Delimiter',' ','WriteMode','append');
+writematrix(pump,[directoryPath_load,'pump_plus.txt'],'Delimiter',' ','WriteMode','append');
 end

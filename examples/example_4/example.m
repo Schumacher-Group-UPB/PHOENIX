@@ -1,13 +1,64 @@
-x0=10; y0=10;  width=1200; height=1000;
+clear; rng('shuffle');
+%% Setting up the required directories and check for executable and GPU device (if required)
+% Define the filename of your PHOENIX release
+filename = 'phoenix_64.exe';
 
+% Specify a custom directory
+customDir = pwd;
+
+if exist(fullfile(customDir, filename), 'file') == 2
+    disp(['The file "', filename, '" is present in the directory.']);
+else
+    disp(['The file "', filename, '" is not found in the directory.']);
+end
+
+% Define loads directory path
+directoryPath_load = 'data/loads/';
+
+% Create loads directory
+if ~exist(directoryPath_load, 'dir')
+    % Create the directory
+    mkdir(directoryPath_load);
+    disp(['Directory "', directoryPath_load, '" has been created.']);
+end
+
+% Define result directory path
+directoryPath_result = 'data/results/';
+
+% Create results directory
+if ~exist(directoryPath_result, 'dir')
+    % Create the directory
+    mkdir(directoryPath_result);
+    disp(['Directory "', directoryPath_result, '" has been created.']);
+end
+
+% Define post-processing directory path
+directoryPath_postprocess = 'BroadEx/Psi/';
+
+% Create results directory
+if ~exist(directoryPath_postprocess, 'dir')
+    % Create the directory
+    mkdir(directoryPath_postprocess);
+    disp(['Directory "', directoryPath_postprocess, '" has been created.']);
+end
+
+% Get GPU device table
+gpuTable = gpuDeviceTable;
+
+% Check if the GPU device table is empty
+if isempty(gpuTable)
+    disp('No GPU device detected. Please use the CPU version of Phoenix.');
+else
+    disp('GPU device detected. Proceeding with GPU-based Phoenix.');
+end
+
+%% Setting up parameters and matrices
 % system discretisation
 N = 256;                   %grid size
 L = 230.4;                 %real space grid length
 dxy = L/N;                 %spatial discretization step
 x = sparse(dxy*(-N/2+1:N/2)).';   %x dimension discretization
 y = sparse(dxy*(-N/2+1:N/2)).';   %y dimension discretization
-kx = (2*pi*(-N/2+1:N/2)/L).';     %wavevector discretization
-ky = (2*pi*(-N/2+1:N/2)/L).';     %wavevector discretization
 
 % set Wigner Noise and sampling
 dV = L^2/N^2;
@@ -16,7 +67,7 @@ Nj=150;
 
 % time evolution settings
 tsave = 5;
-tav=1000;
+tav=0;
 dt = 0.04;
 tend = 2000;
 
@@ -60,11 +111,11 @@ wavefunction(N+1:2*N,1:N) = imag(psi);
 reservoir(1:N,1:N) = real(res);
 reservoir(N+1:2*N,1:N) = imag(res);
 
-writecell(header,'data/load/wavefunction_plus.txt','Delimiter',' ');
-writecell(header,'data/load/reservoir_plus.txt','Delimiter',' ');
+writecell(header,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ');
+writecell(header,[directoryPath_load,'reservoir_plus.txt'],'Delimiter',' ');
 
-writematrix(wavefunction,'data/load/wavefunction_plus.txt','Delimiter',' ','WriteMode','append');
-writematrix(reservoir,'data/load/reservoir_plus.txt','Delimiter',' ','WriteMode','append');
+writematrix(wavefunction,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ','WriteMode','append');
+writematrix(reservoir,[directoryPath_load,'reservoir_plus.txt'],'Delimiter',' ','WriteMode','append');
 
 for j=1:length(MultP)
     disp(['Amplitude multiplier = ',num2str(MultP(j))]);
@@ -73,76 +124,65 @@ for j=1:length(MultP)
         pump(1:N,1:N) = real(pump_new);
         pump(N+1:2*N,1:N) = imag(pump_new);
   
-        writecell(header,'data/load/pump_plus.txt','Delimiter',' ');
-        writematrix(pump,'data/load/pump_plus.txt','Delimiter',' ','WriteMode','append');
+        writecell(header,[directoryPath_load,'pump_plus.txt'],'Delimiter',' ');
+        writematrix(pump,[directoryPath_load,'pump_plus.txt'],'Delimiter',' ','WriteMode','append');
 
-        % create runstring
-        str1 = 'main.exe --dw 1 --threads 2 ';  
+        %% Execute PHOENIX
+        str1 = [filename, ' --dw 1 --threads 2 '];  
         str2 = ['--N ',num2str(N),' ',num2str(N),' --L ',num2str(L),' ',num2str(L),' --boundary periodic periodic ']; 
         str3 = ['--tmax ',num2str(tend),' --tstep ',num2str(dt),' '];                                                 
-        str4 = '--pump load data/load/pump_plus.txt 1 add plus --reservoir load data/load/reservoir_plus.txt 1 add plus --initialState load data/load/wavefunction_plus.txt 1 add plus '; 
+        str4 = ['--pump load ',directoryPath_load,'pump_plus.txt 1 add plus --reservoir load ',directoryPath_load,'reservoir_plus.txt 1 add plus --initialState load ',directoryPath_load,'wavefunction_plus.txt 1 add plus ']; 
         str5 = ['--gammaC ',num2str(gammaC),' --gammaR ',num2str(gammaR),' --gc ',num2str(gc),' --gr ',num2str(gr),' --meff ',num2str(mc),' --hbarscaled ',num2str(hbar),' --R ',num2str(R),' '];
-        str6 = ['--historyMatrix 0 ',num2str(N),' 0 ',num2str(N),' 1 --output wavefunction --outEvery ',num2str(tsave),' --path data/results/'];
+        str6 = ['--historyMatrix 0 ',num2str(N),' 0 ',num2str(N),' 1 --output wavefunction --outEvery ',num2str(tsave),' --path ',directoryPath_result];
 
         % execute PHOENIX
         inputstr = [str1,str2,str3,str4,str5,str6];
-        [~,cmdout] = system(inputstr,'CUDA_VISIBLE_DEVICES','0');
-        htmlString = removeAnsiCodes(cmdout);
-        disp(htmlString(end-2630:end));
+        [~,cmdout] = system(inputstr);
+        % in cmdout you can view the output of PHOENIX
+        phoenix_output = removeAnsiCodes(cmdout);
+        disp(phoenix_output);
 
+        % Check if PHOENIX was completed successfully
+        if contains(phoenix_output, ' Runtime Statistics ')
+            disp('PHOENIX ran successfully.');
+        else
+            disp('PHOENIX did not run successfully.');
+        end
+
+        %% Post-processing
         % post-processing: save data for evaluation of the quantum coherence, the correlation function and mean and variance of averaged polariton excitation number 
-        projectdir = 'data/results/timeoutput/';
+        projectdir = [directoryPath_result,'timeoutput/'];
         dinfo = dir( fullfile(projectdir, 'wavefunction*.txt'));
         nfiles = length(dinfo); 
         filenames = fullfile(projectdir, {dinfo.name});
         navPsi = zeros(N^2, nfiles-tav/tsave+1);        
 
-        thisdata = readmatrix('load/wavefunction_plus.txt');
+        thisdata = readmatrix([directoryPath_load,'wavefunction_plus.txt']);
         psi_k = reshape(thisdata(1:N,:)+1i*thisdata(N+1:2*N,:),N^2,1);
         navPsi(:,1) = psi_k; 
 
-        for K = 0 : nfiles-1-tav/tsave
-            thisfile = ['data/results/timeoutput/wavefunction_plus_',num2str(K+tav/tsave),'.txt'];
+        for K =1 : nfiles-tav/tsave
+            thisfile = [directoryPath_result,'timeoutput/wavefunction_plus_',num2str((K+tav/tsave)*tsave),'.000000.txt'];
             thisdata = readmatrix(thisfile);
             psi_k = reshape(thisdata(1:N,:)+1i*thisdata(N+1:2*N,:),N^2,1);
-            navPsi(:,K+2) = psi_k; 
-            maxn(K+1) = max(max(abs(psi_k).^2));
+            navPsi(:,K+1) = psi_k; 
+            maxn(K) = max(max(abs(psi_k).^2));
         end
 
         name = strcat('Broad',string(k),'_Pump',string(MultP(1,j)));
-        save(strcat('BroadEx/Psi/',name,'.mat'),'-v7.3',"navPsi","N","L","tend","dt","tsave","tav","gammaR","gammaC","R","gc","gr");
+        save(strcat(directoryPath_postprocess,name,'.mat'),'-v7.3',"navPsi","N","L","tend","dt","tsave","tav","gammaR","gammaC","R","gc","gr");
 
     end
 end
 
-function cleanedString = removeAnsiCodes(inputString)
-% Use regexprep to remove ANSI escape codes
-cleanedString = strrep(inputString, '[90m#[0m', ' ');
-cleanedString = regexprep(cleanedString, '\[0m|\[1m|\[2m|\[3m|\[4m|\[30m|\[31m|\[32m|\[33m|\[34m|\[35m|\[36m|\[37m|[93m|\[94m|\[?25h|\[2K|\[?25l|\[90m|\[A', '');
-end
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Post-processing
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % this part of the code determines the quantum coherence, the correlation function and mean and variance of averaged polariton excitation number 
 
-N=256;                                                                   
-L=230.4; 
-
-dx = L/(N-1);
-x = -L/2:dx:L/2;
-dV = L^2/N^2;
-kx = -2*pi/(2*dx):2*pi/L:2*pi/(2*dx);
-
-tend = 2000;                                                       
-dt = 0.04;                                                            
-tsave = 5;                                                            
-
-Nj=5;                                                                      
-
-tav=1000;                                                                  
-
-MultP = 1:0.5:8;                                                            
-
-DirName='BroadEx/Psi/';                                                       
+kx = -2*pi/(2*dxy):2*pi/L:2*pi/(2*dxy);
+                                          
+DirName=directoryPath_postprocess;                                                       
 PsiName="navPsi";
 
 QCplt=zeros(1,length(MultP));                                              
@@ -260,6 +300,11 @@ for m=1:length(MultP)
     saveas(F1,strcat(DirName,'Bilder/Skala_kS_MultP',string(MultP(1,m)),'.png'));
 end
 
+function cleanedString = removeAnsiCodes(inputString)
+% Use regexprep to remove ANSI escape codes
+cleanedString = strrep(inputString, '[90m#[0m', ' ');
+cleanedString = regexprep(cleanedString, '\[0m|\[1m|\[2m|\[3m|\[4m|\[30m|\[31m|\[32m|\[33m|\[34m|\[35m|\[36m|\[37m|[93m|\[94m|\[?25h|\[2K|\[?25l|\[90m|\[A', '');
+end
 
 function ret=gety(i,N)
     ret = floor((i-1)/N)+1;
@@ -267,5 +312,3 @@ end
 function ret=getx(i,N)
     ret = mod(i-1,N)+1;
 end        
-
-

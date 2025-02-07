@@ -1,5 +1,38 @@
+clear; rng('shuffle');
 x0=10; y0=10;  width=1200; height=1000;
+%% Setting up the required directories and check for executable and GPU device (if required)
+% Define the filename of your PHOENIX release
+filename = 'phoenix_64.exe';
 
+% Specify a custom directory
+customDir = pwd;
+
+if exist(fullfile(customDir, filename), 'file') == 2
+    disp(['The file "', filename, '" is present in the directory.']);
+else
+    disp(['The file "', filename, '" is not found in the directory.']);
+end
+
+% Define result directory path
+directoryPath_result = 'data/results/';
+
+% Create results directory
+if ~exist(directoryPath_result, 'dir')
+    % Create the directory
+    mkdir(directoryPath_result);
+    disp(['Directory "', directoryPath_result, '" has been created.']);
+end
+
+% Get GPU device table
+gpuTable = gpuDeviceTable;
+
+% Check if the GPU device table is empty
+if isempty(gpuTable)
+    disp('No GPU device detected. Please use the CPU version of Phoenix.');
+else
+    disp('GPU device detected. Proceeding with GPU-based Phoenix.');
+end
+%% Setting up parameters and matrices
 % system discretisation
 N = 500;                  %grid size
 dxy = 0.4;                 %spatial discretization step
@@ -36,56 +69,64 @@ end
 
 [rows,~] = size(marray);
 
-for mscan = 1:1%rows
+for mscan = 1:rows
 
 mp = marray(mscan,1);
 mm = marray(mscan,2);
 
-
-% create runstring
-str1 = 'phoenix_64.exe -tetm ';                                         %call PHOENIX with TE-TM splitting
-str2 = '--N 500 500 --L 100 100 --boundary zero zero ';                 %define the real-space grid
-str3 = '--tmax 10000 ';                                                 %time settings
-str4 = ['--initialState 0.1 add 70 70 0 0 plus 1 ',num2str(mp),' gauss+noDivide --initialState 0.1 add 70 70 0 0 minus 1 ',num2str(mm),' gauss+noDivide '];  %define initial condition
-str5 = '--g_pm 6E-7 --deltaLT 0.025E-3 ';                                                         %set GP-Parameters
-str6 = ['--pump 100 add ',num2str(wp),' ',num2str(wp),' 0 0 both 1 none gauss+noDivide+ring '];   %define pump
-str7 = '--outEvery 5 --path data/results/';                                                       %set output directory
+%% Execute PHOENIX
+str1 = [filename, ' -tetm '];                                        
+str2 = '--N 500 500 --L 100 100 --boundary zero zero ';                 
+str3 = '--tmax 10000 ';                                                 
+str4 = ['--initialState 0.1 add 70 70 0 0 plus 1 ',num2str(mp),' gauss+noDivide --initialState 0.1 add 70 70 0 0 minus 1 ',num2str(mm),' gauss+noDivide '];  
+str5 = '--g_pm 6E-7 --deltaLT 0.025E-3 ';                                                               
+str6 = ['--pump 100 add ',num2str(wp),' ',num2str(wp),' 0 0 both 1 none gauss+noDivide+ring '];   
+str7 = ['--outEvery 5 --path ',directoryPath_result];                        
 
 % execute PHOENIX
 inputstr = [str1,str2,str3,str4,str5,str6,str7];
-[status,cmdout] = system(inputstr,'CUDA_VISIBLE_DEVICES','0');
+[~,cmdout] = system(inputstr       );
 
-htmlString = removeAnsiCodes(cmdout);
-disp(htmlString(end-2630:end));
+% in cmdout you can view the output of PHOENIX
+phoenix_output = removeAnsiCodes(cmdout);
+disp(phoenix_output);
 
+% Check if PHOENIX was completed successfully
+if contains(phoenix_output, ' Runtime Statistics ')
+    disp('PHOENIX ran successfully.');
+else
+    disp('PHOENIX did not run successfully.');
+end
+
+%% Post-processing
 % post-processing: visualize results
-psiiniplus = readmatrix('data/results/initial_condition_plus.txt');
+psiiniplus = readmatrix([directoryPath_result,'initial_wavefunction_plus.txt']);
 psiiniplus=psiiniplus(1:N,1:N)+1i*psiiniplus(N+1:2*N,1:N);
 Y1iniplus = abs(reshape(psiiniplus,N,N)).^2;
 
-psiiniminus = readmatrix('data/results/initial_condition_minus.txt');
+psiiniminus = readmatrix([directoryPath_result,'initial_wavefunction_minus.txt']);
 psiiniminus=psiiniminus(1:N,1:N)+1i*psiiniminus(N+1:2*N,1:N);
 Y1iniminus = abs(reshape(psiiniminus,N,N)).^2;
 
-pump = readmatrix('data/results/pump_plus.txt');
-pump=pump(1:N,1:N)+1i*pump(N+1:2*N,1:N);
+pump = readmatrix([directoryPath_result,'pump_plus.txt']);
+pump=pump(1:N,1:N);
 
-psi = readmatrix('data/results/wavefunction_plus.txt');
+psi = readmatrix([directoryPath_result,'wavefunction_plus.txt']);
 psi=psi(1:N,1:N)+1i*psi(N+1:2*N,1:N);
 Y1 = abs(reshape(psi,N,N)).^2;
 
-psim = readmatrix('data/results/wavefunction_minus.txt');
+psim = readmatrix([directoryPath_result,'wavefunction_minus.txt']);
 psim=psim(1:N,1:N)+1i*psim(N+1:2*N,1:N);
 Y1m = abs(reshape(psim,N,N)).^2;
 
 figure(2);surf(x,y,Y1);shading interp;view(2);colormap('jet');pbaspect([1 1 1]);axis tight;set(gca,'XTickLabel',[]);set(gca,'YTickLabel',[]);shading interp;xlim([-xres xres]);ylim([-yres yres]);clim([0 160])
-saveas(gca,['Figure\msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psip_d.png']);
+saveas(gca,['Figure_msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psip_d.png']);
 figure(3);surf(x,y,Y1m);shading interp;view(2);colormap('jet');pbaspect([1 1 1]);axis tight;set(gca,'XTickLabel',[]);set(gca,'YTickLabel',[]);shading interp;xlim([-xres xres]);ylim([-yres yres]);clim([0 160])
-saveas(gca,['Figure\msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psim_d.png']);
+saveas(gca,['Figure_msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psim_d.png']);
 figure(4);surf(x,y,angle(reshape(psi,N,N)));shading interp;view(2);colormap('gray');pbaspect([1 1 1]);axis tight;set(gca,'XTickLabel',[]);set(gca,'YTickLabel',[]);shading interp;xlim([-xres xres]);ylim([-yres yres]);clim([-pi pi])
-saveas(gca,['Figure\msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psip_arg.png']);
+saveas(gca,['Figure_msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psip_arg.png']);
 figure(5);surf(x,y,angle(reshape(psim,N,N)));shading interp;view(2);colormap('gray');pbaspect([1 1 1]);axis tight;set(gca,'XTickLabel',[]);set(gca,'YTickLabel',[]);shading interp;xlim([-xres xres]);ylim([-yres yres]);clim([-pi pi])
-saveas(gca,['Figure\msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psim_arg.png']);
+saveas(gca,['Figure_msum=',num2str(mp+mm),'_mdif=',num2str(mp-mm),'_psim_arg.png']);
 
 end
 end
