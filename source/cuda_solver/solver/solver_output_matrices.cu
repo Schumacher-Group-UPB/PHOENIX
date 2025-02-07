@@ -74,7 +74,8 @@ void PHOENIX::Solver::outputInitialMatrices() {
 
         auto future = std::async( std::launch::async, [buffer1, buffer2, header_information, this]() {
             this->system.filehandler.outputMatrixToFile( buffer1.data(), this->system.p.N_c, this->system.p.N_r, header_information, "initial_wavefunction_plus" );
-            this->system.filehandler.outputMatrixToFile( buffer2.data(), this->system.p.N_c, this->system.p.N_r, header_information, "initial_reservoir_plus" );
+            if ( system.use_reservoir )
+                this->system.filehandler.outputMatrixToFile( buffer2.data(), this->system.p.N_c, this->system.p.N_r, header_information, "initial_reservoir_plus" );
         } );
     }
     if ( system.use_reservoir and system.doOutput( "all", "mat", "pump_plus", "pump" ) )
@@ -120,7 +121,8 @@ void PHOENIX::Solver::outputInitialMatrices() {
         //system.filehandler.outputMatrixToFile( matrix.initial_reservoir_minus.data(), system.p.N_c, system.p.N_r, header_information, "initial_reservoir_minus" );
         auto future = std::async( std::launch::async, [buffer1, buffer2, header_information, this]() {
             this->system.filehandler.outputMatrixToFile( buffer1.data(), this->system.p.N_c, this->system.p.N_r, header_information, "initial_wavefunction_minus" );
-            this->system.filehandler.outputMatrixToFile( buffer2.data(), this->system.p.N_c, this->system.p.N_r, header_information, "initial_reservoir_minus" );
+            if ( system.use_reservoir )
+                this->system.filehandler.outputMatrixToFile( buffer2.data(), this->system.p.N_c, this->system.p.N_r, header_information, "initial_reservoir_minus" );
         } );
     }
     if ( system.use_reservoir and system.doOutput( "all", "mat", "pump_minus", "pump" ) )
