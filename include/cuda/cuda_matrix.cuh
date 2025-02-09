@@ -162,6 +162,7 @@ class CUDAMatrix : CUDAMatrixBase {
         // Clear the Host data
         host_data.clear();
         device_data.clear();
+        device_data_full.clear();
         // Host is not ahead
         host_is_ahead = false;
         // The matrix is no longer constructed
