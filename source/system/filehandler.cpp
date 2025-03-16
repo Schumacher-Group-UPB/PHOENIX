@@ -1,6 +1,7 @@
 #include "system/filehandler.hpp"
 #include "misc/commandline_io.hpp"
 #include "misc/escape_sequences.hpp"
+#include "misc/simple_npy.hpp"
 #include "omp.h"
 
 // MARK: Constructor and Destructor
@@ -188,7 +189,7 @@ bool PHOENIX::FileHandler::loadMatrixFromFile( const std::string& filepath, Type
 
     // Header
     getline( filein, line );
-    inputstring = std::istringstream( line );
+    inputstring = std::istringstream( line ); 
     // Read SIZE Nx Ny sLx sLy dx dy
     Type::uint32 N_c, N_r;
     Type::real header;
@@ -207,12 +208,26 @@ bool PHOENIX::FileHandler::loadMatrixFromFile( const std::string& filepath, Type
     std::cout << PHOENIX::CLIO::prettyPrint( "Loaded " + std::to_string( i ) + " elements from '" + filepath + "'", PHOENIX::CLIO::Control::Success ) << std::endl;
     return true;
 }
-
+ 
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, std::ofstream& out, const std::string& name ) {
     if ( !out.is_open() ) {
         std::cout << PHOENIX::CLIO::prettyPrint( "File '" + name + "' is not open! Cannot output matrix to file!", PHOENIX::CLIO::Control::Error ) << std::endl;
         return;
     }
+    // TODO: implement this properly.
+    // - flag to set output mode -> .txt, .npy, .mat (later)
+    // - move actual output function to different function, then do 
+    // if (output_mode == "txt") {
+    //     outputMatrixToFileTxt(...);
+    // } else if (output_mode == "npy") {
+    //     outputMatrixToFileNpy(...);
+    // } else if (output_mode == "mat") {
+    //     outputMatrixToFileMat(...);
+    // }
+    std::ofstream new_out;
+    new_out.open( toPath( name ), std::ios::binary );
+    simple_npy::save_npy( new_out, std::vector<Type::complex>( buffer, buffer + N_c * N_r ), N_r, N_c );
+    return;
     // Header
     out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
     std::stringstream output_buffer;
