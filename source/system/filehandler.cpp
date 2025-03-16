@@ -70,6 +70,7 @@ void PHOENIX::FileHandler::init( int argc, char** argv ) {
 
 void PHOENIX::FileHandler::waitForCompletion() {
     std::unique_lock<std::mutex> lock( queueMutex );
+    std::cout << PHOENIX::CLIO::prettyPrint( "Waiting for FileHandler to finish, " + std::to_string( matrixQueue.size() ) + " items left in queue...", PHOENIX::CLIO::Control::Info ) << std::endl;
     completionCondition.wait( lock, [this] { return matrixQueue.empty(); } );
 }
 
@@ -121,12 +122,13 @@ void PHOENIX::FileHandler::processQueue() {
             outputMatrixToFile( realItem.matrix.data(), realItem.start_c, realItem.end_c, realItem.start_r, realItem.end_r, realItem.N_c, realItem.N_r, realItem.increment, realItem.header, realItem.fpath );
         }
 
-        //{
-        //    std::lock_guard<std::mutex> lock( queueMutex );
-        //    if ( matrixQueue.empty() ) {
-        //        completionCondition.notify_all();
-        //    }
-        //}
+        // After processing, check if queue is empty and notify waiting threads
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            if (matrixQueue.empty()) {
+                completionCondition.notify_all();
+            }
+        }
     }
 }
 
