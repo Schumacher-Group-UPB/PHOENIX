@@ -1,10 +1,19 @@
 #pragma once
 
+#include <map>
+#include <iomanip>
+#include <filesystem>
 #include <vector>
 #include <string>
-#include <map>
+#include <queue>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <fstream>
+#include <sstream>
 #include <iostream>
+#include <complex>
+#include <variant>
 #include "cuda/typedef.cuh"
 
 namespace PHOENIX {
@@ -17,6 +26,7 @@ class FileHandler {
     FileHandler();
     FileHandler( int argc, char** argv );
     FileHandler( FileHandler& other ) = delete;
+    ~FileHandler();
 
     struct Header {
         // Spatial Parameters
@@ -58,6 +68,22 @@ class FileHandler {
         }
     };
 
+    template <typename T>
+    struct QueueItem {
+        Type::host_vector<T> matrix;
+        Type::uint32 N_c, N_r;
+        Type::uint32  start_c, end_c, start_r, end_r, increment;
+        Header header;
+        std::string fpath;
+    };
+
+    std::queue<std::variant<QueueItem<Type::complex>, QueueItem<Type::real>>> matrixQueue;
+    std::mutex queueMutex;
+    std::condition_variable queueCondition;
+    std::condition_variable completionCondition;
+    std::vector<std::thread> workerThreads;
+    bool stopWorker;
+
     std::string toPath( const std::string& name );
 
     std::ofstream& getFile( const std::string& name );
@@ -79,7 +105,13 @@ class FileHandler {
     void outputListToFile( const std::string& path, std::vector<std::vector<Type::real>>& data, const std::string& name );
 
     void init( int argc, char** argv );
-};
+
+    void processQueue();
+    void waitForCompletion();
+    // Queue matrix is same footprint as outputMatrixToFile, but with a queue
+    void queueComplexMatrix( const Type::host_vector<Type::complex>& matrix, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out );
+    void queueRealMatrix( const Type::host_vector<Type::real>& matrix, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out );
+    };
 
 std::vector<char*> readConfigFromFile( int argc, char** argv );
 

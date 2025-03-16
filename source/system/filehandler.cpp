@@ -1,18 +1,35 @@
-#include <iomanip>
-#include <filesystem>
-#include <vector>
-#include <string>
-
 #include "system/filehandler.hpp"
 #include "misc/commandline_io.hpp"
 #include "misc/escape_sequences.hpp"
 #include "omp.h"
 
-PHOENIX::FileHandler::FileHandler() : outputPath( "data" ), outputName( "" ), color_palette( "vik" ), color_palette_phase( "viko" ) {};
+// MARK: Constructor and Destructor
+
+PHOENIX::FileHandler::FileHandler() : outputPath( "data" ), outputName( "" ), color_palette( "vik" ), color_palette_phase( "viko" ), stopWorker( false ) {
+    // TODO: for cpu version, maybe reduce the number of output threads
+    const auto max_threads = omp_get_max_threads();
+    workerThreads.reserve(max_threads);
+    std::cout << PHOENIX::CLIO::prettyPrint( "Creating FileHandler with " + std::to_string( max_threads ) + " worker threads...", PHOENIX::CLIO::Control::Info ) << std::endl;
+    for ( int i = 0; i < max_threads; i++ )
+        workerThreads.emplace_back( &PHOENIX::FileHandler::processQueue, this );
+}
 
 PHOENIX::FileHandler::FileHandler( int argc, char** argv ) : FileHandler() {
     init( argc, argv );
 }
+
+PHOENIX::FileHandler::~FileHandler() {
+    waitForCompletion();
+    {
+        std::lock_guard<std::mutex> lock( queueMutex );
+        stopWorker = true;
+    }
+    queueCondition.notify_all();
+    for (auto& workerThread : workerThreads)
+        workerThread.join();
+}
+
+// MARK: Initializer
 
 void PHOENIX::FileHandler::init( int argc, char** argv ) {
     int index = 0;
@@ -49,15 +66,68 @@ void PHOENIX::FileHandler::init( int argc, char** argv ) {
     }
 }
 
-std::string PHOENIX::FileHandler::toPath( const std::string& name ) {
-    return outputPath + ( outputPath.back() == '/' ? "" : "/" ) + outputName + ( outputName.empty() ? "" : "_" ) + name + ".txt";
+// MARK: Asynchronous Matrix output Queue
+
+void PHOENIX::FileHandler::waitForCompletion() {
+    std::unique_lock<std::mutex> lock( queueMutex );
+    completionCondition.wait( lock, [this] { return matrixQueue.empty(); } );
 }
 
-std::ofstream& PHOENIX::FileHandler::getFile( const std::string& name ) {
-    if ( files.find( name ) == files.end() ) {
-        files[name] = std::ofstream( toPath( name ) );
+void PHOENIX::FileHandler::queueComplexMatrix( const Type::host_vector<Type::complex>& matrix, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out ) {
+    {
+        std::lock_guard<std::mutex> lock( queueMutex );
+        matrixQueue.emplace( QueueItem<Type::complex>( matrix, N_c, N_r, col_start, col_stop, row_start, row_stop, increment, header, out ) );
     }
-    return files[name];
+    queueCondition.notify_all();
+}
+
+void PHOENIX::FileHandler::queueRealMatrix( const Type::host_vector<Type::real>& matrix, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out ) {
+    {
+        std::lock_guard<std::mutex> lock( queueMutex );
+        matrixQueue.emplace( QueueItem<Type::real>( matrix, N_c, N_r, col_start, col_stop, row_start, row_stop, increment, header, out ) );
+    }
+    queueCondition.notify_all();
+}
+
+
+void PHOENIX::FileHandler::processQueue() {
+    while ( true ) {
+        PHOENIX::FileHandler::QueueItem<Type::complex> complexItem;
+        PHOENIX::FileHandler::QueueItem<Type::real> realItem;
+        bool isComplex = false;
+        // Get next queue item
+        {
+            std::unique_lock<std::mutex> lock( queueMutex );
+            queueCondition.wait( lock, [this] { return !matrixQueue.empty() || stopWorker; } );
+
+            if ( stopWorker && matrixQueue.empty() ) {
+                completionCondition.notify_all();
+                return;
+            }
+
+            if ( std::holds_alternative<PHOENIX::FileHandler::QueueItem<Type::complex>>( matrixQueue.front() ) ) {
+                complexItem = std::move( std::get<PHOENIX::FileHandler::QueueItem<Type::complex>>( matrixQueue.front() ) );
+                isComplex = true;
+            } else {
+                realItem = std::move( std::get<PHOENIX::FileHandler::QueueItem<Type::real>>( matrixQueue.front() ) );
+            }
+            matrixQueue.pop();
+        }
+
+        // Process Queue Item
+        if ( isComplex ) {
+            outputMatrixToFile( complexItem.matrix.data(), complexItem.start_c, complexItem.end_c, complexItem.start_r, complexItem.end_r, complexItem.N_c, complexItem.N_r, complexItem.increment, complexItem.header, complexItem.fpath );
+        } else {
+            outputMatrixToFile( realItem.matrix.data(), realItem.start_c, realItem.end_c, realItem.start_r, realItem.end_r, realItem.N_c, realItem.N_r, realItem.increment, realItem.header, realItem.fpath );
+        }
+
+        //{
+        //    std::lock_guard<std::mutex> lock( queueMutex );
+        //    if ( matrixQueue.empty() ) {
+        //        completionCondition.notify_all();
+        //    }
+        //}
+    }
 }
 
 bool PHOENIX::FileHandler::loadMatrixFromFile( const std::string& filepath, Type::complex* buffer ) {
@@ -261,4 +331,15 @@ void PHOENIX::FileHandler::outputListToFile( const std::string& path, std::vecto
     fileout.flush();
     fileout.close();
     std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( data[0].size() ) + " columns to '" + path + "' - '" + name + "'", PHOENIX::CLIO::Control::Success ) << std::endl;
+}
+
+std::string PHOENIX::FileHandler::toPath( const std::string& name ) {
+    return outputPath + ( outputPath.back() == '/' ? "" : "/" ) + outputName + ( outputName.empty() ? "" : "_" ) + name + ".txt";
+}
+
+std::ofstream& PHOENIX::FileHandler::getFile( const std::string& name ) {
+    if ( files.find( name ) == files.end() ) {
+        files[name] = std::ofstream( toPath( name ) );
+    }
+    return files[name];
 }
