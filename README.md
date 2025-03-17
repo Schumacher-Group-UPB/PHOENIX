@@ -2,7 +2,7 @@
 ---
 
 # Highly optimized Solver for the Nonlinear 2D Schrödinger Equation (GPU or CPU)
-[![arXiv](https://img.shields.io/badge/arXiv-2411.18341-b31b1b.svg)](https://arxiv.org/abs/2411.18341)
+[![arXiv](https://img.shields.io/badge/arXiv-2411.18341-b31b1b.svg)](https://arxiv.org/abs/2411.18341) [![Build CPU](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/c-cpp.yml) [![Build GPU](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/nvcc-cpp.yml/badge.svg)](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/nvcc-cpp.yml)
 
 PHOENIX is a high-performance, solver for the nonlinear two-dimensional Schrödinger equation that can operate on CPUs and GPUs (CUDA-accelerated). Originally designed for simulating exciton-polariton condensates, it has a broad range of applications in fields of nonlinear optics and atomic condensates. 
 
