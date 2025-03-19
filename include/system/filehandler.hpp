@@ -77,13 +77,6 @@ class FileHandler {
         std::string fpath;
     };
 
-    std::queue<std::variant<QueueItem<Type::complex>, QueueItem<Type::real>>> matrixQueue;
-    std::mutex queueMutex;
-    std::condition_variable queueCondition;
-    std::condition_variable completionCondition;
-    std::vector<std::thread> workerThreads;
-    bool stopWorker;
-
     std::string toPath( const std::string& name, const std::string& filetype );
 
     std::ofstream& getFile( const std::string& name, const std::string& filetype = "txt" );
@@ -111,7 +104,16 @@ class FileHandler {
     // Queue matrix is same footprint as outputMatrixToFile, but with a queue
     void queueComplexMatrix( const Type::host_vector<Type::complex>& matrix, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out );
     void queueRealMatrix( const Type::host_vector<Type::real>& matrix, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out );
-    };
+    
+    private:
+    std::queue<std::variant<QueueItem<Type::complex>, QueueItem<Type::real>>> matrixQueue;
+    std::mutex queueMutex;
+    std::condition_variable queueCondition;
+    std::condition_variable completionCondition;
+    std::vector<std::thread> workerThreads;
+    bool stopWorker;
+    bool outputLog;
+};
 
 std::vector<char*> readConfigFromFile( int argc, char** argv );
 

@@ -9,10 +9,9 @@
 PHOENIX::FileHandler::FileHandler() : outputPath( "data" ), outputName( "" ), color_palette( "vik" ), color_palette_phase( "viko" ), stopWorker( false ) {
     // TODO: for cpu version, maybe reduce the number of output threads
     const auto max_threads = omp_get_max_threads();
-    workerThreads.reserve(max_threads);
+    workerThreads.reserve( max_threads );
     std::cout << PHOENIX::CLIO::prettyPrint( "Creating FileHandler with " + std::to_string( max_threads ) + " worker threads...", PHOENIX::CLIO::Control::Info ) << std::endl;
-    for ( int i = 0; i < max_threads; i++ )
-        workerThreads.emplace_back( &PHOENIX::FileHandler::processQueue, this );
+    for ( int i = 0; i < max_threads; i++ ) workerThreads.emplace_back( &PHOENIX::FileHandler::processQueue, this );
 }
 
 PHOENIX::FileHandler::FileHandler( int argc, char** argv ) : FileHandler() {
@@ -26,8 +25,7 @@ PHOENIX::FileHandler::~FileHandler() {
         stopWorker = true;
     }
     queueCondition.notify_all();
-    for (auto& workerThread : workerThreads)
-        workerThread.join();
+    for ( auto& workerThread : workerThreads ) workerThread.join();
 }
 
 // MARK: Initializer
@@ -52,6 +50,25 @@ void PHOENIX::FileHandler::init( int argc, char** argv ) {
     if ( ( index = PHOENIX::CLIO::findInArgv( { "of", "outputFileType" }, argc, argv, 0, "--" ) ) != -1 ) {
         outputFiletype = PHOENIX::CLIO::getNextStringInput( argv, argc, "outputFileType", ++index );
     }
+    if ( outputFiletype == "phoenix" ) {
+        outputFiletype = "ash";
+    }
+    if ( outputFiletype == "numpy" ) {
+        outputFiletype = "npy";
+    }
+    if ( outputFiletype == "text" ) {
+        outputFiletype = "txt";
+    }
+    if ( outputFiletype != "ash" && outputFiletype != "npy" && outputFiletype != "txt" ) {
+        std::cout << PHOENIX::CLIO::prettyPrint( "Invalid output file type '" + outputFiletype + "'. Defaulting to 'txt'...", PHOENIX::CLIO::Control::Warning ) << std::endl;
+        outputFiletype = "txt";
+    }
+    std::cout << PHOENIX::CLIO::prettyPrint( "Output file type set to '" + outputFiletype + "'", PHOENIX::CLIO::Control::Info ) << std::endl;
+
+    // Verbose output flag
+    if ( PHOENIX::CLIO::findInArgv( "-verboseIO", argc, argv ) != -1 ) {
+        outputLog = true;
+    }  
 
     // Creating output directory.
     try {
@@ -129,8 +146,8 @@ void PHOENIX::FileHandler::processQueue() {
 
         // After processing, check if queue is empty and notify waiting threads
         {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            if (matrixQueue.empty()) {
+            std::lock_guard<std::mutex> lock( queueMutex );
+            if ( matrixQueue.empty() ) {
                 completionCondition.notify_all();
             }
         }
@@ -193,7 +210,7 @@ bool PHOENIX::FileHandler::loadMatrixFromFile( const std::string& filepath, Type
 
     // Header
     getline( filein, line );
-    inputstring = std::istringstream( line ); 
+    inputstring = std::istringstream( line );
     // Read SIZE Nx Ny sLx sLy dx dy
     Type::uint32 N_c, N_r;
     Type::real header;
@@ -231,7 +248,6 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type
         PHOENIX::Output::save_binary( out, "NUMPY", submatrix, row_stop - row_start, col_stop - col_start, true );
         out.flush();
         out.close();
-        return;
     }
 
     // PHOENIX binary format
@@ -246,34 +262,38 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type
         PHOENIX::Output::save_binary( out, "PHOENIX", submatrix, row_stop - row_start, col_stop - col_start, true );
         out.flush();
         out.close();
-        return;
     }
 
     // .txt format
-    // Header
-    out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
-    std::stringstream output_buffer;
-    // Real
-    for ( int i = row_start; i < row_stop; i += increment ) {
-        for ( int j = col_start; j < col_stop; j += increment ) {
-            auto index = j + i * N_c;
-            output_buffer << CUDA::real( buffer[index] ) << " ";
+    if ( outputFiletype == "txt" ) {
+        // Header
+        out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
+        std::stringstream output_buffer;
+        // Real
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                output_buffer << CUDA::real( buffer[index] ) << " ";
+            }
+            output_buffer << "\n";
         }
-        output_buffer << "\n";
-    }
-    // Imag
-    for ( int i = row_start; i < row_stop; i += increment ) {
-        for ( int j = col_start; j < col_stop; j += increment ) {
-            auto index = j + i * N_c;
-            output_buffer << CUDA::imag( buffer[index] ) << " ";
+        // Imag
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                output_buffer << CUDA::imag( buffer[index] ) << " ";
+            }
+            output_buffer << "\n";
         }
-        output_buffer << "\n";
+        out << output_buffer.str();
+        out.flush();
+        out.close();
     }
-    out << output_buffer.str();
-    out.flush();
-    out.close();
+
+    if ( outputLog ) {
 #pragma omp critical
-    std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name, outputFiletype ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
+        std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name, outputFiletype ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
+    }
 }
 
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out ) {
@@ -306,7 +326,6 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::u
         PHOENIX::Output::save_binary( out, "NUMPY", submatrix, row_stop - row_start, col_stop - col_start );
         out.flush();
         out.close();
-        return;
     }
 
     // PHOENIX binary format
@@ -321,26 +340,29 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::u
         PHOENIX::Output::save_binary( out, "PHOENIX", submatrix, row_stop - row_start, col_stop - col_start );
         out.flush();
         out.close();
-        return;
     }
 
     // .txt format
-    // Header
-    out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
-    std::stringstream output_buffer;
-    // Real
-    for ( int i = row_start; i < row_stop; i += increment ) {
-        for ( int j = col_start; j < col_stop; j += increment ) {
-            auto index = j + i * N_c;
-            output_buffer << buffer[index] << " ";
+    if ( outputFiletype == "txt" ) {
+        // Header
+        out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
+        std::stringstream output_buffer;
+        // Real
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                output_buffer << buffer[index] << " ";
+            }
+            output_buffer << "\n";
         }
-        output_buffer << "\n";
+        out << output_buffer.str();
+        out.flush();
+        out.close();
     }
-    out << output_buffer.str();
-    out.flush();
-    out.close();
+    if ( outputLog ) {
 #pragma omp critical
-    std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name, outputFiletype ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
+        std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name, outputFiletype ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
+    }
 }
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out ) {
     auto& file = getFile( out, outputFiletype );
