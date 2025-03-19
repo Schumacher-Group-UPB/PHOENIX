@@ -1,7 +1,7 @@
 #include "system/filehandler.hpp"
 #include "misc/commandline_io.hpp"
 #include "misc/escape_sequences.hpp"
-#include "misc/simple_npy.hpp"
+#include "misc/simple_binary.hpp"
 #include "omp.h"
 
 // MARK: Constructor and Destructor
@@ -218,17 +218,32 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type
         std::cout << PHOENIX::CLIO::prettyPrint( "File '" + name + "' is not open! Cannot output matrix to file!", PHOENIX::CLIO::Control::Error ) << std::endl;
         return;
     }
-    
+
     // Python npy format
     if ( outputFiletype == "npy" ) {
         std::vector<Type::complex> submatrix;
-        for (int i = row_start; i < row_stop; i += increment) {
-            for (int j = col_start; j < col_stop; j += increment) {
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
                 auto index = j + i * N_c;
-                submatrix.push_back(buffer[index]);
+                submatrix.push_back( buffer[index] );
             }
         }
-        simple_npy::save_npy( out, submatrix, row_stop - row_start, col_stop - col_start );
+        PHOENIX::Output::save_binary( out, "NUMPY", submatrix, row_stop - row_start, col_stop - col_start, true );
+        out.flush();
+        out.close();
+        return;
+    }
+
+    // PHOENIX binary format
+    if ( outputFiletype == "ash" ) {
+        std::vector<Type::complex> submatrix;
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                submatrix.push_back( buffer[index] );
+            }
+        }
+        PHOENIX::Output::save_binary( out, "PHOENIX", submatrix, row_stop - row_start, col_stop - col_start, true );
         out.flush();
         out.close();
         return;
@@ -288,7 +303,22 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::u
                 submatrix.push_back( buffer[index] );
             }
         }
-        simple_npy::save_npy( out, submatrix, row_stop - row_start, col_stop - col_start );
+        PHOENIX::Output::save_binary( out, "NUMPY", submatrix, row_stop - row_start, col_stop - col_start );
+        out.flush();
+        out.close();
+        return;
+    }
+
+    // PHOENIX binary format
+    if ( outputFiletype == "ash" ) {
+        std::vector<Type::complex> submatrix;
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                submatrix.push_back( buffer[index] );
+            }
+        }
+        PHOENIX::Output::save_binary( out, "PHOENIX", submatrix, row_stop - row_start, col_stop - col_start );
         out.flush();
         out.close();
         return;

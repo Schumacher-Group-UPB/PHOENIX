@@ -8,7 +8,7 @@
 
 #include "cuda/typedef.cuh"
 
-namespace PHOENIX::simple_npy {
+namespace PHOENIX::Output {
 
 char endian_char() {
     int x = 1;
@@ -48,7 +48,7 @@ std::string type_char() {
 }
 
 template <typename T>
-std::vector<char> create_npy_header( const std::vector<size_t>& shape ) {
+std::vector<char> create_binary_header( const std::vector<size_t>& shape, const std::string& name ) {
     std::string header = "{'descr': '";
     header += endian_char();
     header += type_char<T>();
@@ -65,7 +65,14 @@ std::vector<char> create_npy_header( const std::vector<size_t>& shape ) {
     while ( ( 10 + header.size() ) % 16 != 15 ) header += ' ';
     header += '\n';
 
-    std::vector<char> final_header = { char( 0x93 ), 'N', 'U', 'M', 'P', 'Y', 0x01, 0x00 };
+    // Numpy magic string with header as text
+    //{ char( 0x93 ), ... name ..., 0x01, 0x00 };
+    std::vector<char> final_header;
+    final_header.push_back( 0x93 );
+    final_header.insert( final_header.end(), name.begin(), name.end() );
+    final_header.push_back( 0x01 );
+    final_header.push_back( 0x00 );
+
     uint16_t header_len = static_cast<uint16_t>( header.size() );
     final_header.push_back( header_len & 0xFF );
     final_header.push_back( ( header_len >> 8 ) & 0xFF );
@@ -75,19 +82,29 @@ std::vector<char> create_npy_header( const std::vector<size_t>& shape ) {
 }
 
 // Specialization for complex numbers: Ensure (real, imag) pairs are stored correctly
-std::vector<Type::real> flatten_complex_data(const std::vector<Type::complex>& complex_data) {
+// Interleaved: [real, imag, real, imag, ...]
+// Non-interleaved: [real, real, ..., imag, imag, ...]
+std::vector<Type::real> flatten_complex_data(const std::vector<Type::complex>& complex_data, bool interleaved = false) {
     std::vector<Type::real> flat_data(complex_data.size() * 2);
-    for (size_t i = 0; i < complex_data.size(); ++i) {
-        flat_data[2 * i] = complex_data[i].real();
-        flat_data[2 * i + 1] = complex_data[i].imag();
+    
+    if (interleaved) {
+        for ( size_t i = 0; i < complex_data.size(); ++i ) {
+            flat_data[2 * i] = complex_data[i].real();
+            flat_data[2 * i + 1] = complex_data[i].imag();
+        }
+    } else {
+        for ( size_t i = 0; i < complex_data.size(); ++i ) {
+            flat_data[i] = complex_data[i].real();
+            flat_data[complex_data.size() + i] = complex_data[i].imag();
+        }
     }
     return flat_data;
 }
 
 template <typename T>
-void save_npy( std::ofstream& fstream, const std::vector<T>& data, size_t rows, size_t cols ) {
+void save_binary( std::ofstream& fstream, const std::string& dtype, const std::vector<T>& data, size_t rows, size_t cols ) {
     std::vector<size_t> shape = { rows, cols };
-    std::vector<char> header = create_npy_header<T>( shape );
+    std::vector<char> header = create_binary_header<T>( shape, dtype );
 
     assert( fstream.is_open() && "Could not open file for writing." );
 
@@ -97,14 +114,13 @@ void save_npy( std::ofstream& fstream, const std::vector<T>& data, size_t rows, 
 }
 
 // Overload for complex number saving
-template <>
-void save_npy<Type::complex>( std::ofstream& fstream, const std::vector<Type::complex>& data, size_t rows, size_t cols ) {
+void save_binary( std::ofstream& fstream, const std::string& dtype, const std::vector<Type::complex>& data, size_t rows, size_t cols, bool interleaved ) {
     std::vector<size_t> shape = { rows, cols };
-    std::vector<char> header = create_npy_header<Type::complex>( shape );
+    std::vector<char> header = create_binary_header<Type::complex>( shape, dtype );
 
     assert( fstream.is_open() && "Could not open file for writing." );
 
-    std::vector<Type::real> flat_data = flatten_complex_data(data);
+    std::vector<Type::real> flat_data = flatten_complex_data( data, interleaved );
 
     fstream.write( header.data(), header.size() );
     fstream.write( reinterpret_cast<char*>( flat_data.data() ), flat_data.size() * sizeof( Type::real ) );
