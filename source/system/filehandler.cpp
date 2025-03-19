@@ -34,7 +34,7 @@ PHOENIX::FileHandler::~FileHandler() {
 
 void PHOENIX::FileHandler::init( int argc, char** argv ) {
     int index = 0;
-    if ( ( index = PHOENIX::CLIO::findInArgv( "--path", argc, argv ) ) != -1 )
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "path", "outputPath" }, argc, argv, 0, "--" ) ) != -1 )
         outputPath = PHOENIX::CLIO::getNextStringInput( argv, argc, "path", ++index );
     if ( outputPath.back() != '/' )
         outputPath += "/";
@@ -48,6 +48,11 @@ void PHOENIX::FileHandler::init( int argc, char** argv ) {
         color_palette_phase = PHOENIX::CLIO::getNextStringInput( argv, argc, "cmap", index );
     }
 
+    // Filetype
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "of", "outputFileType" }, argc, argv, 0, "--" ) ) != -1 ) {
+        outputFiletype = PHOENIX::CLIO::getNextStringInput( argv, argc, "outputFileType", ++index );
+    }
+
     // Creating output directory.
     try {
         std::filesystem::create_directories( outputPath );
@@ -57,7 +62,7 @@ void PHOENIX::FileHandler::init( int argc, char** argv ) {
     }
 
     // Create timeoutput subdirectory if --historyMatrix is passed.
-    if ( PHOENIX::CLIO::findInArgv( "--historyMatrix", argc, argv ) != -1 ) {
+    if ( PHOENIX::CLIO::findInArgv( { "historyMatrix", "hm" }, argc, argv, 0, "--" ) != -1 ) {
         try {
             std::filesystem::create_directories( outputPath + "timeoutput" );
             std::cout << PHOENIX::CLIO::prettyPrint( "Successfully created sub-directory '" + outputPath + "timeoutput'", PHOENIX::CLIO::Control::Info ) << std::endl;
@@ -90,7 +95,6 @@ void PHOENIX::FileHandler::queueRealMatrix( const Type::host_vector<Type::real>&
     }
     queueCondition.notify_all();
 }
-
 
 void PHOENIX::FileHandler::processQueue() {
     while ( true ) {
@@ -208,26 +212,29 @@ bool PHOENIX::FileHandler::loadMatrixFromFile( const std::string& filepath, Type
     std::cout << PHOENIX::CLIO::prettyPrint( "Loaded " + std::to_string( i ) + " elements from '" + filepath + "'", PHOENIX::CLIO::Control::Success ) << std::endl;
     return true;
 }
- 
+
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, std::ofstream& out, const std::string& name ) {
     if ( !out.is_open() ) {
         std::cout << PHOENIX::CLIO::prettyPrint( "File '" + name + "' is not open! Cannot output matrix to file!", PHOENIX::CLIO::Control::Error ) << std::endl;
         return;
     }
-    // TODO: implement this properly.
-    // - flag to set output mode -> .txt, .npy, .mat (later)
-    // - move actual output function to different function, then do 
-    // if (output_mode == "txt") {
-    //     outputMatrixToFileTxt(...);
-    // } else if (output_mode == "npy") {
-    //     outputMatrixToFileNpy(...);
-    // } else if (output_mode == "mat") {
-    //     outputMatrixToFileMat(...);
-    // }
-    std::ofstream new_out;
-    new_out.open( toPath( name ), std::ios::binary );
-    simple_npy::save_npy( new_out, std::vector<Type::complex>( buffer, buffer + N_c * N_r ), N_r, N_c );
-    return;
+    
+    // Python npy format
+    if ( outputFiletype == "npy" ) {
+        std::vector<Type::complex> submatrix;
+        for (int i = row_start; i < row_stop; i += increment) {
+            for (int j = col_start; j < col_stop; j += increment) {
+                auto index = j + i * N_c;
+                submatrix.push_back(buffer[index]);
+            }
+        }
+        simple_npy::save_npy( out, submatrix, row_stop - row_start, col_stop - col_start );
+        out.flush();
+        out.close();
+        return;
+    }
+
+    // .txt format
     // Header
     out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
     std::stringstream output_buffer;
@@ -251,15 +258,15 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type
     out.flush();
     out.close();
 #pragma omp critical
-    std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
+    std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name, outputFiletype ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
 }
 
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out ) {
-    auto& file = getFile( out );
+    auto& file = getFile( out, outputFiletype );
     outputMatrixToFile( buffer, col_start, col_stop, row_start, row_stop, N_c, N_r, increment, header, file, out );
 }
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, const Type::uint32 N_c, const Type::uint32 N_r, const Header& header, const std::string& out ) {
-    auto& file = getFile( out );
+    auto& file = getFile( out, outputFiletype );
     outputMatrixToFile( buffer, 0, N_c, 0, N_r, N_c, N_r, 1.0, header, file, out );
 }
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, const Type::uint32 N_c, const Type::uint32 N_r, const Header& header, std::ofstream& out, const std::string& name ) {
@@ -271,6 +278,23 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::u
         std::cout << PHOENIX::CLIO::prettyPrint( "File '" + name + "' is not open! Cannot output matrix to file!", PHOENIX::CLIO::Control::Error ) << std::endl;
         return;
     }
+
+    // Python npy format
+    if ( outputFiletype == "npy" ) {
+        std::vector<Type::real> submatrix;
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                submatrix.push_back( buffer[index] );
+            }
+        }
+        simple_npy::save_npy( out, submatrix, row_stop - row_start, col_stop - col_start );
+        out.flush();
+        out.close();
+        return;
+    }
+
+    // .txt format
     // Header
     out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
     std::stringstream output_buffer;
@@ -286,14 +310,14 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::u
     out.flush();
     out.close();
 #pragma omp critical
-    std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
+    std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( ( row_stop - row_start ) * ( col_stop - col_start ) / increment ) + " elements to '" + toPath( name, outputFiletype ) + "'.", PHOENIX::CLIO::Control::Success ) << std::endl;
 }
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::uint32 col_start, Type::uint32 col_stop, Type::uint32 row_start, Type::uint32 row_stop, const Type::uint32 N_c, const Type::uint32 N_r, Type::uint32 increment, const Header& header, const std::string& out ) {
-    auto& file = getFile( out );
+    auto& file = getFile( out, outputFiletype );
     outputMatrixToFile( buffer, col_start, col_stop, row_start, row_stop, N_c, N_r, increment, header, file, out );
 }
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, const Type::uint32 N_c, const Type::uint32 N_r, const Header& header, const std::string& out ) {
-    auto& file = getFile( out );
+    auto& file = getFile( out, outputFiletype );
     outputMatrixToFile( buffer, 0, N_c, 0, N_r, N_c, N_r, 1.0, header, file, out );
 }
 void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, const Type::uint32 N_c, const Type::uint32 N_r, const Header& header, std::ofstream& out, const std::string& name ) {
@@ -350,13 +374,16 @@ void PHOENIX::FileHandler::outputListToFile( const std::string& path, std::vecto
     std::cout << PHOENIX::CLIO::prettyPrint( "Output " + std::to_string( data[0].size() ) + " columns to '" + path + "' - '" + name + "'", PHOENIX::CLIO::Control::Success ) << std::endl;
 }
 
-std::string PHOENIX::FileHandler::toPath( const std::string& name ) {
-    return outputPath + ( outputPath.back() == '/' ? "" : "/" ) + outputName + ( outputName.empty() ? "" : "_" ) + name + ".txt";
+std::string PHOENIX::FileHandler::toPath( const std::string& name, const std::string& filetype ) {
+    return outputPath + ( outputPath.back() == '/' ? "" : "/" ) + outputName + ( outputName.empty() ? "" : "_" ) + name + "." + filetype;
 }
 
-std::ofstream& PHOENIX::FileHandler::getFile( const std::string& name ) {
+std::ofstream& PHOENIX::FileHandler::getFile( const std::string& name, const std::string& filetype ) {
     if ( files.find( name ) == files.end() ) {
-        files[name] = std::ofstream( toPath( name ) );
+        if ( filetype == "npy" || filetype == "mat" )
+            files[name] = std::ofstream( toPath( name, filetype ), std::ios::binary );
+        else
+            files[name] = std::ofstream( toPath( name, filetype ) );
     }
     return files[name];
 }

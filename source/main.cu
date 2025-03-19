@@ -111,7 +111,7 @@ int main( int argc, char* argv[] ) {
 
     // Print Time statistics and output to file
     system.printSummary( PHOENIX::TimeIt::getTimes(), PHOENIX::TimeIt::getTimesTotal() );
-    PHOENIX::TimeIt::toFile( system.filehandler.getFile( "times" ) );
+    PHOENIX::TimeIt::toFile( system.filehandler.getFile( "times", "txt" ) );
 #ifdef BENCH
     #ifdef LIKWID
     LIKWID_MARKER_CLOSE;

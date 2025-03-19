@@ -21,7 +21,7 @@ namespace PHOENIX {
 class FileHandler {
    public:
     std::map<std::string, std::ofstream> files;
-    std::string outputPath, outputName, color_palette, color_palette_phase;
+    std::string outputPath, outputName, color_palette, color_palette_phase, outputFiletype;
 
     FileHandler();
     FileHandler( int argc, char** argv );
@@ -84,9 +84,9 @@ class FileHandler {
     std::vector<std::thread> workerThreads;
     bool stopWorker;
 
-    std::string toPath( const std::string& name );
+    std::string toPath( const std::string& name, const std::string& filetype );
 
-    std::ofstream& getFile( const std::string& name );
+    std::ofstream& getFile( const std::string& name, const std::string& filetype = "txt" );
 
     bool loadMatrixFromFile( const std::string& filepath, Type::complex* buffer );
     bool loadMatrixFromFile( const std::string& filepath, Type::real* buffer );
