@@ -88,7 +88,7 @@ If the precompiled versions don’t meet your needs, or you wish to modify the s
    - **`SFML_PATH`**: Specify the SFML installation directory (if not in the system PATH).  
    - **`FP32`**: Use single-precision floats (default: double-precision).  
    - **`ARCH`**: Specify the CUDA compute capability (e.g., `ARCH=75`).
-   - **`OPTIMIZATION=-O0``**: Use to compile on Windows
+   - **`OPTIMIZATION=-O0`**: Use to compile on Windows
 
 ### Build Without Rendering
 1. **Clone the Repository**
