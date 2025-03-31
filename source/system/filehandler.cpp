@@ -59,7 +59,10 @@ void PHOENIX::FileHandler::init( int argc, char** argv ) {
     if ( outputFiletype == "text" ) {
         outputFiletype = "txt";
     }
-    if ( outputFiletype != "ash" && outputFiletype != "npy" && outputFiletype != "txt" ) {
+    if ( outputFiletype == "matlab" ) {
+        outputFiletype = "mat";
+    }
+    if ( outputFiletype != "ash" && outputFiletype != "npy" && outputFiletype != "txt"  && outputFiletype != "mat" ) {
         std::cout << PHOENIX::CLIO::prettyPrint( "Invalid output file type '" + outputFiletype + "'. Defaulting to 'txt'...", PHOENIX::CLIO::Control::Warning ) << std::endl;
         outputFiletype = "txt";
     }
@@ -235,7 +238,7 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type
         std::cout << PHOENIX::CLIO::prettyPrint( "File '" + name + "' is not open! Cannot output matrix to file!", PHOENIX::CLIO::Control::Error ) << std::endl;
         return;
     }
-
+    
     // Python npy format
     if ( outputFiletype == "npy" ) {
         std::vector<Type::complex> submatrix;
@@ -264,7 +267,21 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type
         out.close();
     }
 
-    // .txt format
+    // Matlab format
+    if ( outputFiletype == "mat" ) {
+        std::vector<Type::complex> submatrix;
+        for ( int i = row_start; i < row_stop; i += increment ) { 
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                submatrix.push_back( buffer[index] );
+            } 
+        }
+        PHOENIX::Output::save_matlab4_complex( out, "mat", submatrix, row_stop - row_start, col_stop - col_start );
+        out.flush();
+        out.close();
+    }
+
+    // .txt format 
     if ( outputFiletype == "txt" ) {
         // Header
         out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
@@ -338,6 +355,20 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::u
             }
         }
         PHOENIX::Output::save_binary( out, "PHOENIX", submatrix, row_stop - row_start, col_stop - col_start );
+        out.flush();
+        out.close();
+    }
+
+    // Matlab format
+    if ( outputFiletype == "mat" ) {
+        std::vector<Type::real> submatrix;
+        for ( int i = row_start; i < row_stop; i += increment ) {
+            for ( int j = col_start; j < col_stop; j += increment ) {
+                auto index = j + i * N_c;
+                submatrix.push_back( buffer[index] );
+            }
+        }
+        PHOENIX::Output::save_matlab4( out, "mat", submatrix, row_stop - row_start, col_stop - col_start );
         out.flush();
         out.close();
     }
