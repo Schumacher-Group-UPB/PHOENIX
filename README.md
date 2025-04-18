@@ -2,7 +2,7 @@
 ---
 
 # Highly optimized Solver for the Nonlinear 2D Schrödinger Equation (GPU or CPU)
-[![arXiv](https://img.shields.io/badge/arXiv-2411.18341-b31b1b.svg)](https://arxiv.org/abs/2411.18341)
+[![arXiv](https://img.shields.io/badge/arXiv-2411.18341-b31b1b.svg)](https://arxiv.org/abs/2411.18341) [![Build CPU](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/c-cpp.yml) [![Build GPU](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/nvcc-cpp.yml/badge.svg)](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/nvcc-cpp.yml) [![Issues](https://img.shields.io/github/issues/Schumacher-Group-UPB/PHOENIX.svg?maxAge=2592000)](https://github.com/Schumacher-Group-UPB/PHOENIX/issues) 
 
 PHOENIX is a high-performance, solver for the nonlinear two-dimensional Schrödinger equation that can operate on CPUs and GPUs (CUDA-accelerated). Originally designed for simulating exciton-polariton condensates, it has a broad range of applications in fields of nonlinear optics and atomic condensates. 
 
@@ -88,6 +88,7 @@ If the precompiled versions don’t meet your needs, or you wish to modify the s
    - **`SFML_PATH`**: Specify the SFML installation directory (if not in the system PATH).  
    - **`FP32`**: Use single-precision floats (default: double-precision).  
    - **`ARCH`**: Specify the CUDA compute capability (e.g., `ARCH=75`).
+   - **`OPTIMIZATION=-O0`**: Use to compile on Windows
 
 ### Build Without Rendering
 1. **Clone the Repository**
