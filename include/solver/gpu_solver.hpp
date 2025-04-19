@@ -10,6 +10,7 @@
 #include "system/system_parameters.hpp"
 #include "system/filehandler.hpp"
 #include "solver/matrix_container.cuh"
+#include "solver/iterator_config.hpp"
 #include "misc/escape_sequences.hpp"
 
 namespace PHOENIX {
@@ -107,17 +108,89 @@ class Solver {
     void finalize();
 
     void iterateNewton();
+    void iterateFixedTimestepHouwenWray();
+    void iterateFixedTimestepExplicitMidpoint();
+    void iterateFixedTimestepHeun();
+    void iterateFixedTimestepHeun3();
+    void iterateFixedTimestepRalston();
+    void iterateFixedTimestepRalston3();
+    void iterateFixedTimestepRalston4();
+    void iterateFixedTimestepSSPRK3();
     void iterateFixedTimestepRungeKutta3();
     void iterateFixedTimestepRungeKutta4();
+    void iterateFixedTimestepRule38();
+    void iterateFixedTimestepNystroem();
+    void iterateFixedTimestepDOP853();
     void iterateVariableTimestepRungeKutta();
     void iterateSplitStepFourier();
     void normalizeImaginaryTimePropagation();
 
     struct iteratorFunction {
-        int k_max;
+        uint32_t k_max;
         std::function<void()> iterate;
     };
-    std::map<std::string, iteratorFunction> iterator = { { "newton", { 1, std::bind( &Solver::iterateNewton, this ) } }, { "rk4", { 4, std::bind( &Solver::iterateFixedTimestepRungeKutta4, this ) } }, { "ssfm", { 0, std::bind( &Solver::iterateSplitStepFourier, this ) } } };
+    std::map<std::string, iteratorFunction> iterator = {
+        {
+            "Newton",
+            { Iterator::available.at( "Newton" ).halo_size, std::bind( &Solver::iterateNewton, this ) },
+        },
+        {
+            "MP",
+            { Iterator::available.at( "MP" ).halo_size, std::bind( &Solver::iterateFixedTimestepExplicitMidpoint, this ) },
+        },
+        {
+            "Heun",
+            { Iterator::available.at( "Heun" ).halo_size, std::bind( &Solver::iterateFixedTimestepHeun, this ) },
+        },
+        {
+            "Heun3",
+            { Iterator::available.at( "Heun3" ).halo_size, std::bind( &Solver::iterateFixedTimestepHeun3, this ) },
+        },
+        {
+            "Ralston",
+            { Iterator::available.at( "Ralston3" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston, this ) },
+        },
+        {
+            "Ralston3",
+            { Iterator::available.at( "Ralston3" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston3, this ) },
+        },
+        {
+            "Ralston4",
+            { Iterator::available.at( "Ralston4" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston4, this ) },
+        },
+        {
+            "VHW",
+            { Iterator::available.at( "VHW" ).halo_size, std::bind( &Solver::iterateFixedTimestepHouwenWray, this ) },
+        },
+        {
+            "SSPRK3",
+            { Iterator::available.at( "SSPRK3" ).halo_size, std::bind( &Solver::iterateFixedTimestepSSPRK3, this ) },
+        },
+        {
+            "RK3",
+            { Iterator::available.at( "RK3" ).halo_size, std::bind( &Solver::iterateFixedTimestepRungeKutta3, this ) },
+        },
+        {
+            "RK4",
+            { Iterator::available.at( "RK4" ).halo_size, std::bind( &Solver::iterateFixedTimestepRungeKutta4, this ) },
+        },
+        {
+            "rule38",
+            { Iterator::available.at( "rule38" ).halo_size, std::bind( &Solver::iterateFixedTimestepRule38, this ) },
+        },
+        {
+            "Nystroem",
+            { Iterator::available.at( "Nystroem" ).halo_size, std::bind( &Solver::iterateFixedTimestepNystroem, this ) },
+        },
+        {
+            "DOP853",
+            { Iterator::available.at( "DOP853" ).halo_size, std::bind( &Solver::iterateFixedTimestepDOP853, this ) },
+        },
+        {
+            "SSFM",
+            { 0, std::bind( &Solver::iterateSplitStepFourier, this ) },
+        },
+    };
 
     // Main System function. Either gp_scalar or gp_tetm.
     // Both functions have signature void(int i, Type::uint32 current_halo, Solver::VKernelArguments time, Solver::KernelArguments args, Solver::InputOutput io)

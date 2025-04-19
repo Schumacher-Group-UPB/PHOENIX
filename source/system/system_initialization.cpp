@@ -7,6 +7,7 @@
 #include "misc/commandline_io.hpp"
 #include "misc/escape_sequences.hpp"
 #include "system/envelope.hpp"
+#include "solver/iterator_config.hpp"
 #include "omp.h"
 
 void PHOENIX::SystemParameters::init( int argc, char** argv ) {
@@ -106,22 +107,27 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     }
 
     // Choose the iterator
-    iterator = "rk4";
+    iterator = "RK4";
     if ( ( index = PHOENIX::CLIO::findInArgv( "-ssfm", argc, argv ) ) != -1 ) {
-        iterator = "ssfm";
+        iterator = "SSFM";
     }
     if ( ( index = PHOENIX::CLIO::findInArgv( "--iterator", argc, argv ) ) != -1 ) {
         std::string it = PHOENIX::CLIO::getNextStringInput( argv, argc, "iterator", ++index );
         iterator = it;
     }
 
-    std::map<std::string, Type::uint32> halo_size_for_it = { { "rk4", 4 }, { "ssfm", 0 }, { "newton", 1 } };
-    if ( halo_size_for_it.find( iterator ) == halo_size_for_it.end() ) {
-        std::cout << PHOENIX::CLIO::prettyPrint( "Iterator '" + iterator + "' is not implemented. Falling back to 'rk4'", PHOENIX::CLIO::Control::Warning ) << std::endl;
-        iterator = "rk4";
+    if ( Iterator::available.find( iterator ) == Iterator::available.end() || !Iterator::available.at(iterator).implemented ) {
+        std::cout << PHOENIX::CLIO::prettyPrint( "Iterator '" + iterator + "' is not implemented. Falling back to 'RK4'", PHOENIX::CLIO::Control::Warning ) << std::endl;
+        std::cout << PHOENIX::CLIO::prettyPrint( "Available iterators are: ", PHOENIX::CLIO::Control::Info ) << std::endl;
+        for ( auto& it : Iterator::available ) {
+            std::cout << PHOENIX::CLIO::prettyPrint( " - " + it.first + ": " + std::string(it.second.name) + (it.second.implemented ? "" : "(not implemented)"), PHOENIX::CLIO::Control::Info ) << std::endl;
+        }
+        iterator = "RK4";
     }
-    p.halo_size = halo_size_for_it[iterator];
-    std::cout << PHOENIX::CLIO::prettyPrint( "Halo Size for iterator '" + iterator + "' = " + std::to_string( p.halo_size ), PHOENIX::CLIO::Control::Info ) << std::endl;
+    p.halo_size = Iterator::available.at(iterator).halo_size;
+    std::cout << PHOENIX::CLIO::prettyPrint( "Using iterator '" + iterator + " - " + std::string(Iterator::available.at(iterator).name) + "' with halo size " + std::to_string( p.halo_size ), PHOENIX::CLIO::Control::Info ) << std::endl; 
+    std::cout << PHOENIX::CLIO::prettyPrint( "Butcher Tableau: ", PHOENIX::CLIO::Control::Info ) << std::endl;
+    std::cout << Iterator::available.at( iterator ).butcher_tableau << std::endl;
 
     if ( ( index = PHOENIX::CLIO::findInArgv( { "initRandom", "iR" }, argc, argv, 0, "--" ) ) != -1 ) {
         randomly_initialize_system = true;

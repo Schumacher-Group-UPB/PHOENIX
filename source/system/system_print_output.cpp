@@ -9,6 +9,7 @@
 #include "misc/commandline_io.hpp"
 #include "misc/escape_sequences.hpp"
 #include "misc/timeit.hpp"
+#include "solver/iterator_config.hpp"
 #include "omp.h"
 
 // Automatically determine console width depending on windows or linux
@@ -267,12 +268,12 @@ const std::map<std::string_view, ArgInfo> arguments{
     },
     { "iterator", 
         { 
-            .name{ "--iterator, -rk4, -ssfm" }, 
+            .name{ "--iterator" }, 
             .key{ "<string>" }, 
-            .short_description{ "RK4 or SSFM" }, 
-            .long_description{ "Iterator to use. Can be either 'rk4' or 'ssfm'. -rk4 and -ssfm can be used instead." }, 
-            .short_usecase{ "--iterator rk4" }, 
-            .long_usecase{ "--iterator rk4 (sets the iterator to RK4)\n--iterator ssfm (sets the iterator to SSFM)\n-ssfm (use SSFM iterator instead)" } 
+            .short_description{ "Iterator to use." }, 
+            .long_description{ "Iterator to use." }, 
+            .short_usecase{ "--iterator RK4" }, 
+            .long_usecase{ "--iterator RK4 (sets the iterator to RK4)\n--iterator SSFM (sets the iterator to SSFM)" } 
         } 
     },
     { "imagTime", 
@@ -531,6 +532,12 @@ void PHOENIX::SystemParameters::printHelp( bool verbose, bool markdown ) {
     arguments.at( "tmax" ).print_usecase( t_max, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "iterator" ).print_usecase( iterator, verbose, markdown );
+    std::cout << PHOENIX::CLIO::unifyLength( "", "", "Available:", L1, L2, L3 ) << std::endl;
+    for ( auto& it : Iterator::available ) {
+        if ( !it.second.implemented )
+            continue;
+        std::cout << PHOENIX::CLIO::unifyLength( "", "", it.first + ": " + std::string( it.second.name ) + (it.second.fixed_timestep ? " (fixed)" : " (adaptive)"), L1, L2, L3 ) << std::endl;
+    }
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "imagTime" ).print_usecase( imag_time_amplitude, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
@@ -659,9 +666,8 @@ void PHOENIX::SystemParameters::printSummary( std::map<std::string, std::vector<
 
     // Additional Information
     std::cout << EscapeSequence::BOLD << PHOENIX::CLIO::centerString( " Infos ", console_width, '-' ) << EscapeSequence::RESET << std::endl;
-    std::cout << "Calculations done using the '" << iterator << "' solver" << std::endl;
-
-    if ( iterator == "rk45" ) {
+    std::cout << "Calculations done using the '" << iterator << " - " << Iterator::available.at(iterator).name << "' solver" << std::endl;
+    if ( !Iterator::available.at(iterator).fixed_timestep ) {
         std::cout << " = Tolerance used: " << tolerance << std::endl;
         std::cout << " = dt_max used: " << dt_max << std::endl;
         std::cout << " = dt_min used: " << dt_min << std::endl;

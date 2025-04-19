@@ -9,6 +9,25 @@
 #include "cuda/cuda_matrix.cuh"
 #include "solver/gpu_solver.hpp"
 #include "misc/commandline_io.hpp"
+
+void PHOENIX::Solver::iterateFixedTimestepRungeKutta3() {
+    SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
+
+                     CALCULATE_K( 1, wavefunction, reservoir );
+
+                     INTERMEDIATE_SUM_K( 1, Type::real( 0.5 ) );
+
+                     CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+
+                     INTERMEDIATE_SUM_K( 2, Type::real( -1.0 ), Type::real( 2.0 ) );
+
+                     CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+
+                     FINAL_SUM_K( 3, Type::real( 1.0 / 6.0 ), Type::real( 2.0 / 3.0 ), Type::real( 1.0 / 6.0 ), Type::real( 1.0 / 6.0 ) );
+
+    );
+}
+
 /*
  * This function iterates the Runge Kutta Kernel using a fixed time step.
  * A 4th order Runge-Kutta method is used. This function calls a single
@@ -16,7 +35,7 @@
  * for the next rungeFuncKernel call is done in the rungeFuncSum function.
  * The general implementation of the RK4 method goes as follows:
  * ------------------------------------------------------------------------------
- * k1 = f(t, y) = rungeFuncKernel(current)
+ * k1 =f(t, y) = rungeFuncKernel(current)
  * input_for_k2 = current + 0.5 * dt * k1
  * k2 = f(t + 0.5 * dt, input_for_k2) = rungeFuncKernel(input_for_k2)
  * input_for_k3 = current + 0.5 * dt * k2
@@ -35,19 +54,19 @@ void PHOENIX::Solver::iterateFixedTimestepRungeKutta4() {
 
                      CALCULATE_K( 1, wavefunction, reservoir );
 
-                     INTERMEDIATE_SUM_K( 1, 0.5f );
+                     INTERMEDIATE_SUM_K( 1, Type::real(0.5) );
 
                      CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
 
-                     INTERMEDIATE_SUM_K( 2, 0.5f );
+                     INTERMEDIATE_SUM_K( 2, Type::real(0.5) );
 
                      CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
 
-                     INTERMEDIATE_SUM_K( 3, 1.0f );
+                     INTERMEDIATE_SUM_K( 3, Type::real(1.0) );
 
                      CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
 
-                     FINAL_SUM_K( 4, 1.0f / 6.0f, 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 6.0f );
+                     FINAL_SUM_K( 4, Type::real(1.0 / 6.0), Type::real(1.0 / 3.0), Type::real(1.0 / 3.0), Type::real(1.0 / 6.0) );
 
     );
 }
