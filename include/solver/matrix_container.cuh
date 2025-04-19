@@ -44,7 +44,7 @@ struct MatrixContainer {
     PHOENIX::Type::device_vector<Type::cuda_random_state> random_state;
 
     // RK45 Style Error Matrix.
-    PHOENIX::CUDAMatrix<Type::complex> rk_error;
+    PHOENIX::CUDAMatrix<Type::real> rk_error;
 
     // K Matrices. These are vectors of CUDAMatrices.
     PHOENIX::CUDAMatrix<Type::complex> k_wavefunction_plus, k_wavefunction_minus, k_reservoir_plus, k_reservoir_minus;
@@ -121,7 +121,7 @@ struct MatrixContainer {
 
         // RK Error Matrix. For now, use k_max > 4 as a construction condition.
         // TODO: we removed RK45, so we dont need this any more.
-        if ( k_max > 4 )
+        //if ( k_max > 4 )
             rk_error.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "rk_error" );
 
         // Construct the halo map. 6*total halo points because we have 6 coordinates for each point
@@ -218,7 +218,7 @@ struct MatrixContainer {
         Type::cuda_random_state* random_state = nullptr;
 
         // RK Error
-        Type::complex* rk_error = nullptr;
+        Type::real* rk_error = nullptr;
 
         // Halo Map
         int* halo_map = nullptr;

@@ -16,6 +16,19 @@
 PHOENIX::Type::real fft_cached_t = 0.0;
 bool first_time = true;
 
+void PHOENIX::Solver::updateKernelTime() {
+    system.pulse.updateTemporal( system.p.t );
+    system.potential.updateTemporal( system.p.t );
+    system.pump.updateTemporal( system.p.t );
+    // Update the time struct. This is required for variable time steps, and when the kernels need t or dt.
+    Type::host_vector<Type::real> new_time = { system.p.t, system.p.dt };
+    // And update the solver struct accordingly
+    dev_pulse_oscillation.amp = system.pulse.temporal_envelope;
+    dev_potential_oscillation.amp = system.potential.temporal_envelope;
+    dev_pump_oscillation.amp = system.pump.temporal_envelope;
+    time = new_time;
+}
+
 /**
  * Iterates the Runge-Kutta-Method on the GPU
  * Note, that all device arrays and variables have to be initialized at this point
@@ -43,17 +56,8 @@ bool PHOENIX::Solver::iterate() {
         }
         CALL_FULL_KERNEL( PHOENIX::Kernel::generate_random_numbers, "random_number_gen", grid_size, block_size, 0, args.dev_ptrs.random_state, args.dev_ptrs.random_number, system.p.subgrid_N2_with_halo, system.p.stochastic_amplitude * std::sqrt( system.p.dt ), system.p.stochastic_amplitude * std::sqrt( system.p.dt ) );
     }
-    // TODO: Hide this in a solver.updateKernelArgs function
-    system.pulse.updateTemporal( system.p.t );
-    system.potential.updateTemporal( system.p.t );
-    system.pump.updateTemporal( system.p.t );
-    // Update the time struct. This is required for variable time steps, and when the kernels need t or dt.
-    Type::host_vector<Type::real> new_time = { system.p.t, system.p.dt };
-    // And update the solver struct accordingly
-    dev_pulse_oscillation.amp = system.pulse.temporal_envelope;
-    dev_potential_oscillation.amp = system.potential.temporal_envelope;
-    dev_pump_oscillation.amp = system.pump.temporal_envelope;
-    time = new_time;
+    
+    updateKernelTime();
 
     // Iterate RK4(45)/ssfm/itp
     iterator[system.iterator].iterate();

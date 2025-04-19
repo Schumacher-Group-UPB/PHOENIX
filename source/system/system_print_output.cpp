@@ -266,6 +266,28 @@ const std::map<std::string_view, ArgInfo> arguments{
             .long_usecase{ "--tmax 1000 (sets the simulation time to 1000ps)" } 
         } 
     },
+    {
+        "rkvdt",
+        {
+            .name{ "--rkvdt" },
+            .key{ "<double> <double>" },
+            .short_description{ "Minimum and maximum timestep for adaptive iterator." },
+            .long_description{ "Minimum and maximum timestep for adaptive iterator." },
+            .short_usecase{ "--rkvdt 0.1 1.0" },
+            .long_usecase{ "--rkvdt 0.01 1.0 (sets the minimum timestep to 0.01ps and the maximum timestep to 1.0ps)" }
+        }
+    }, 
+    {
+        "tol",
+        {
+            .name{ "--tol" },
+            .key{ "<double>" },
+            .short_description{ "Tolerance for adaptive iterator." },
+            .long_description{ "Tolerance for adaptive iterator." },
+            .short_usecase{ "--tol 0.1" },
+            .long_usecase{ "--tol 0.1 (sets the tolerance to 0.1)" }
+        }
+    },
     { "iterator", 
         { 
             .name{ "--iterator" }, 
@@ -530,6 +552,10 @@ void PHOENIX::SystemParameters::printHelp( bool verbose, bool markdown ) {
     arguments.at( "tstep" ).print_usecase( magic_timestep, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "tmax" ).print_usecase( t_max, verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "rkvdt" ).print_usecase( std::to_string( dt_min ) + ":" + std::to_string( dt_max ), verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
+    arguments.at( "tol" ).print_usecase( tolerance, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "iterator" ).print_usecase( iterator, verbose, markdown );
     std::cout << PHOENIX::CLIO::unifyLength( "", "", "Available:", L1, L2, L3 ) << std::endl;

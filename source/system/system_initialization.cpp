@@ -93,7 +93,7 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     if ( ( index = PHOENIX::CLIO::findInArgv( "--tol", argc, argv ) ) != -1 ) {
         tolerance = PHOENIX::CLIO::getNextInput( argv, argc, "tol", ++index );
     }
-    if ( ( index = PHOENIX::CLIO::findInArgv( "--rk45dt", argc, argv ) ) != -1 ) {
+    if ( ( index = PHOENIX::CLIO::findInArgv( "--rkvdt", argc, argv ) ) != -1 ) {
         dt_min = PHOENIX::CLIO::getNextInput( argv, argc, "dt_min", ++index );
         dt_max = PHOENIX::CLIO::getNextInput( argv, argc, "dt_max", index );
     }

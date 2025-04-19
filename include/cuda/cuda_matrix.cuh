@@ -525,6 +525,39 @@ class CUDAMatrix : CUDAMatrixBase {
         return host_data;
     }
 
+    void swap( CUDAMatrix& other ) noexcept {
+        using std::swap;
+
+        // If your base‐class has any state, swap it first:
+        swap( static_cast<CUDAMatrixBase&>( *this ), static_cast<CUDAMatrixBase&>( other ) );
+
+        // Now swap every non‐static data member:
+        swap( rows, other.rows );
+        swap( cols, other.cols );
+        swap( subgrid_rows, other.subgrid_rows );
+        swap( subgrid_cols, other.subgrid_cols );
+        swap( subgrid_rows_with_halo, other.subgrid_rows_with_halo );
+        swap( subgrid_cols_with_halo, other.subgrid_cols_with_halo );
+        swap( total_size_host, other.total_size_host );
+        swap( total_size_device, other.total_size_device );
+        swap( subgrids_columns, other.subgrids_columns );
+        swap( subgrids_rows, other.subgrids_rows );
+        swap( total_num_subgrids, other.total_num_subgrids );
+        swap( subgrid_size, other.subgrid_size );
+        swap( subgrid_size_with_halo, other.subgrid_size_with_halo );
+        swap( halo_size, other.halo_size );
+        swap( num_matrices, other.num_matrices );
+        swap( name, other.name );
+        swap( device_data, other.device_data );
+        swap( subgrid_pointers_device, other.subgrid_pointers_device );
+        swap( host_data, other.host_data );
+        swap( size_in_mb_host, other.size_in_mb_host );
+        swap( size_in_mb_device, other.size_in_mb_device );
+        swap( host_is_ahead, other.host_is_ahead );
+        swap( is_constructed, other.is_constructed );
+        // note: we do *not* swap the static device_data_full map
+    }
+
     // MARK: Transformations on Device Data
     // ===================================================================== //
     // =------------------------- Transformations -------------------------= //
@@ -533,6 +566,18 @@ class CUDAMatrix : CUDAMatrixBase {
     // They are applied per-subgrid and may change the actual subgrid device
     // data in place. The host data is then marked as outdated.
     // Oh and these also transform all num_matrices matrices. :)
+
+    struct transform_abs2 {
+        __host__ __device__ T operator()( const T& x ) const {
+            const T res = CUDA::abs2( x );
+            return res;
+        }
+    };
+    struct transform_sum {
+        __host__ __device__ T operator()( const T& lhs, const T& rhs ) const {
+            return lhs + rhs;
+        }
+    };
 
     /**
      * Transforms the device data in the matrix using a lambda function.

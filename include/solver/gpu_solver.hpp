@@ -105,11 +105,14 @@ class Solver {
     // Output the history and max caches to files. should be called from finalize()
     void cacheToFiles();
 
+    void updateKernelTime();
+
     void finalize();
 
     void iterateNewton();
     void iterateFixedTimestepHouwenWray();
     void iterateFixedTimestepExplicitMidpoint();
+    void iterateFixedTimestepBogacki();
     void iterateFixedTimestepHeun();
     void iterateFixedTimestepHeun3();
     void iterateFixedTimestepRalston();
@@ -120,7 +123,15 @@ class Solver {
     void iterateFixedTimestepRungeKutta4();
     void iterateFixedTimestepRule38();
     void iterateFixedTimestepNystroem();
+    void iterateFixedTimestepCashKarp();
+    void iterateFixedTimestepFehlberg2();
+    void iterateFixedTimestepFehlberg5();
+    void iterateFixedTimestepDOP5();
     void iterateFixedTimestepDOP853();
+
+    void iterateVariableTimestepFehlberg2();
+    void iteratevariableTimestepFehlberg5();
+    void iterateVariableTimestepDOP853();
     void iterateVariableTimestepRungeKutta();
     void iterateSplitStepFourier();
     void normalizeImaginaryTimePropagation();
@@ -148,7 +159,7 @@ class Solver {
         },
         {
             "Ralston",
-            { Iterator::available.at( "Ralston3" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston, this ) },
+            { Iterator::available.at( "Ralston" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston, this ) },
         },
         {
             "Ralston3",
@@ -183,8 +194,40 @@ class Solver {
             { Iterator::available.at( "Nystroem" ).halo_size, std::bind( &Solver::iterateFixedTimestepNystroem, this ) },
         },
         {
-            "DOP853",
-            { Iterator::available.at( "DOP853" ).halo_size, std::bind( &Solver::iterateFixedTimestepDOP853, this ) },
+            "CashKarp",
+            { Iterator::available.at( "CashKarp" ).halo_size, std::bind( &Solver::iterateFixedTimestepCashKarp, this ) },
+        },
+        {
+            "Fehlberg2",
+            { Iterator::available.at( "Fehlberg2" ).halo_size, std::bind( &Solver::iterateFixedTimestepFehlberg2, this ) },
+        },
+        {
+            "Fehlberg12",
+            { Iterator::available.at( "Fehlberg12" ).halo_size, std::bind( &Solver::iterateVariableTimestepFehlberg2, this ) },
+        },
+        {
+            "Fehlberg5",
+            { Iterator::available.at( "Fehlberg5" ).halo_size, std::bind( &Solver::iterateFixedTimestepFehlberg5, this ) },
+        },
+        {
+            "Fehlberg45",
+            { Iterator::available.at( "Fehlberg45" ).halo_size, std::bind( &Solver::iteratevariableTimestepFehlberg5, this ) },
+        },
+        {
+            "Bogacki",
+            { Iterator::available.at( "Bogacki" ).halo_size, std::bind( &Solver::iterateFixedTimestepBogacki, this ) },
+        },
+        {
+            "DP5",
+            { Iterator::available.at( "DP5" ).halo_size, std::bind( &Solver::iterateFixedTimestepDOP5, this ) },
+        },
+        {
+            "DP8",
+            { Iterator::available.at( "DP8" ).halo_size, std::bind( &Solver::iterateFixedTimestepDOP853, this ) },
+        },
+        {
+            "DP85",
+            { Iterator::available.at( "DP85" ).halo_size, std::bind( &Solver::iterateVariableTimestepDOP853, this ) },
         },
         {
             "SSFM",
