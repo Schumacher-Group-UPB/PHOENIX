@@ -134,6 +134,7 @@ class Solver {
     void iteratevariableTimestepFehlberg5();
     void iterateVariableTimestepDOP853();
     void iterateVariableTimestepNSRK78();
+    void iterateVariableTimestepDOP45();
     void iterateVariableTimestepRungeKutta();
     void iterateSplitStepFourier();
     void normalizeImaginaryTimePropagation();
@@ -238,6 +239,10 @@ class Solver {
         {
             "NSRK78",
             { Iterator::available.at( "NSRK78" ).halo_size, std::bind( &Solver::iterateVariableTimestepNSRK78, this ) },
+        },
+        {
+            "DP45",
+            { Iterator::available.at( "DP45" ).halo_size, std::bind( &Solver::iterateVariableTimestepDOP45, this ) },
         },
         {
             "SSFM",

@@ -19,7 +19,9 @@ void PHOENIX::Solver::iterateFixedTimestepNSRK78() {
                      CALCULATE_K( 1, wavefunction, reservoir );
 
                      // Stage 2 (t + c₂·h), c₂ = 1/1000
-                     INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 1000.0 ) ); CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                     INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 1000.0 ) ); 
+                     
+                     CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
 
                      // Stage 3 (t + c₃·h), c₃ = 1/9
                      INTERMEDIATE_SUM_K( 2,
@@ -127,6 +129,7 @@ void PHOENIX::Solver::iterateFixedTimestepNSRK78() {
                                          Type::real( 7470703125.0 / 1567431866.0 ), // a₁₂,₁₀
                                          Type::real( 1562500000.0 / 72342361.0 )    // a₁₂,₁₁
                      );
+                     
                      CALCULATE_K( 12, buffer_wavefunction, buffer_reservoir );
 
                      // Stage 13 (t + c₁₃·h), c₁₃ = 1
@@ -141,14 +144,28 @@ void PHOENIX::Solver::iterateFixedTimestepNSRK78() {
                                          Type::real( -3625.0 / 6188.0 ),          // a₁₃,₉
                                          Type::real( 292968750.0 / 374084711.0 ), // a₁₃,₁₀
                                          Type::real( 0.0 ),                       // a₁₃,₁₁
-                                         Type::real( 1e-15 )                      // a₁₃,₁₂
+                                         Type::real( 0.0 )                      // a₁₃,₁₂
                      );
+
                      CALCULATE_K( 13, buffer_wavefunction, buffer_reservoir );
 
                      // High‑order (8th) solution
                      FINAL_SUM_K( 13,
                                   Type::real( 4241.0 / 88200.0 ), // b₁
-                                  Type::real( 0.0 ), Type::real( 0.0 ), Type::real( 0.0 ), Type::real( 0.0 ), Type::real( 9946.0 / 23205.0 ), Type::real( -10449.0 / 1925.0 ), Type::real( 415449.0 / 1573075.0 ), Type::real( -2025.0 / 5096.0 ), Type::real( 48828125.0 / 44900856.0 ), Type::real( 48828125.0 / 9843561.0 ), Type::real( 463.0 / 12600.0 ), Type::real( 1e-15 ) ); );
+                                  Type::real( 0.0 ), 
+                                  Type::real( 0.0 ), 
+                                  Type::real( 0.0 ), 
+                                  Type::real( 0.0 ), 
+                                  Type::real( 9946.0 / 23205.0 ), 
+                                  Type::real( -10449.0 / 1925.0 ), 
+                                  Type::real( 415449.0 / 1573075.0 ), 
+                                  Type::real( -2025.0 / 5096.0 ), 
+                                  Type::real( 48828125.0 / 44900856.0 ), 
+                                  Type::real( 48828125.0 / 9843561.0 ), 
+                                  Type::real( 463.0 / 12600.0 ), 
+                                  Type::real( 0.0 ) 
+                    ); 
+         );
 }
 
 void PHOENIX::Solver::iterateVariableTimestepNSRK78() {
@@ -283,7 +300,7 @@ void PHOENIX::Solver::iterateVariableTimestepNSRK78() {
                                 Type::real( -3625.0 / 6188.0 ),          // a₁₃,₉
                                 Type::real( 292968750.0 / 374084711.0 ), // a₁₃,₁₀
                                 Type::real( 0.0 ),                       // a₁₃,₁₁
-                                Type::real( 1e-15 )                      // a₁₃,₁₂
+                                Type::real( 0.0 )                      // a₁₃,₁₂
             );
             CALCULATE_K( 13, buffer_wavefunction, buffer_reservoir );
 
@@ -300,7 +317,7 @@ void PHOENIX::Solver::iterateVariableTimestepNSRK78() {
                                 Type::real( 48828125.0 / 44900856.0 ), 
                                 Type::real( 48828125.0 / 9843561.0 ), 
                                 Type::real( 463.0 / 12600.0 ), 
-                                Type::real( 1e-15 ) 
+                                Type::real( 0.0 ) 
             );
 
             // Embedded (7th) – error=high−low

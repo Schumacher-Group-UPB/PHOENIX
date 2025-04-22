@@ -40,6 +40,84 @@ void PHOENIX::Solver::iterateFixedTimestepDOP5() {
     );
 }
 
+void PHOENIX::Solver::iterateVariableTimestepDOP45() {
+    bool accept = false;
+    do {
+        SOLVER_SEQUENCE( false /*Capture CUDA Graph*/,
+
+                         CALCULATE_K( 1, wavefunction, reservoir );
+
+                         INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 5.0 ) );
+
+                         CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+
+                         INTERMEDIATE_SUM_K( 2, Type::real( 3.0 / 40.0 ), Type::real( 9.0 / 40.0 ) );
+
+                         CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+
+                         INTERMEDIATE_SUM_K( 3, Type::real( 44.0 / 45.0 ), Type::real( -56.0 / 15.0 ), Type::real( 32.0 / 9.0 ) );
+
+                         CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
+
+                         INTERMEDIATE_SUM_K( 4, Type::real( 19372.0 / 6561.0 ), Type::real( -25360.0 / 2187.0 ), Type::real( 64448.0 / 6561.0 ), Type::real( -212.0 / 729.0 ) );
+
+                         CALCULATE_K( 5, buffer_wavefunction, buffer_reservoir );
+
+                         INTERMEDIATE_SUM_K( 5, Type::real( 9017.0 / 3168.0 ), Type::real( -355.0 / 33.0 ), Type::real( 46732.0 / 5247.0 ), Type::real( 49.0 / 176.0 ), Type::real( -5103.0 / 18656.0 ) );
+
+                         CALCULATE_K( 6, buffer_wavefunction, buffer_reservoir );
+
+                         INTERMEDIATE_SUM_K( 6, Type::real( 35.0 / 384.0 ), Type::real( 0.0 ), Type::real( 500.0 / 1113.0 ), Type::real( 125.0 / 192.0 ), Type::real( -2187.0 / 6784.0 ), Type::real( 11.0 / 84.0 ) );
+
+                         // For DP, we need the 7th k
+                         CALCULATE_K( 7, buffer_wavefunction, buffer_reservoir );
+
+                         ERROR_K( 7, Type::real( 35.0 / 384.0 - 5179.0 / 57600.0 ), Type::real( 0.0 ), Type::real( 500.0 / 1113.0 - 7571.0 / 16695.0 ), Type::real( 125.0 / 192.0 - 393.0 / 640.0 ), Type::real( -2187.0 / 6784.0 + 92097.0 / 339200.0 ), Type::real( 11.0 / 84.0 - 187.0 / 2100.0 ), Type::real( -1.0 / 40.0 ) );
+
+                         // Redo this sum so we get the correct solution in buffer_...
+                         INTERMEDIATE_SUM_K( 6, Type::real( 35.0 / 384.0 ), Type::real( 0.0 ), Type::real( 500.0 / 1113.0 ), Type::real( 125.0 / 192.0 ), Type::real( -2187.0 / 6784.0 ), Type::real( 11.0 / 84.0 ) );
+
+        );
+        auto msum = matrix.k_wavefunction_plus.transformReduce( Type::complex( 0.0 ), CUDAMatrix<Type::complex>::transform_abs2(), CUDAMatrix<Type::complex>::transform_sum(), 5 /*matrix k6*/ );
+        Type::real normalization_factor = CUDA::sqrt( CUDA::real( msum ) );
+        Type::real integrated_error = std::sqrt( matrix.rk_error.sum() );
+
+        Type::real final_error = std::abs( integrated_error / normalization_factor );
+        Type::real dh_arg = system.tolerance / 2.0 / CUDA::max( std::numeric_limits<Type::real>::min(), final_error );
+        Type::real dh = std::pow<Type::real>( dh_arg, Type::real( 1.0 / 5.0 ) );
+
+        if ( std::isnan( dh ) ) {
+            dh = 0.9;
+            final_error = std::numeric_limits<Type::real>::max();
+        }
+        if ( std::isnan( final_error ) ) {
+            dh = 0.9;
+            final_error = std::numeric_limits<Type::real>::max();
+        }
+
+        //  Set new timestep
+        Type::real new_dt = std::min( system.p.dt * dh, system.dt_max );
+        if ( new_dt < system.dt_min ) {
+            new_dt = system.dt_min;
+            accept = true;
+        }
+        system.p.dt = new_dt;
+
+        updateKernelTime();
+
+        if ( final_error < system.tolerance ) {
+            accept = true;
+            matrix.wavefunction_plus.swap( matrix.buffer_wavefunction_plus );
+            matrix.reservoir_plus.swap( matrix.buffer_reservoir_plus );
+            if ( system.use_twin_mode ) {
+                matrix.wavefunction_minus.swap( matrix.buffer_wavefunction_minus );
+                matrix.reservoir_minus.swap( matrix.buffer_reservoir_minus );
+            }
+        }
+
+    } while ( !accept );
+}
+
 void PHOENIX::Solver::iterateFixedTimestepDOP853() {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 

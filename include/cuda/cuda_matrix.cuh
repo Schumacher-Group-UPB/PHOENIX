@@ -585,16 +585,18 @@ class CUDAMatrix : CUDAMatrixBase {
      * @param func: Lambda function that takes a T and returns a T.
      */
     template <typename Func>
-    CUDAMatrix<T>& transform( Func func ) {
+    CUDAMatrix<T>& transform( Func func, size_t matrix = 0 ) {
+        size_t matrix_start = matrix * subgrid_size_with_halo;
+        size_t matrix_end = ( matrix + 1 ) * subgrid_size_with_halo;
 // Transform the data
 #ifdef USE_CPU
     #pragma omp parallel for schedule( static )
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            std::ranges::transform( device_data[i].begin(), device_data[i].end(), device_data[i].begin(), func );
+            std::ranges::transform( device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, device_data[i].begin() + matrix_start, func );
         }
 #else
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            thrust::transform( device_data[i].begin(), device_data[i].end(), device_data[i].begin(), func );
+            thrust::transform( device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, device_data[i].begin() + matrix_start, func );
         }
 #endif
         // The device matrix is now ahead
@@ -610,17 +612,19 @@ class CUDAMatrix : CUDAMatrixBase {
      * @param reduction: Lambda function that takes two Ts and returns a T. 
     */
     template <typename Func, typename Reduction>
-    T transformReduce( T init, Func func, Reduction reduction ) {
+    T transformReduce( T init, Func func, Reduction reduction, size_t matrix = 0 ) {
         T result = init;
+        size_t matrix_start = matrix * subgrid_size_with_halo;
+        size_t matrix_end = ( matrix + 1 ) * subgrid_size_with_halo;
 // Transform the data
 #ifdef USE_CPU
     #pragma omp parallel for schedule( static )
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            result = std::transform_reduce( device_data[i].begin(), device_data[i].end(), result, reduction, func );
+            result = std::transform_reduce( device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, result, reduction, func );
         }
 #else
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            result = thrust::transform_reduce( device_data[i].begin(), device_data[i].end(), func, result, reduction );
+            result = thrust::transform_reduce( device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, func, result, reduction );
         }
 #endif
         // Return this pointer
@@ -632,14 +636,16 @@ class CUDAMatrix : CUDAMatrixBase {
      * Transformations happen per subgrid. This function does not change the device data.
      * @return: std::pair<T, T> - The minimum and maximum values of the matrix.
     */
-    std::tuple<T, T> extrema() {
+    std::tuple<T, T> extrema( size_t matrix = 0 ) {
         T min = std::numeric_limits<T>::max();
         T max = std::numeric_limits<T>::min();
+        size_t matrix_start = matrix * subgrid_size_with_halo;
+        size_t matrix_end = ( matrix + 1 ) * subgrid_size_with_halo;
         // Transform the data
 #ifdef USE_CPU
     #pragma omp parallel for schedule( static )
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            auto [min_i, max_i] = std::ranges::minmax_element( device_data[i].begin(), device_data[i].end(), []( T a, T b ) { return a < b; } );
+            auto [min_i, max_i] = std::ranges::minmax_element( device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, []( T a, T b ) { return a < b; } );
     #pragma omp critical
             {
                 min = min < *min_i ? min : *min_i;
@@ -648,7 +654,7 @@ class CUDAMatrix : CUDAMatrixBase {
         }
 #else
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            auto result = thrust::minmax_element( device_data[i].begin(), device_data[i].end(), [] PHOENIX_DEVICE( T a, T b ) { return a < b; } );
+            auto result = thrust::minmax_element( device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, [] PHOENIX_DEVICE( T a, T b ) { return a < b; } );
             // Result contains pointers to DEVICE memory, so we cant just dereference them
             T min_i, max_i;
             thrust::copy( result.first, result.first + 1, &min_i );
@@ -667,17 +673,19 @@ class CUDAMatrix : CUDAMatrixBase {
      * @param reduction: Lambda function that takes two Ts and returns a T. 
     */
     template <typename Reduction>
-    T reduce( T init, Reduction reduction ) {
+    T reduce( T init, Reduction reduction, size_t matrix = 0 ) {
         T result = init;
+        size_t matrix_start = matrix * subgrid_size_with_halo;
+        size_t matrix_end = ( matrix + 1 ) * subgrid_size_with_halo;
 // Transform the data
 #ifdef USE_CPU
     #pragma omp parallel for schedule( static )
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            result = std::reduce( device_data[i].begin(), device_data[i].end(), result, reduction );
+            result = std::reduce( device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, result, reduction );
         }
 #else
         for ( int i = 0; i < total_num_subgrids; i++ ) {
-            result = thrust::reduce( thrust::device, device_data[i].begin(), device_data[i].end(), result, reduction );
+            result = thrust::reduce( thrust::device, device_data[i].begin() + matrix_start, device_data[i].begin() + matrix_end, result, reduction );
         }
 #endif
         return result;
@@ -688,11 +696,11 @@ class CUDAMatrix : CUDAMatrixBase {
      * Transformations happen per subgrid. This function does not change the device data.
      * @return: T - The sum of the matrix.
     */
-    T sum() {
+    T sum( size_t matrix = 0 ) {
 #ifdef USE_CPU
-        return reduce( T( 0.0 ), std::plus<T>() );
+        return reduce( T( 0.0 ), std::plus<T>(), matrix );
 #else
-        return reduce( T( 0.0 ), thrust::plus<T>() );
+        return reduce( T( 0.0 ), thrust::plus<T>(), matrix );
 #endif
     }
 
