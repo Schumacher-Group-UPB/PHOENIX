@@ -17,16 +17,22 @@ PHOENIX::Type::real fft_cached_t = 0.0;
 bool first_time = true;
 
 void PHOENIX::Solver::updateKernelTime() {
+    // Update the time struct. This is required for variable time steps, and when the kernels need t or dt.
+    Type::host_vector<Type::real> new_time = { system.p.t, system.p.dt };
+    time = new_time;
+    // And update the solver struct accordingly
     system.pulse.updateTemporal( system.p.t );
     system.potential.updateTemporal( system.p.t );
     system.pump.updateTemporal( system.p.t );
-    // Update the time struct. This is required for variable time steps, and when the kernels need t or dt.
-    Type::host_vector<Type::real> new_time = { system.p.t, system.p.dt };
-    // And update the solver struct accordingly
     dev_pulse_oscillation.amp = system.pulse.temporal_envelope;
     dev_potential_oscillation.amp = system.potential.temporal_envelope;
     dev_pump_oscillation.amp = system.pump.temporal_envelope;
-    time = new_time;
+    system.pulse.updateTemporal( system.p.t + system.p.dt );
+    system.potential.updateTemporal( system.p.t + system.p.dt );
+    system.pump.updateTemporal( system.p.t + system.p.dt );
+    dev_pulse_oscillation.amp_next = system.pulse.temporal_envelope;
+    dev_potential_oscillation.amp_next = system.potential.temporal_envelope;
+    dev_pump_oscillation.amp_next = system.pump.temporal_envelope;
 }
 
 /**

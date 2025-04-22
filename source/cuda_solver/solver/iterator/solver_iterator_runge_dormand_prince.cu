@@ -13,27 +13,27 @@
 void PHOENIX::Solver::iterateFixedTimestepDOP5() {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 
-                     CALCULATE_K( 1, wavefunction, reservoir );
+                     CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                      INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 5.0 ) );
 
-                     CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 2, Type::real( 1.0 / 5.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 2, Type::real( 3.0 / 40.0 ), Type::real( 9.0 / 40.0 ) );
 
-                     CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 3, Type::real( 3.0 / 10.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 3, Type::real( 44.0 / 45.0 ), Type::real( -56.0 / 15.0 ), Type::real( 32.0 / 9.0 ) );
 
-                     CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 4, Type::real( 4.0 / 5.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 4, Type::real( 19372.0 / 6561.0 ), Type::real( -25360.0 / 2187.0 ), Type::real( 64448.0 / 6561.0 ), Type::real( -212.0 / 729.0 ) );
 
-                     CALCULATE_K( 5, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 5, Type::real( 8.0 / 9.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 5, Type::real( 9017.0 / 3168.0 ), Type::real( -355.0 / 33.0 ), Type::real( 46732.0 / 5247.0 ), Type::real( 49.0 / 176.0 ), Type::real( -5103.0 / 18656.0 ) );
 
-                     CALCULATE_K( 6, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 6, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                      FINAL_SUM_K( 6, Type::real( 35.0 / 384.0 ), Type::real( 0.0 ), Type::real( 500.0 / 1113.0 ), Type::real( 125.0 / 192.0 ), Type::real( -2187.0 / 6784.0 ), Type::real( 11.0 / 84.0 ) );
 
@@ -45,32 +45,32 @@ void PHOENIX::Solver::iterateVariableTimestepDOP45() {
     do {
         SOLVER_SEQUENCE( false /*Capture CUDA Graph*/,
 
-                         CALCULATE_K( 1, wavefunction, reservoir );
+                         CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                          INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 5.0 ) );
 
-                         CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 2, Type::real( 1.0 / 5.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 2, Type::real( 3.0 / 40.0 ), Type::real( 9.0 / 40.0 ) );
 
-                         CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 3, Type::real( 3.0 / 10.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 3, Type::real( 44.0 / 45.0 ), Type::real( -56.0 / 15.0 ), Type::real( 32.0 / 9.0 ) );
 
-                         CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 4, Type::real( 4.0 / 5.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 4, Type::real( 19372.0 / 6561.0 ), Type::real( -25360.0 / 2187.0 ), Type::real( 64448.0 / 6561.0 ), Type::real( -212.0 / 729.0 ) );
 
-                         CALCULATE_K( 5, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 5, Type::real( 8.0 / 9.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 5, Type::real( 9017.0 / 3168.0 ), Type::real( -355.0 / 33.0 ), Type::real( 46732.0 / 5247.0 ), Type::real( 49.0 / 176.0 ), Type::real( -5103.0 / 18656.0 ) );
 
-                         CALCULATE_K( 6, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 6, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 6, Type::real( 35.0 / 384.0 ), Type::real( 0.0 ), Type::real( 500.0 / 1113.0 ), Type::real( 125.0 / 192.0 ), Type::real( -2187.0 / 6784.0 ), Type::real( 11.0 / 84.0 ) );
 
                          // For DP, we need the 7th k
-                         CALCULATE_K( 7, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 7, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                          ERROR_K( 7, Type::real( 35.0 / 384.0 - 5179.0 / 57600.0 ), Type::real( 0.0 ), Type::real( 500.0 / 1113.0 - 7571.0 / 16695.0 ), Type::real( 125.0 / 192.0 - 393.0 / 640.0 ), Type::real( -2187.0 / 6784.0 + 92097.0 / 339200.0 ), Type::real( 11.0 / 84.0 - 187.0 / 2100.0 ), Type::real( -1.0 / 40.0 ) );
 
@@ -125,17 +125,19 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                      // Coefficients taken verbatim from your dop853.f snippet.
 
                      // Stage 1 (t + 0)
-                     CALCULATE_K( 1, wavefunction, reservoir );
+                     CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                      // Stage 2 (t + c₂·h),   c₂ =  5.260015195876773e-2
-                     INTERMEDIATE_SUM_K( 1, Type::real( 5.260015195876773e-2 ) ); CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                     INTERMEDIATE_SUM_K( 1, Type::real( 5.260015195876773e-2 ) );
+
+                     CALCULATE_K( 2, Type::real( 0.05260015196 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 3 (t + c₃·h),   c₃ =  7.8900227938151598e-2
                      INTERMEDIATE_SUM_K( 2,
                                          Type::real( 1.9725056984537899e-2 ), // a₃₁
                                          Type::real( 5.9175170953613698e-2 )  // a₃₂
                      );
-                     CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 3, Type::real( 0.07890022794 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 4 (t + c₄·h),   c₄ =  1.1835034190722739e-1
                      INTERMEDIATE_SUM_K( 3,
@@ -143,7 +145,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( 0.0 ),                   // a₄₂
                                          Type::real( 8.8762756430420548e-2 )  // a₄₃
                      );
-                     CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 4, Type::real( 0.1183503419 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 5 (t + c₅·h),   c₅ =  2.8164965809277260e-1
                      INTERMEDIATE_SUM_K( 4,
@@ -152,7 +154,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( -8.8454947932828610e-1 ), // a₅₃
                                          Type::real( 9.2483400326179200e-1 )   // a₅₄
                      );
-                     CALCULATE_K( 5, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 5, Type::real( 0.2816496581 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 6 (t + c₆·h),   c₆ =  3.3333333333333333e-1
                      INTERMEDIATE_SUM_K( 5,
@@ -162,7 +164,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( 1.7082860872947387e-1 ), // a₆₄
                                          Type::real( 1.2546768756682243e-1 )  // a₆₅
                      );
-                     CALCULATE_K( 6, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 6, Type::real( 0.3333333333 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 7 (t + c₇·h),   c₇ =  2.5e-1
                      INTERMEDIATE_SUM_K( 6,
@@ -173,7 +175,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( 6.0216538980455961e-2 ), // a₇₅
                                          Type::real( -1.7578125e-2 )          // a₇₆
                      );
-                     CALCULATE_K( 7, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 7, Type::real( 0.25 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 8 (t + c₈·h),   c₈ =  0.3076923076923077
                      INTERMEDIATE_SUM_K( 7,
@@ -185,7 +187,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( -1.5319437748624402e-2 ), // a₈₆
                                          Type::real( 8.2737891638140229e-3 )   // a₈₇
                      );
-                     CALCULATE_K( 8, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 8, Type::real( 0.3076923077 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 9 (t + c₉·h),   c₉ =  0.6512820512820513
                      INTERMEDIATE_SUM_K( 8,
@@ -198,7 +200,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( 2.0154067550477893e+1 ),  // a₉₇
                                          Type::real( -4.3489884181069959e+1 )  // a₉₈
                      );
-                     CALCULATE_K( 9, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 9, Type::real( 0.6512820513 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 10 (t + c₁₀·h), c₁₀ =  0.6
                      INTERMEDIATE_SUM_K( 9,
@@ -212,7 +214,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( -3.3288210968984863e+1 ), // a₁₀,₈
                                          Type::real( -2.0331201708508626e-2 )  // a₁₀,₉
                      );
-                     CALCULATE_K( 10, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 10, Type::real( 0.6 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 11 (t + c₁₁·h), c₁₁ =  6/7
                      INTERMEDIATE_SUM_K( 10,
@@ -227,7 +229,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( 2.4936055526796524e+0 ),  // a₁₁,₉
                                          Type::real( -3.0467644718982195e+0 )  // a₁₁,₁₀
                      );
-                     CALCULATE_K( 11, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 11, Type::real( 0.8571428571 ), buffer_wavefunction, buffer_reservoir );
 
                      // Stage 12 (t + c₁₂·h), c₁₂ =  1.0
                      INTERMEDIATE_SUM_K( 11,
@@ -243,7 +245,7 @@ void PHOENIX::Solver::iterateFixedTimestepDOP853() {
                                          Type::real( 1.2360567175794303e+1 ),  // a₁₂,₁₀
                                          Type::real( 6.4339274601576353e-1 )   // a₁₂,₁₁
                      );
-                     CALCULATE_K( 12, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 12, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                      // Final 8th‑order combination (b₁…b₁₂)
                      // b₂=b₃=b₄=b₅=0
@@ -273,17 +275,19 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                          // Coefficients taken verbatim from your dop853.f snippet.
 
                          // Stage 1 (t + 0)
-                         CALCULATE_K( 1, wavefunction, reservoir );
+                         CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                          // Stage 2 (t + c₂·h),   c₂ =  5.260015195876773e-2
-                         INTERMEDIATE_SUM_K( 1, Type::real( 5.260015195876773e-2 ) ); CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                         INTERMEDIATE_SUM_K( 1, Type::real( 5.260015195876773e-2 ) );
+
+                         CALCULATE_K( 2, Type::real( 0.05260015196 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 3 (t + c₃·h),   c₃ =  7.8900227938151598e-2
                          INTERMEDIATE_SUM_K( 2,
                                              Type::real( 1.9725056984537899e-2 ), // a₃₁
                                              Type::real( 5.9175170953613698e-2 )  // a₃₂
                          );
-                         CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 3, Type::real( 0.07890022794 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 4 (t + c₄·h),   c₄ =  1.1835034190722739e-1
                          INTERMEDIATE_SUM_K( 3,
@@ -291,7 +295,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( 0.0 ),                   // a₄₂
                                              Type::real( 8.8762756430420548e-2 )  // a₄₃
                          );
-                         CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 4, Type::real( 0.1183503419 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 5 (t + c₅·h),   c₅ =  2.8164965809277260e-1
                          INTERMEDIATE_SUM_K( 4,
@@ -300,7 +304,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( -8.8454947932828610e-1 ), // a₅₃
                                              Type::real( 9.2483400326179200e-1 )   // a₅₄
                          );
-                         CALCULATE_K( 5, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 5, Type::real( 0.2816496581 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 6 (t + c₆·h),   c₆ =  3.3333333333333333e-1
                          INTERMEDIATE_SUM_K( 5,
@@ -310,7 +314,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( 1.7082860872947387e-1 ), // a₆₄
                                              Type::real( 1.2546768756682243e-1 )  // a₆₅
                          );
-                         CALCULATE_K( 6, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 6, Type::real( 0.3333333333 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 7 (t + c₇·h),   c₇ =  2.5e-1
                          INTERMEDIATE_SUM_K( 6,
@@ -321,7 +325,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( 6.0216538980455961e-2 ), // a₇₅
                                              Type::real( -1.7578125e-2 )          // a₇₆
                          );
-                         CALCULATE_K( 7, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 7, Type::real( 0.25 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 8 (t + c₈·h),   c₈ =  0.3076923076923077
                          INTERMEDIATE_SUM_K( 7,
@@ -333,7 +337,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( -1.5319437748624402e-2 ), // a₈₆
                                              Type::real( 8.2737891638140229e-3 )   // a₈₇
                          );
-                         CALCULATE_K( 8, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 8, Type::real( 0.3076923077 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 9 (t + c₉·h),   c₉ =  0.6512820512820513
                          INTERMEDIATE_SUM_K( 8,
@@ -346,7 +350,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( 2.0154067550477893e+1 ),  // a₉₇
                                              Type::real( -4.3489884181069959e+1 )  // a₉₈
                          );
-                         CALCULATE_K( 9, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 9, Type::real( 0.6512820513 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 10 (t + c₁₀·h), c₁₀ =  0.6
                          INTERMEDIATE_SUM_K( 9,
@@ -360,7 +364,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( -3.3288210968984863e+1 ), // a₁₀,₈
                                              Type::real( -2.0331201708508626e-2 )  // a₁₀,₉
                          );
-                         CALCULATE_K( 10, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 10, Type::real( 0.6 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 11 (t + c₁₁·h), c₁₁ =  6/7
                          INTERMEDIATE_SUM_K( 10,
@@ -375,7 +379,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( 2.4936055526796524e+0 ),  // a₁₁,₉
                                              Type::real( -3.0467644718982195e+0 )  // a₁₁,₁₀
                          );
-                         CALCULATE_K( 11, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 11, Type::real( 0.8571428571 ), buffer_wavefunction, buffer_reservoir );
 
                          // Stage 12 (t + c₁₂·h), c₁₂ =  1.0
                          INTERMEDIATE_SUM_K( 11,
@@ -391,7 +395,7 @@ void PHOENIX::Solver::iterateVariableTimestepDOP853() {
                                              Type::real( 1.2360567175794303e+1 ),  // a₁₂,₁₀
                                              Type::real( 6.4339274601576353e-1 )   // a₁₂,₁₁
                          );
-                         CALCULATE_K( 12, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 12, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                          // Final 8th‑order combination (b₁…b₁₂)
                          // b₂=b₃=b₄=b₅=0

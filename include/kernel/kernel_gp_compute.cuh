@@ -16,7 +16,7 @@
 namespace PHOENIX::Kernel::Compute {
 
 template <bool tmp_use_tetm, bool tmp_use_reservoir, bool tmp_use_pulse, bool tmp_use_pump, bool tmp_use_potential, bool tmp_use_stochastic>
-PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 current_halo, Solver::KernelArguments args, Solver::InputOutput io ) {
+PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::real w, Type::uint32 current_halo, Solver::KernelArguments args, Solver::InputOutput io ) {
     GENERATE_SUBGRID_INDEX( i, current_halo );
 
     // For now, we do a giant case switch for TE/TM, repeating a lot of code. Maybe we will change this later to include TE/TM throughout the regular kernel.
@@ -76,7 +76,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
             if constexpr ( tmp_use_pump ) {
                 for ( int k = 0; k < args.pump_pointers.n; k++ ) {
                     PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
-                    rv_plus += args.dev_ptrs.pump_plus[i + offset] * args.pump_pointers.amp[k];
+                    rv_plus += args.dev_ptrs.pump_plus[i + offset] * ( args.pump_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pump_pointers.amp_next[k] );
                 }
             }
 
@@ -90,7 +90,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
         if constexpr ( tmp_use_potential ) {
             for ( int k = 0; k < args.potential_pointers.n; k++ ) {
                 PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
-                const Type::complex potential = args.dev_ptrs.potential_plus[i + offset] * args.potential_pointers.amp[k];
+                const Type::complex potential = args.dev_ptrs.potential_plus[i + offset] * (args.potential_pointers.amp[k]*(Type::real(1.0)-w) + w*args.potential_pointers.amp_next[k]);
                 wf_plus += args.p.one_over_h_bar_s * potential * in_wf_mi;
             }
         }
@@ -99,7 +99,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
             for ( int k = 0; k < args.pulse_pointers.n; k++ ) {
                 PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
                 const Type::complex pulse = args.dev_ptrs.pulse_plus[i + offset];
-                wf_plus += args.p.one_over_h_bar_s * pulse * args.pulse_pointers.amp[k];
+                wf_plus += args.p.one_over_h_bar_s * pulse * (args.pulse_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pulse_pointers.amp_next[k]);
             }
         }
 
@@ -145,7 +145,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
 
         for ( int k = 0; k < args.potential_pointers.n; k++ ) {
             PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
-            const Type::complex potential = args.dev_ptrs.potential_plus[i + offset] * args.potential_pointers.amp[k];
+            const Type::complex potential = args.dev_ptrs.potential_plus[i + offset] * (args.potential_pointers.amp[k]*(Type::real(1.0)-w) + w*args.potential_pointers.amp_next[k]);
             result += args.p.one_over_h_bar_s * potential * in_wf_plus_mi; // TODO: remove this complex multiplication!
         }
 
@@ -161,7 +161,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
         for ( int k = 0; k < args.pulse_pointers.n; k++ ) {
             PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
             const Type::complex pulse = args.dev_ptrs.pulse_plus[i + offset];
-            result += args.p.one_over_h_bar_s * pulse * args.pulse_pointers.amp[k]; // TODO: remove this complex multiplication!
+            result += args.p.one_over_h_bar_s * pulse * (args.pulse_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pulse_pointers.amp_next[k]); // TODO: remove this complex multiplication!
         }
 
         // MARK: Stochastic
@@ -176,7 +176,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
         result = -( args.p.gamma_r + args.p.R * in_psi_plus_norm ) * in_rv_plus;
 
         for ( int k = 0; k < args.pump_pointers.n; k++ ) {
-            const auto gauss = args.pump_pointers.amp[k];
+            const auto gauss = args.pump_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pump_pointers.amp_next[k];
             PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
             result += args.dev_ptrs.pump_plus[i + offset] * gauss; // TODO: remove this complex multiplication!
         }
@@ -192,7 +192,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
 
         for ( int k = 0; k < args.potential_pointers.n; k++ ) {
             PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
-            const Type::complex potential = args.dev_ptrs.potential_minus[i + offset] * args.potential_pointers.amp[k];
+            const Type::complex potential = args.dev_ptrs.potential_minus[i + offset] * (args.potential_pointers.amp[k]*(Type::real(1.0)-w) + w*args.potential_pointers.amp_next[k]);
             result += args.p.one_over_h_bar_s * potential * in_wf_minus_mi; // TODO: remove this complex multiplication!
         }
 
@@ -208,7 +208,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
         for ( int k = 0; k < args.pulse_pointers.n; k++ ) {
             PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
             const Type::complex pulse = args.dev_ptrs.pulse_minus[i + offset];
-            result += args.p.one_over_h_bar_s * pulse * args.pulse_pointers.amp[k]; // TODO: remove this complex multiplication!
+            result += args.p.one_over_h_bar_s * pulse * (args.pulse_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pulse_pointers.amp_next[k]); // TODO: remove this complex multiplication!
         }
 
         if ( args.p.stochastic_amplitude > 0.0 ) {
@@ -222,7 +222,7 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::uint32 cur
         result = -( args.p.gamma_r + args.p.R * in_psi_minus_norm ) * in_rv_minus;
 
         for ( int k = 0; k < args.pump_pointers.n; k++ ) {
-            const auto gauss = args.pump_pointers.amp[k];
+            const auto gauss = args.pump_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pump_pointers.amp_next[k];
             PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
             result += args.dev_ptrs.pump_minus[i + offset] * gauss; // TODO: remove this complex multiplication!
         }

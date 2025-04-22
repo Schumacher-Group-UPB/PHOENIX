@@ -13,15 +13,15 @@
 void PHOENIX::Solver::iterateFixedTimestepFehlberg2() {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 
-                     CALCULATE_K( 1, wavefunction, reservoir );
+                     CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                      INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 2.0 ) );
 
-                     CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 2, Type::real( 1.0 / 2.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 2, Type::real( 1.0 / 256.0 ), Type::real( 255.0 / 256.0 ) );
 
-                     CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 3, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                      FINAL_SUM_K( 3, Type::real( 1.0 / 512.0 ), Type::real( 255.0 / 256.0 ), Type::real( 1.0 / 512.0 ) );
 
@@ -33,15 +33,15 @@ void PHOENIX::Solver::iterateVariableTimestepFehlberg2() {
     do {
         SOLVER_SEQUENCE( false /*Capture CUDA Graph*/,
 
-                         CALCULATE_K( 1, wavefunction, reservoir );
+                         CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                          INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 2.0 ) );
 
-                         CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 2, Type::real( 1.0 / 2.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 2, Type::real( 1.0 / 256.0 ), Type::real( 255.0 / 256.0 ) );
 
-                         CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 3, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 3, Type::real( 1.0 / 512.0 ), Type::real( 255.0 / 256.0 ), Type::real( 1.0 / 512.0 ) );
 
@@ -89,27 +89,27 @@ void PHOENIX::Solver::iterateVariableTimestepFehlberg2() {
 void PHOENIX::Solver::iterateFixedTimestepFehlberg5() {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 
-                     CALCULATE_K( 1, wavefunction, reservoir );
+                     CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                      INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 40.0 ) );
 
-                     CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 2, Type::real( 1.0 / 4.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 2, Type::real( 3.0 / 32.0 ), Type::real( 9.0 / 32.0 ) );
 
-                     CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 3, Type::real( 3.0 / 8.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 3, Type::real( 1932.0 / 2197.0 ), Type::real( -7200.0 / 2197.0 ), Type::real( 7296.0 / 2197.0 ) );
 
-                     CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 4, Type::real( 12.0 / 13.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 4, Type::real( 439.0 / 216.0 ), Type::real( -8.0 ), Type::real( 3680.0 / 513.0 ), Type::real( -845.0 / 4104.0 ) );
 
-                     CALCULATE_K( 5, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 5, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                      INTERMEDIATE_SUM_K( 5, Type::real( -8.0 / 27.0 ), Type::real( 2.0 ), Type::real( -3544.0 / 2565.0 ), Type::real( 1859.0 / 4104.0 ), Type::real( -11.0 / 40.0 ) );
 
-                     CALCULATE_K( 6, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 6, Type::real( 1.0 / 2.0 ), buffer_wavefunction, buffer_reservoir );
 
                      FINAL_SUM_K( 6, Type::real( 16.0 / 135.0 ), Type::real( 0.0 ), Type::real( 6656.0 / 12825.0 ), Type::real( 28561.0 / 56430.0 ), Type::real( -9.0 / 50.0 ), Type::real( 2.0 / 55.0 ) );
 
@@ -121,27 +121,27 @@ void PHOENIX::Solver::iteratevariableTimestepFehlberg5() {
     do {
         SOLVER_SEQUENCE( false /*Capture CUDA Graph*/,
 
-                         CALCULATE_K( 1, wavefunction, reservoir );
+                         CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
                          INTERMEDIATE_SUM_K( 1, Type::real( 1.0 / 40.0 ) );
 
-                         CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 2, Type::real( 1.0 / 4.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 2, Type::real( 3.0 / 32.0 ), Type::real( 9.0 / 32.0 ) );
 
-                         CALCULATE_K( 3, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 3, Type::real( 3.0 / 8.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 3, Type::real( 1932.0 / 2197.0 ), Type::real( -7200.0 / 2197.0 ), Type::real( 7296.0 / 2197.0 ) );
 
-                         CALCULATE_K( 4, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 4, Type::real( 12.0 / 13.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 4, Type::real( 439.0 / 216.0 ), Type::real( -8.0 ), Type::real( 3680.0 / 513.0 ), Type::real( -845.0 / 4104.0 ) );
 
-                         CALCULATE_K( 5, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 5, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
                          INTERMEDIATE_SUM_K( 5, Type::real( -8.0 / 27.0 ), Type::real( 2.0 ), Type::real( -3544.0 / 2565.0 ), Type::real( 1859.0 / 4104.0 ), Type::real( -11.0 / 40.0 ) );
 
-                         CALCULATE_K( 6, buffer_wavefunction, buffer_reservoir );
+                         CALCULATE_K( 6, Type::real( 1.0 / 2.0 ), buffer_wavefunction, buffer_reservoir );
 
                          // Write result to buffer_ instead of wavefunction_
                          INTERMEDIATE_SUM_K( 6, Type::real( 16.0 / 135.0 ), Type::real( 0.0 ), Type::real( 6656.0 / 12825.0 ), Type::real( 28561.0 / 56430.0 ), Type::real( -9.0 / 50.0 ), Type::real( 2.0 / 55.0 ) );

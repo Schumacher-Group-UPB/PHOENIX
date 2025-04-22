@@ -14,13 +14,13 @@
 void PHOENIX::Solver::iterateFixedTimestepExplicitMidpoint() {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 
-                     CALCULATE_K( 1, wavefunction, reservoir );
+                     CALCULATE_K( 1, Type::real( 0.0 ), wavefunction, reservoir );
 
-                     INTERMEDIATE_SUM_K( 1, Type::real(0.5f) );
+                     INTERMEDIATE_SUM_K( 1, Type::real( 0.5 ) );
 
-                     CALCULATE_K( 2, buffer_wavefunction, buffer_reservoir );
+                     CALCULATE_K( 2, Type::real(0.5), buffer_wavefunction, buffer_reservoir );
 
-                     FINAL_SUM_K( 2, Type::real(0.0f), Type::real(1.0f) );
+                     FINAL_SUM_K( 2, Type::real( 0.0 ), Type::real( 1.0 ) );
 
     );
 }

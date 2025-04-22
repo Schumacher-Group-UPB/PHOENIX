@@ -290,17 +290,19 @@ static constexpr Config CASHKARP = {
         "              | 25./216      1408./2565   2197./4104 -1./5          -1./12     -1.0",
 };
 
-static constexpr Config FEHLBERG2 = { .name = "Fehlberg 2",
-                                      .k_max = 3,
-                                      .halo_size = 3,
-                                      .fixed_timestep = true,
-                                      .implemented = true,
-                                      .butcher_tableau =
-                                          "     0.0     | 0.0     0.0         0.0\n"
-                                          "     1.0/2.0 | 1.0/2.0 0.0         0.0\n"
-                                          "     1.0     | 1.0/256 255.0/256.0 0.0\n"
-                                          "     ---------------------------------------\n"
-                                          "             | 1.0/512 255.0/256   1.0/512.0" };
+static constexpr Config FEHLBERG2 = { 
+    .name = "Fehlberg 2",
+    .k_max = 3,
+    .halo_size = 3,
+    .fixed_timestep = true,
+    .implemented = true,
+    .butcher_tableau =
+        "     0.0     | 0.0     0.0         0.0\n"
+        "     1.0/2.0 | 1.0/2.0 0.0         0.0\n"
+        "     1.0     | 1.0/256 255.0/256.0 0.0\n"
+        "     ---------------------------------------\n"
+        "             | 1.0/512 255.0/256   1.0/512.0",
+};
 
 static constexpr Config FEHLBERG2_VAR = {
     .name = "Fehlberg 2",

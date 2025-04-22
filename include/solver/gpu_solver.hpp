@@ -26,17 +26,18 @@ class Solver {
     PHOENIX::SystemParameters& system;
     PHOENIX::FileHandler& filehandler;
 
-    // TODO: amp zu Type::device_vector. cudamatrix not needed
     struct TemporalEvelope {
         Type::device_vector<Type::complex> amp;
+        Type::device_vector<Type::complex> amp_next;
 
         struct Pointers {
             Type::complex* amp;
+            Type::complex* amp_next;
             Type::uint32 n;
         };
 
         Pointers pointers() {
-            return Pointers{ GET_RAW_PTR( amp ), Type::uint32( amp.size() ) };
+            return Pointers{ GET_RAW_PTR( amp ), GET_RAW_PTR( amp_next ), Type::uint32( amp.size() ) };
         }
     } dev_pulse_oscillation, dev_pump_oscillation, dev_potential_oscillation;
 
@@ -60,6 +61,7 @@ class Solver {
 
     Type::device_vector<Type::real> time; // [0] is t, [1] is dt
 
+    // The parameters are all pointers so that the cuda compute graph uses the updated values
     struct KernelArguments {
         TemporalEvelope::Pointers pulse_pointers;     // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
         TemporalEvelope::Pointers pump_pointers;      // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
