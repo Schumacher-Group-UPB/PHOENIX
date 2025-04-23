@@ -126,7 +126,7 @@ OPTIMIZATION=-O0
 ### Example (valid for Windows)
 make TARGET=PHOENIX.exe SFML=FALSE GPU=TRUE FP32=TRUE OPTIMIZATION=-O0 -j24 
 
-# Optional: Download and Prepare PHOENIX
+# Optional: Download precompiled PHOENIX
 
 Only use the precompiled PHOENIX executable if your version-numbers installed match the above. Otherwhise it is highly recommended to compile PHOENIX yourself.
 
