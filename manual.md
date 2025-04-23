@@ -96,7 +96,7 @@ You can specify the compiler using the `COMPILER=` flag to `make`.
 make [SFML=TRUE/FALSE FP32=TRUE/FALSE TETM=TRUE/FALSE CPU=TRUE COMPILER=g++]
 ```
 
-## FP32 - Single Precision
+### FP32 - Single Precision
 By default, the program is compiled using double precision 64b floats.
 For some cases, FP32 may be sufficient for convergent simulations.
 To manually change the precision to 32b floats, use
@@ -107,7 +107,7 @@ FP32=TRUE
 
 when using the makefile.
 
-# CUDA Architexture
+### CUDA Architexture
 You can also specify the architexture used when compiling PHOENIX. The release binaries are compiled with a variety of Compute Capabilities (CC). To ensure maximum performance, picking the CC for your specific GPU and using 
 
 ```
@@ -116,17 +116,17 @@ ARCH=xy
 
 when using the Makefile, where xy is your CC, is most beneficial.
 
-# When building on Windows
+### When building on Windows
 If you build PHOENIX on Windows it is required to use the Optimization flag
 
 ```
 OPTIMIZATION=-O0
 ```
 
-# Example (valid for Windows)
+### Example (valid for Windows)
 make TARGET=PHOENIX.exe SFML=FALSE GPU=TRUE FP32=TRUE OPTIMIZATION=-O0 -j24 
 
-#### Optional: Download and Prepare PHOENIX
+# Optional: Download and Prepare PHOENIX
 
 Only use the precompiled PHOENIX executable if your version-numbers installed match the above. Otherwhise it is highly recommended to compile PHOENIX yourself.
 
@@ -136,7 +136,7 @@ Download the precompiled PHOENIX executable from [here](https://github.com/AG-Sc
 2. Open a console window and navigate to your newly created PHOENIX directory.
 
 
-#### 6. Execute PHOENIX
+# 6. Execute PHOENIX
 
 You are now ready to run PHOENIX for the first time. Copy and execute the following command in your console:
 
@@ -155,7 +155,7 @@ This command will:
 
 For further details on the command syntax, use `./PHOENIX.exe[.o] --help`.
 
-#### 7. Review Results
+##  7. Review Results
 
 Upon successful execution, the time-evolution will be displayed. After the program completes, it will print a summary of the process. The output directory will contain the desired results.
 
