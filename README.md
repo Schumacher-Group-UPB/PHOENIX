@@ -8,12 +8,13 @@ PHOENIX is a high-performance, solver for the nonlinear two-dimensional Schrödi
 
 The project comes with a variety of examples, including Jupyter Notebooks and Matlab files, that demonstrate how to use PHOENIX in scientific research. You can explore these examples in the [examples folder](/examples/). Simply download one of the precompiled binaries from the [latest release](https://github.com/Schumacher-Group-UPB/PHOENIX/releases/) and place it in the same folder as the example you wish to run. Make sure to edit the configuration files to match your executable.
 
+In case you struggle installing the requirements or building PHOENIX you can follow our detailed [step by step guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual.md).
+
 If you would like to use PHOENIX or if you are missing certain functionalities in the code, please do not hesitate to [contact us by Email](mailto:jawi1@campus.uni-paderborn.de).
 We'd appreciate your feedback and should you need technical support we would be happy to help. 
 
-If you use PHOENIX, give our paper a citation: J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. arXiv:2411.18341.
-
-In case you struggle installing the requirements or building PHOENIX you can follow our detailed [step by step guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual.md).
+If you use PHOENIX in your research, please cite: 
+J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. arXiv:2411.18341. [DOI](https://doi.org/10.48550/arXiv.2411.18341)
 
 ## Table of Contents
 
