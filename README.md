@@ -14,7 +14,7 @@ If you would like to use PHOENIX or if you are missing certain functionalities i
 We'd appreciate your feedback and should you need technical support we would be happy to help. 
 
 If you use PHOENIX in your research, please cite: 
-J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. arXiv:2411.18341. [DOI](https://doi.org/10.48550/arXiv.2411.18341)
+J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. [arXiv:2411.18341](https://doi.org/10.48550/arXiv.2411.18341)
 
 ## Table of Contents
 
