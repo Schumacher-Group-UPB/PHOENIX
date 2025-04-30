@@ -79,7 +79,7 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     // We can also disable to SFML renderer by using the --nosfml flag.
     disableRender = true;
 #ifdef SFML_RENDER
-    if ( PHOENIX::CLIO::findInArgv( "-nosfml", argc, argv ) == -1 or PHOENIX::CLIO::findInArgv( "-norender", argc, argv ) == -1 )
+    if ( PHOENIX::CLIO::findInArgv( "-nosfml", argc, argv ) == -1 and PHOENIX::CLIO::findInArgv( "-norender", argc, argv ) == -1 )
         disableRender = false;
 #endif
 

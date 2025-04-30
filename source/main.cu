@@ -79,10 +79,9 @@ int main( int argc, char* argv[] ) {
     while ( system.p.t < system.t_max and running ) {
         TimeThis(
             // Iterate #output_every ps
-            auto start = system.p.t; while ( ( ( not system.disableRender and system.p.t < start + system.output_every ) or ( system.disableRender and system.p.t < out_every_iterations * system.output_every ) ) and solver.iterate() ) {
-                // If we use live rendering, do not adjust dt
-                if ( not system.disableRender )
-                    continue;
+            auto start = system.p.t;
+
+            while ( ( ( not system.disableRender and system.p.t < start + system.output_every ) or ( system.disableRender and system.p.t < out_every_iterations * system.output_every ) ) and solver.iterate() ) {
                 // Check if t+dt would overshoot out_every_iterations*output_every, adjust dt accordingly
                 system.p.dt = dt;
                 if ( system.p.t + system.p.dt > out_every_iterations * system.output_every ) {
