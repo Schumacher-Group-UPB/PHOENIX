@@ -10,6 +10,7 @@
 #include "system/system_parameters.hpp"
 #include "system/filehandler.hpp"
 #include "solver/matrix_container.cuh"
+#include "solver/iterator_config.hpp"
 #include "misc/escape_sequences.hpp"
 
 namespace PHOENIX {
@@ -25,17 +26,18 @@ class Solver {
     PHOENIX::SystemParameters& system;
     PHOENIX::FileHandler& filehandler;
 
-    // TODO: amp zu Type::device_vector. cudamatrix not needed
     struct TemporalEvelope {
         Type::device_vector<Type::complex> amp;
+        Type::device_vector<Type::complex> amp_next;
 
         struct Pointers {
             Type::complex* amp;
+            Type::complex* amp_next;
             Type::uint32 n;
         };
 
         Pointers pointers() {
-            return Pointers{ GET_RAW_PTR( amp ), Type::uint32( amp.size() ) };
+            return Pointers{ GET_RAW_PTR( amp ), GET_RAW_PTR( amp_next ), Type::uint32( amp.size() ) };
         }
     } dev_pulse_oscillation, dev_pump_oscillation, dev_potential_oscillation;
 
@@ -59,6 +61,7 @@ class Solver {
 
     Type::device_vector<Type::real> time; // [0] is t, [1] is dt
 
+    // The parameters are all pointers so that the cuda compute graph uses the updated values
     struct KernelArguments {
         TemporalEvelope::Pointers pulse_pointers;     // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
         TemporalEvelope::Pointers pump_pointers;      // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
@@ -104,20 +107,150 @@ class Solver {
     // Output the history and max caches to files. should be called from finalize()
     void cacheToFiles();
 
+    void updateKernelTime();
+
     void finalize();
 
     void iterateNewton();
+    void iterateFixedTimestepHouwenWray();
+    void iterateFixedTimestepExplicitMidpoint();
+    void iterateFixedTimestepBogacki();
+    void iterateFixedTimestepHeun();
+    void iterateFixedTimestepHeun3();
+    void iterateFixedTimestepRalston();
+    void iterateFixedTimestepRalston3();
+    void iterateFixedTimestepRalston4();
+    void iterateFixedTimestepSSPRK3();
     void iterateFixedTimestepRungeKutta3();
     void iterateFixedTimestepRungeKutta4();
+    void iterateFixedTimestepRule38();
+    void iterateFixedTimestepNystroem();
+    void iterateFixedTimestepCashKarp();
+    void iterateFixedTimestepFehlberg2();
+    void iterateFixedTimestepFehlberg5();
+    void iterateFixedTimestepDOP5();
+    void iterateFixedTimestepDOP853();
+    void iterateFixedTimestepNSRK78();
+
+    void iterateVariableTimestepFehlberg2();
+    void iteratevariableTimestepFehlberg5();
+    void iterateVariableTimestepDOP853();
+    void iterateVariableTimestepNSRK78();
+    void iterateVariableTimestepDOP45();
     void iterateVariableTimestepRungeKutta();
     void iterateSplitStepFourier();
     void normalizeImaginaryTimePropagation();
 
     struct iteratorFunction {
-        int k_max;
+        uint32_t k_max;
         std::function<void()> iterate;
     };
-    std::map<std::string, iteratorFunction> iterator = { { "newton", { 1, std::bind( &Solver::iterateNewton, this ) } }, { "rk4", { 4, std::bind( &Solver::iterateFixedTimestepRungeKutta4, this ) } }, { "ssfm", { 0, std::bind( &Solver::iterateSplitStepFourier, this ) } } };
+    std::map<std::string, iteratorFunction> iterator = {
+        {
+            "Newton",
+            { Iterator::available.at( "Newton" ).halo_size, std::bind( &Solver::iterateNewton, this ) },
+        },
+        {
+            "MP",
+            { Iterator::available.at( "MP" ).halo_size, std::bind( &Solver::iterateFixedTimestepExplicitMidpoint, this ) },
+        },
+        {
+            "Heun",
+            { Iterator::available.at( "Heun" ).halo_size, std::bind( &Solver::iterateFixedTimestepHeun, this ) },
+        },
+        {
+            "Heun3",
+            { Iterator::available.at( "Heun3" ).halo_size, std::bind( &Solver::iterateFixedTimestepHeun3, this ) },
+        },
+        {
+            "Ralston",
+            { Iterator::available.at( "Ralston" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston, this ) },
+        },
+        {
+            "Ralston3",
+            { Iterator::available.at( "Ralston3" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston3, this ) },
+        },
+        {
+            "Ralston4",
+            { Iterator::available.at( "Ralston4" ).halo_size, std::bind( &Solver::iterateFixedTimestepRalston4, this ) },
+        },
+        {
+            "VHW",
+            { Iterator::available.at( "VHW" ).halo_size, std::bind( &Solver::iterateFixedTimestepHouwenWray, this ) },
+        },
+        {
+            "SSPRK3",
+            { Iterator::available.at( "SSPRK3" ).halo_size, std::bind( &Solver::iterateFixedTimestepSSPRK3, this ) },
+        },
+        {
+            "RK3",
+            { Iterator::available.at( "RK3" ).halo_size, std::bind( &Solver::iterateFixedTimestepRungeKutta3, this ) },
+        },
+        {
+            "RK4",
+            { Iterator::available.at( "RK4" ).halo_size, std::bind( &Solver::iterateFixedTimestepRungeKutta4, this ) },
+        },
+        {
+            "rule38",
+            { Iterator::available.at( "rule38" ).halo_size, std::bind( &Solver::iterateFixedTimestepRule38, this ) },
+        },
+        {
+            "Nystroem",
+            { Iterator::available.at( "Nystroem" ).halo_size, std::bind( &Solver::iterateFixedTimestepNystroem, this ) },
+        },
+        {
+            "CashKarp",
+            { Iterator::available.at( "CashKarp" ).halo_size, std::bind( &Solver::iterateFixedTimestepCashKarp, this ) },
+        },
+        {
+            "Fehlberg2",
+            { Iterator::available.at( "Fehlberg2" ).halo_size, std::bind( &Solver::iterateFixedTimestepFehlberg2, this ) },
+        },
+        {
+            "Fehlberg12",
+            { Iterator::available.at( "Fehlberg12" ).halo_size, std::bind( &Solver::iterateVariableTimestepFehlberg2, this ) },
+        },
+        {
+            "Fehlberg5",
+            { Iterator::available.at( "Fehlberg5" ).halo_size, std::bind( &Solver::iterateFixedTimestepFehlberg5, this ) },
+        },
+        {
+            "Fehlberg45",
+            { Iterator::available.at( "Fehlberg45" ).halo_size, std::bind( &Solver::iteratevariableTimestepFehlberg5, this ) },
+        },
+        {
+            "Bogacki",
+            { Iterator::available.at( "Bogacki" ).halo_size, std::bind( &Solver::iterateFixedTimestepBogacki, this ) },
+        },
+        {
+            "DP5",
+            { Iterator::available.at( "DP5" ).halo_size, std::bind( &Solver::iterateFixedTimestepDOP5, this ) },
+        },
+        {
+            "DP8",
+            { Iterator::available.at( "DP8" ).halo_size, std::bind( &Solver::iterateFixedTimestepDOP853, this ) },
+        },
+        {
+            "DP85",
+            { Iterator::available.at( "DP85" ).halo_size, std::bind( &Solver::iterateVariableTimestepDOP853, this ) },
+        },
+        {
+            "NSRK8",
+            { Iterator::available.at( "NSRK8" ).halo_size, std::bind( &Solver::iterateFixedTimestepNSRK78, this ) },
+        },
+        {
+            "NSRK78",
+            { Iterator::available.at( "NSRK78" ).halo_size, std::bind( &Solver::iterateVariableTimestepNSRK78, this ) },
+        },
+        {
+            "DP45",
+            { Iterator::available.at( "DP45" ).halo_size, std::bind( &Solver::iterateVariableTimestepDOP45, this ) },
+        },
+        {
+            "SSFM",
+            { 0, std::bind( &Solver::iterateSplitStepFourier, this ) },
+        },
+    };
 
     // Main System function. Either gp_scalar or gp_tetm.
     // Both functions have signature void(int i, Type::uint32 current_halo, Solver::VKernelArguments time, Solver::KernelArguments args, Solver::InputOutput io)

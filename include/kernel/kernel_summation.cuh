@@ -6,17 +6,25 @@ namespace PHOENIX::Kernel::Summation {
 
 template <typename buffer_type, Type::uint32 NMax, Type::real w, Type::real... W>
 PHOENIX_DEVICE PHOENIX_INLINE buffer_type sum_single_k( Type::uint32 i, buffer_type* buffer, Type::uint32 offset ) {
-    if constexpr ( sizeof...( W ) == 0 ) {
-        // Last Weight
-        return w * buffer[i + offset * ( NMax - sizeof...( W ) - 1 )];
-    }
-    if constexpr ( w == 0.0 ) {
-        return sum_single_k<buffer_type, NMax, W...>( i, buffer, offset );
-    }
-    // The constexpr if is logically redundant, but we need it so the compiler doesnt complain about not being able to call <buffer_type,int,w>
-    // For sizeof..(W)==0, this line is never reached, but the compiler stil complains.
-    if constexpr ( sizeof...( W ) > 0 ) {
-        return w * buffer[i + offset * ( NMax - sizeof...( W ) - 1 )] + sum_single_k<buffer_type, NMax, W...>( i, buffer, offset );
+    // If this weight is zero, skip it entirely.
+    if constexpr ( w == Type::real( 0 ) ) {
+        if constexpr ( sizeof...( W ) > 0 ) {
+            // drop w and recurse
+            return sum_single_k<buffer_type, NMax, W...>( i, buffer, offset );
+        } else {
+            // no more weights, sum is zero
+            return buffer_type( 0 );
+        }
+    } else {
+        // w != 0
+        if constexpr ( sizeof...( W ) == 0 ) {
+            // last weight
+            return w * buffer[i + offset * ( NMax - 1 )];
+        } else {
+            // accumulate w * K + rest
+            constexpr auto idx = NMax - sizeof...( W ) - 1;
+            return w * buffer[i + offset * idx] + sum_single_k<buffer_type, NMax, W...>( i, buffer, offset );
+        }
     }
 }
 

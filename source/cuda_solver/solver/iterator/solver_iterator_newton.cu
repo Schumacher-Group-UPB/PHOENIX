@@ -17,9 +17,9 @@
 void PHOENIX::Solver::iterateNewton() {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 
-                     CALCULATE_K( 1, wavefunction, reservoir );
+                     CALCULATE_K( 1, Type::real(0.0), wavefunction, reservoir );
 
-                     FINAL_SUM_K( 1, 1.0f );
+                     FINAL_SUM_K( 1, Type::real(1.0) );
 
     )
 

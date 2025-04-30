@@ -174,7 +174,6 @@ bool PHOENIX::FileHandler::loadMatrixFromFile( const std::string& filepath, Type
     inputstring = std::istringstream( line );
     // Read SIZE Nx Ny sLx sLy dx dy
     Type::uint32 N_c, N_r;
-    Type::real header;
     inputstring >> line >> line >> N_c >> N_r;
     Type::uint32 N = N_c * N_r;
     while ( getline( filein, line ) ) {
@@ -216,9 +215,7 @@ bool PHOENIX::FileHandler::loadMatrixFromFile( const std::string& filepath, Type
     inputstring = std::istringstream( line );
     // Read SIZE Nx Ny sLx sLy dx dy
     Type::uint32 N_c, N_r;
-    Type::real header;
     inputstring >> line >> line >> N_c >> N_r;
-    Type::uint32 N = N_c * N_r;
     while ( getline( filein, line ) ) {
         // If the line is empty or starts with "#", skip it.
         if ( line.size() < 1 || line[0] == '#' )
