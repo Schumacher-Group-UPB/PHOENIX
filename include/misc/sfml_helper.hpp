@@ -93,9 +93,9 @@ void initSFMLWindow( PHOENIX::Solver& solver ) {
         return;
     }
     if ( solver.system.use_twin_mode )
-        getWindow().construct( 1920, 1080, solver.system.p.N_c * 3, solver.system.p.N_r * 2, "PHOENIX_ - TE/TM" );
+        getWindow().construct( 1920, 1080, solver.system.p.N_c * 3, solver.system.p.N_r * 2, "PHOENIX_ v0.3.0-alpha" );
     else
-        getWindow().construct( 1920, 540, solver.system.p.N_c * 3, solver.system.p.N_r, "PHOENIX_ - Scalar" );
+        getWindow().construct( 1920, 540, solver.system.p.N_c * 3, solver.system.p.N_r, "PHOENIX_ v0.3.0-alpha" );
 
     // if .pal in __local_colorpalette, read gnuplot __local_colorpalette, else read as .txt
     if ( solver.system.filehandler.color_palette.find( ".pal" ) != std::string::npos ) {
