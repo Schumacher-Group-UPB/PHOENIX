@@ -48,7 +48,7 @@ void PHOENIX::Solver::cacheToFiles() {
     if ( not system.doOutput( "all", "max", "scalar" ) )
         return;
 
-    auto& file_max = filehandler.getFile( "scalar" );
+    auto& file_max = filehandler.getFile( "scalar", "txt" );
     file_max << "index ";
     for ( const auto& [key, _] : cache_map_scalar ) file_max << key << " ";
     file_max << "\n";

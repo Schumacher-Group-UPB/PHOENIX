@@ -28,17 +28,20 @@ void PHOENIX::Solver::outputMatrices( const Type::uint32 start_x, const Type::ui
         auto key = fileoutputkeys[i];
         if ( key == "wavefunction_plus" and system.doOutput( "wavefunction", "psi", "wavefunction_plus", "psi_plus", "plus", "wf", "mat", "all", "initial", "initial_plus" ) ) {
             Type::host_vector<Type::complex> buffer = matrix.wavefunction_plus.getFullMatrix( true );
-            auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
+            filehandler.queueComplexMatrix( buffer, start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
+            //auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
             //filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
         }
         if ( key == "reservoir_plus" and system.use_reservoir and system.doOutput( "mat", "reservoir", "n", "reservoir_plus", "n_plus", "plus", "rv", "mat", "all" ) ) {
             Type::host_vector<Type::complex> buffer = matrix.reservoir_plus.getFullMatrix( true );
-            auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
+            filehandler.queueComplexMatrix( buffer, start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
+            //auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
             //filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
         }
         if ( system.fft_every < system.t_max and key == "fft_plus" and system.doOutput( "fft_mask", "fft", "fft_plus", "plus", "mat", "all" ) ) {
             Type::host_vector<Type::complex> buffer = matrix.fft_plus;
-            auto future = std::async( std::launch::async, [buffer, fft_header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, fft_header_information, prefix + key + suffix ); } );
+            filehandler.queueComplexMatrix( buffer, start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, fft_header_information, prefix + key + suffix );
+            //auto future = std::async( std::launch::async, [buffer, fft_header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, fft_header_information, prefix + key + suffix ); } );
             //filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, fft_header_information, prefix + key + suffix );
         }
         // Guard when not useing TE/TM splitting
@@ -46,17 +49,20 @@ void PHOENIX::Solver::outputMatrices( const Type::uint32 start_x, const Type::ui
             continue;
         if ( key == "wavefunction_minus" and system.doOutput( "wavefunction", "psi", "wavefunction_minus", "psi_minus", "plus", "wf", "mat", "all", "initial", "initial_minus" ) ) {
             Type::host_vector<Type::complex> buffer = matrix.wavefunction_minus.getFullMatrix( true );
-            auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
+            filehandler.queueComplexMatrix( buffer, start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
+            //auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
             //filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
         }
         if ( key == "reservoir_minus" and system.use_reservoir and system.doOutput( "reservoir", "n", "reservoir_minus", "n_minus", "plus", "rv", "mat", "all" ) ) {
+            filehandler.queueComplexMatrix( matrix.reservoir_minus.getFullMatrix( true ), start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
             Type::host_vector<Type::complex> buffer = matrix.reservoir_minus.getFullMatrix( true );
-            auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
+            //auto future = std::async( std::launch::async, [buffer, header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, header_information, prefix + key + suffix ); } );
             //filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, header_information, prefix + key + suffix );
         }
         if ( system.fft_every < system.t_max and key == "fft_minus" and system.doOutput( "fft_mask", "fft", "fft_minus", "plus", "mat", "all" ) ) {
             Type::host_vector<Type::complex> buffer = matrix.fft_minus;
-            auto future = std::async( std::launch::async, [buffer, fft_header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, fft_header_information, prefix + key + suffix ); } );
+            filehandler.queueComplexMatrix( buffer, start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, fft_header_information, prefix + key + suffix );
+            //auto future = std::async( std::launch::async, [buffer, fft_header_information, start_x, end_x, start_y, end_y, increment, this, key, suffix, prefix]() { this->system.filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, this->system.p.N_c, this->system.p.N_r, increment, fft_header_information, prefix + key + suffix ); } );
             //filehandler.outputMatrixToFile( buffer.data(), start_x, end_x, start_y, end_y, system.p.N_c, system.p.N_r, increment, fft_header_information, prefix + key + suffix );
         }
     }
