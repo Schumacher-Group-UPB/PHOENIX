@@ -39,6 +39,21 @@ else
 	NVCCFLAGS = -std=c++20 -Xcompiler -fopenmp -lcufft -lcurand -lcudart -lcudadevrt -diag-suppress 177 -lstdc++ -rdc=true --expt-extended-lambda -extended-lambda --expt-relaxed-constexpr # --dlink-time-opt 
 endif
 
+NVCCFLAGS_EXTRA = 
+# If CUDA Version is above 12.4, add -x cu to the nvcc flags
+ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.5) 
+	NVCCFLAGS_EXTRA += -x cu
+endif
+ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.6) 
+	NVCCFLAGS_EXTRA += -x cu
+endif
+ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.7) 
+	NVCCFLAGS_EXTRA += -x cu
+endif
+ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.8) 
+	NVCCFLAGS_EXTRA += -x cu
+endif
+
 SFMLLIBS = -I$(SFML_PATH)/include/ -L$(SFML_PATH)/lib
 
 ifneq ($(ARCH),NONE)
@@ -144,7 +159,7 @@ all: $(OBJDIR) $(CPP_OBJS) $(CU_OBJS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@mkdir -p $(dir $@)
-	$(COMPILER) $(COMPILER_FLAGS) -c $< -o $@ -I$(INCDIR) $(ADD_FLAGS)
+	$(COMPILER) $(COMPILER_FLAGS) -c $< -o $@ -I$(INCDIR) $(ADD_FLAGS) $(NVCCFLAGS_EXTRA)
 
 $(OBJDIR)/%.obj: $(SRCDIR)/%.cu
 	@mkdir -p $(dir $@)

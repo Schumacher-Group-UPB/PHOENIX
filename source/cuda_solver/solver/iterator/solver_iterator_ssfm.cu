@@ -12,7 +12,6 @@
  * Split Step Fourier Method
  */
 void PHOENIX::Solver::iterateSplitStepFourier() {
-    // TODO: im cudamacro.cuh soll ein choose_kernel macro stehen -> der wählt dann die template parameter aus. die einzelfunktionen dann auch templated!!
     auto kernel_arguments = generateKernelArguments();
     auto [block_size, grid_size] = getLaunchParameters( system.p.N_c, system.p.N_r );
     // Liner Half Step

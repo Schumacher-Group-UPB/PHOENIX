@@ -402,7 +402,7 @@ static constexpr Config DOP853_VAR = {
 };
 
 static constexpr Config NSRK78 = {
-    .name = "Nullspace RK (13:8(7))",
+    .name = "Nullspace RK 13-stage 8",
     .k_max = 13,
     .halo_size = 13,
     .fixed_timestep = true,
@@ -426,7 +426,7 @@ static constexpr Config NSRK78 = {
 };
 
 static constexpr Config NSRK78_VAR = {
-    .name = "Nullspace RK 13-stage 8(7) (variable)",
+    .name = "Nullspace RK 13-stage 8(7)",
     .k_max = 13,
     .halo_size = 13,
     .fixed_timestep = false,

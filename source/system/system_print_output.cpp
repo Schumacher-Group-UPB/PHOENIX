@@ -562,7 +562,7 @@ void PHOENIX::SystemParameters::printHelp( bool verbose, bool markdown ) {
     for ( auto& it : Iterator::available ) {
         if ( !it.second.implemented )
             continue;
-        std::cout << PHOENIX::CLIO::unifyLength( "", "", it.first + ": " + std::string( it.second.name ) + (it.second.fixed_timestep ? " (fixed)" : " (adaptive)"), L1, L2, L3 ) << std::endl;
+        std::cout << PHOENIX::CLIO::unifyLength( "", "", it.first + ": " + std::string( it.second.name ) + ( it.second.fixed_timestep ? ( " (" + EscapeSequence::YELLOW + "fixed" + EscapeSequence::RESET + ")" ) : ( " (" + EscapeSequence::ORANGE + "adaptive" + EscapeSequence::RESET +")" ) ), L1, L2, L3 ) << std::endl;
     }
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "imagTime" ).print_usecase( imag_time_amplitude, verbose, markdown );

@@ -568,13 +568,13 @@ class CUDAMatrix : CUDAMatrixBase {
     // Oh and these also transform all num_matrices matrices. :)
 
     struct transform_abs2 {
-        __host__ __device__ T operator()( const T& x ) const {
+        PHOENIX_HOST_DEVICE T operator()( const T& x ) const {
             const T res = CUDA::abs2( x );
             return res;
         }
     };
     struct transform_sum {
-        __host__ __device__ T operator()( const T& lhs, const T& rhs ) const {
+        PHOENIX_HOST_DEVICE T operator()( const T& lhs, const T& rhs ) const {
             return lhs + rhs;
         }
     };
