@@ -1,6 +1,6 @@
 /*
  * MIT License
- * Copyright (c) 2023 David Bauch
+ * Copyright (c) 2025 Workgroup of Prof. Dr. Stefan Schumacher, University of Paderborn
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -79,16 +79,18 @@ int main( int argc, char* argv[] ) {
     while ( system.p.t < system.t_max and running ) {
         TimeThis(
             // Iterate #output_every ps
-            auto start = system.p.t;
-
+            auto start = system.p.t; 
             while ( ( ( not system.disableRender and system.p.t < start + system.output_every ) or ( system.disableRender and system.p.t < out_every_iterations * system.output_every ) ) and solver.iterate() ) {
                 // Check if t+dt would overshoot out_every_iterations*output_every, adjust dt accordingly
-                system.p.dt = dt;
                 if ( system.p.t + system.p.dt > out_every_iterations * system.output_every ) {
                     auto next_dt = out_every_iterations * system.output_every - system.p.t;
-                    if ( next_dt > 0 )
+                    if ( next_dt > 0 ) {
                         system.p.dt = next_dt;
+                    }
+                } else {
+                    dt = system.p.dt;
                 }
+                system.p.dt = dt;
             } out_every_iterations++;
             // Cache the history and max values
             solver.cacheValues();

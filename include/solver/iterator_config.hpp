@@ -171,6 +171,22 @@ static constexpr Config BOGACKI = {
         "             | 2.0/9.0 1.0/3.0 4.0/9.0",
 };
 
+static constexpr Config BOGACKI_VAR = {
+    .name = "Bogacki-Shampine 3(2)",
+    .k_max = 4,
+    .halo_size = 4,
+    .fixed_timestep = false,
+    .implemented = true,
+    .butcher_tableau =
+
+        "     0.0     | 0.0     0.0     0.0      0.0    \n"
+        "     1.0/2.0 | 1.0/2.0 0.0     0.0      0.0    \n"
+        "     3.0/4.0 | 0.0     3.0/4.0 0.0      0.0    \n"
+        "     ------------------------------------------\n"
+        "             | 2.0/9.0 1.0/3.0 4.0/9.0  0.0    \n"
+        "             | 7.0/24.0 1.0/4.0 1.0/3.0 1.0/8.0",
+};
+
 static constexpr Config RK4 = {
     .name = "Runge Kutta 4",
     .k_max = 4,
@@ -273,7 +289,7 @@ static constexpr Config DP5VAR = {
         "              | 5179./57600  0.0         7571./16695  393./640 -92097./339200 187./2100  1.0/40.0",
 };
 
-static constexpr Config CASHKARP = {
+static constexpr Config CASHKARPF = {
     .name = "Cash-Karp 5",
     .k_max = 6,
     .halo_size = 6,
@@ -287,10 +303,29 @@ static constexpr Config CASHKARP = {
         "     1.0      | -11.0/54.0   5.0/2.0    -70.0/27.0    35.0/27.0      0.0        0.0\n"
         "     7.0/8.0  | 1631./55296  175./512    575./13824   44275./110592  253./4096  0.0\n"
         "     -------------------------------------------------------------------------------\n"
-        "              | 25./216      1408./2565   2197./4104 -1./5          -1./12     -1.0",
+        "              | 37.0/378    0.0         250./621    125./594 -11./84        0.0        0.0",
 };
 
-static constexpr Config FEHLBERG2 = { 
+static constexpr Config CASHKARP = {
+    .name = "Cash-Karp 45",
+    .k_max = 6,
+    .halo_size = 6,
+    .fixed_timestep = true,
+    .implemented = true,
+    .butcher_tableau =
+        "     0.0      | 0.0          0.0         0.0          0.0            0.0        0.0\n"
+        "     1.0/5.0  | 1.0/5.0      0.0         0.0          0.0            0.0        0.0\n"
+        "     3.0/10.0 | 3.0/40.0     9.0/40.0    0.0          0.0            0.0        0.0\n"
+        "     3.0/5.0  | 3.0/10.0    -9.0/10.0    6.0/5.0      0.0            0.0        0.0\n"
+        "     1.0      | -11.0/54.0   5.0/2.0    -70.0/27.0    35.0/27.0      0.0        0.0\n"
+        "     7.0/8.0  | 1631./55296  175./512    575./13824   44275./110592  253./4096  0.0\n"
+        "     -------------------------------------------------------------------------------\n"
+        "              | 37.0/378    0.0         250./621    125./594 -11./84        0.0        0.0\n"
+        "              | 2825./27648 0.0         18575./48384 135./384 -2187./6784    11./84     0.0",
+
+};
+
+static constexpr Config FEHLBERG2 = {
     .name = "Fehlberg 2",
     .k_max = 3,
     .halo_size = 3,
@@ -508,7 +543,11 @@ inline const std::map<std::string, Config> available = {
         DOP853,
     },
     {
-        "CashKarp",
+        "CashKarp5",
+        CASHKARPF,
+    },
+    {
+        "CashKarp45",
         CASHKARP,
     },
     {
@@ -520,8 +559,12 @@ inline const std::map<std::string, Config> available = {
         FEHLBERG,
     },
     {
-        "Bogacki",
+        "Bogacki3",
         BOGACKI,
+    },
+    {
+        "Bogacki23",
+        BOGACKI_VAR,
     },
     {
         "Fehlberg2",

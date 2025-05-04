@@ -131,12 +131,14 @@ class Solver {
     void iterateFixedTimestepDOP5();
     void iterateFixedTimestepDOP853();
     void iterateFixedTimestepNSRK78();
-
+    
     void iterateVariableTimestepFehlberg2();
     void iteratevariableTimestepFehlberg5();
     void iterateVariableTimestepDOP853();
     void iterateVariableTimestepNSRK78();
     void iterateVariableTimestepDOP45();
+    void iterateVariableTimestepCashKarp();
+    void iterateVariableTimestepBogacki();
     void iterateVariableTimestepRungeKutta();
     void iterateSplitStepFourier();
     void normalizeImaginaryTimePropagation();
@@ -199,8 +201,12 @@ class Solver {
             { Iterator::available.at( "Nystroem" ).halo_size, std::bind( &Solver::iterateFixedTimestepNystroem, this ) },
         },
         {
-            "CashKarp",
-            { Iterator::available.at( "CashKarp" ).halo_size, std::bind( &Solver::iterateFixedTimestepCashKarp, this ) },
+            "CashKarp5",
+            { Iterator::available.at( "CashKarp5" ).halo_size, std::bind( &Solver::iterateFixedTimestepCashKarp, this ) },
+        },
+        {
+            "CashKarp45",
+            { Iterator::available.at( "CashKarp45" ).halo_size, std::bind( &Solver::iterateVariableTimestepCashKarp, this ) },
         },
         {
             "Fehlberg2",
@@ -219,8 +225,12 @@ class Solver {
             { Iterator::available.at( "Fehlberg45" ).halo_size, std::bind( &Solver::iteratevariableTimestepFehlberg5, this ) },
         },
         {
-            "Bogacki",
-            { Iterator::available.at( "Bogacki" ).halo_size, std::bind( &Solver::iterateFixedTimestepBogacki, this ) },
+            "Bogacki3",
+            { Iterator::available.at( "Bogacki3" ).halo_size, std::bind( &Solver::iterateFixedTimestepBogacki, this ) },
+        },
+        {
+            "Bogacki23",
+            { Iterator::available.at( "Bogacki23" ).halo_size, std::bind( &Solver::iterateVariableTimestepBogacki, this ) },
         },
         {
             "DP5",
@@ -265,6 +275,8 @@ class Solver {
 
     void cacheValues();
     void cacheMatrices();
+
+    void adjustTimeStep( const Type::real power, bool use_discrete_update_steps = true);
 
     // The block size is specified by the user in the system.block_size variable.
     // This solver function the calculates the appropriate grid size for the given execution range.

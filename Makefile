@@ -41,17 +41,10 @@ endif
 
 NVCCFLAGS_EXTRA = 
 # If CUDA Version is above 12.4, add -x cu to the nvcc flags
-ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.5) 
-	NVCCFLAGS_EXTRA += -x cu
-endif
-ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.6) 
-	NVCCFLAGS_EXTRA += -x cu
-endif
-ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.7) 
-	NVCCFLAGS_EXTRA += -x cu
-endif
-ifeq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.8) 
-	NVCCFLAGS_EXTRA += -x cu
+ifneq ($(CPU),TRUE)
+	ifneq ($(shell nvcc --version | grep -oP 'V[0-9]+\.[0-9]+'),V12.4) 
+		NVCCFLAGS_EXTRA += -x cu
+	endif
 endif
 
 SFMLLIBS = -I$(SFML_PATH)/include/ -L$(SFML_PATH)/lib

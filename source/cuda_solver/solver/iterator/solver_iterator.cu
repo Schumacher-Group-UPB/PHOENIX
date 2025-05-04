@@ -35,16 +35,8 @@ void PHOENIX::Solver::updateKernelTime() {
     dev_pump_oscillation.amp_next = system.pump.temporal_envelope;
 }
 
-/**
- * Iterates the Runge-Kutta-Method on the GPU
- * Note, that all device arrays and variables have to be initialized at this point
- * @param t Current time, will be updated to t + dt
- * @param dt Time step, will be updated to the next time step
- * @param N_c Number of grid points in one dimension
- * @param N_r Number of grid points in the other dimension
- */
 bool PHOENIX::Solver::iterate() {
-    // First, check if the maximum time has been reached
+    // Check if the maximum time has been reached
 #ifndef BENCH
     if ( system.p.t >= system.t_max )
         return false;
@@ -65,15 +57,15 @@ bool PHOENIX::Solver::iterate() {
     
     updateKernelTime();
 
+    // Increase t.
+    system.p.t = system.p.t + system.p.dt;
+
     // Iterate RK4(45)/ssfm/itp
     iterator[system.iterator].iterate();
 
     // Call the normalization for imaginary time propagation if required
     if ( system.imag_time_amplitude != 0.0 )
         normalizeImaginaryTimePropagation();
-
-    // Increase t.
-    system.p.t = system.p.t + system.p.dt;
 
     // For statistical purposes, increase the iteration counter
     system.iteration++;
