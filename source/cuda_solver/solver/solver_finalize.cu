@@ -1,4 +1,4 @@
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
 #include "misc/escape_sequences.hpp"
 #include "misc/commandline_io.hpp"
 

@@ -1,6 +1,6 @@
 #pragma once
 #include "cuda/typedef.cuh"
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
 
 namespace PHOENIX::Kernel::Summation {
 

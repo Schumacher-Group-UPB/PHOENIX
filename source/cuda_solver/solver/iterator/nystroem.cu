@@ -1,16 +1,33 @@
 #include <omp.h>
-
-// Include Cuda Kernel headers
 #include "cuda/typedef.cuh"
 #include "kernel/kernel_compute.cuh"
 #include "kernel/kernel_summation.cuh"
 #include "kernel/kernel_halo.cuh"
 #include "system/system_parameters.hpp"
 #include "cuda/cuda_matrix.cuh"
-#include "solver/gpu_solver.hpp"
-#include "misc/commandline_io.hpp"
+#include "solver/iterator/cash_karp.cuh"
+#include "solver/solver_factory.hpp"
 
-void PHOENIX::Solver::iterateFixedTimestepNystroem() {
+namespace PHOENIX {
+
+Nystroem::Nystroem( SystemParameters& system ) : Solver( system ) {
+    k_max_ = 6;
+    halo_size_ = 6;
+    is_adaptive_ = false;
+    name_ = "Nystroem";
+    description_ = "Nystroem's fifth-order method";
+    butcher_tableau_ =
+        "     0.0     | 0.0        0.0       0.0         0.0      0.0       0.0        \n"
+        "     1.0/3.0 | 1.0/3.0    0.0       0.0         0.0      0.0       0.0        \n"
+        "     2.0/5.0 | 4.0/25.0   6.0/25.0  0.0         0.0      0.0       0.0        \n"
+        "     1.0     | 1.0/4.0   -3.0       15.0/4.0    0.0      0.0       0.0        \n"
+        "     2.0/3.0 | 2.0/27.0   10.0/9.0 -50.0/81.0   8.0/81.0 0.0       0.0        \n"
+        "     4.0/5.0 | 2.0/25.0   12.0/25.0 2.0/15.0    8.0/75.0 0.0       0.0        \n"
+        "     -------------------------------------------------------------------------\n"
+        "             | 23.0/192.0 0.0       125.0/192.0 0.0     -27.0/64.0 125.0/192.0";
+}
+
+void Nystroem::step( bool variable_time_step ) {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 
                      CALCULATE_K( 1, Type::real(0.0), wavefunction, reservoir );
@@ -39,3 +56,7 @@ void PHOENIX::Solver::iterateFixedTimestepNystroem() {
 
     );
 }
+
+REGISTER_SOLVER( "Nystroem", Nystroem, false, "Nystroem's fifth-order method" );
+
+} // namespace PHOENIX

@@ -1,16 +1,30 @@
 #include <omp.h>
-
-// Include Cuda Kernel headers
 #include "cuda/typedef.cuh"
 #include "kernel/kernel_compute.cuh"
 #include "kernel/kernel_summation.cuh"
 #include "kernel/kernel_halo.cuh"
 #include "system/system_parameters.hpp"
 #include "cuda/cuda_matrix.cuh"
-#include "solver/gpu_solver.hpp"
-#include "misc/commandline_io.hpp"
+#include "solver/iterator/houwen_wray.cuh"
+#include "solver/solver_factory.hpp"
 
-void PHOENIX::Solver::iterateFixedTimestepHouwenWray() {
+namespace PHOENIX {
+
+HouwenWray::HouwenWray( SystemParameters& system ) : Solver( system ) {
+    k_max_ = 3;
+    halo_size_ = 3;
+    is_adaptive_ = false;
+    name_ = "HouwenWray";
+    description_ = "Van der Houwen's/Wray's third-order method";
+    butcher_tableau_ =
+        "     0.0      | 0.0      0.0      0.0    \n"
+        "     8.0/15.0 | 8.0/15.0 0.0      0.0    \n"
+        "     2.0/3.0  | 1.0/4.0  5.0/12.0 0.0    \n"
+        "     ------------------------------------\n"
+        "     0.0      | 1.0/4.0  0.0      3.0/4.0";
+}
+
+void HouwenWray::step(bool variable_time_step) {
     SOLVER_SEQUENCE( true /*Capture CUDA Graph*/,
 
                      CALCULATE_K( 1, Type::real(0.0), wavefunction, reservoir );
@@ -27,3 +41,7 @@ void PHOENIX::Solver::iterateFixedTimestepHouwenWray() {
 
     );
 }
+
+REGISTER_SOLVER( "HW", HouwenWray, false, "Houwen-Wray" );
+
+} // namespace PHOENIX

@@ -8,7 +8,7 @@
     #include <numeric>
 #endif
 #include <iostream>
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
 #include "kernel/kernel_compute.cuh"
 
 void PHOENIX::Solver::normalizeImaginaryTimePropagation() {

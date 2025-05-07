@@ -145,13 +145,6 @@ void PHOENIX::SystemParameters::calculateAuto() {
         p.subgrids_columns = suggested_subgrids_columns;
     }
 
-    // Number of subgrid points
-    p.subgrid_N_c = p.N_c / p.subgrids_columns;
-    p.subgrid_N_r = p.N_r / p.subgrids_rows;
-    p.subgrid_N2 = p.subgrid_N_c * p.subgrid_N_r;
-    p.subgrid_N2_with_halo = ( p.subgrid_N_c + 2 * p.halo_size ) * ( p.subgrid_N_r + 2 * p.halo_size );
-    // Row offset for a subgrid- i +/- row offset is the row above/below
-    p.subgrid_row_offset = p.subgrid_N_c + 2 * p.halo_size;
     // Effective mass, scaled with hbar
     p.m_eff_scaled = -0.5 * p.h_bar_s * p.h_bar_s / p.m_eff;
     // Magic timestep

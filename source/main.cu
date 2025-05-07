@@ -34,7 +34,8 @@
 #include "system/filehandler.hpp"
 #include "misc/timeit.hpp"
 #include "misc/sfml_helper.hpp"
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
+#include "solver/solver_factory.hpp"
 
 #ifdef BENCH
     #ifdef LIKWID
@@ -50,16 +51,16 @@ int main( int argc, char* argv[] ) {
     auto system = PHOENIX::SystemParameters( config.size(), config.data() );
 
     // Create Solver Class
-    auto solver = PHOENIX::Solver( system );
+    auto solver = PHOENIX::SolverFactory::create( system );
+    solver->initialize();
 
     // Create Main Plotwindow. Needs to be compiled with -DSFML_RENDER
-    initSFMLWindow( solver );
+    initSFMLWindow( *solver.get() );
 
     // Some Helper Variables
     bool running = true;
     double complete_duration = 0.;
     PHOENIX::Type::uint32 out_every_iterations = 1;
-    PHOENIX::Type::real dt = system.p.dt;
     // Main Loop
 #ifdef BENCH
     #ifdef LIKWID
@@ -68,7 +69,7 @@ int main( int argc, char* argv[] ) {
     { LIKWID_MARKER_START( "iterator" ); }
     #endif
     double tstart = omp_get_wtime();
-    TimeThis( while ( omp_get_wtime() - tstart <= BENCH_TIME ) { solver.iterate(); }, "Main-Loop" );
+    TimeThis( while ( omp_get_wtime() - tstart <= BENCH_TIME ) { solver->iterate(); }, "Main-Loop" );
     complete_duration = PHOENIX::TimeIt::totalRuntime();
     system.printCMD( complete_duration, system.iteration );
     #ifdef LIKWID
@@ -80,27 +81,38 @@ int main( int argc, char* argv[] ) {
         TimeThis(
             // Iterate #output_every ps
             auto start = system.p.t; 
-            while ( ( ( not system.disableRender and system.p.t < start + system.output_every ) or ( system.disableRender and system.p.t < out_every_iterations * system.output_every ) ) and solver.iterate() ) {
+            bool force_fixed_time_step = false; 
+            
+            while ( ( not system.disableRender and system.p.t < start + system.output_every ) or ( system.disableRender and system.p.t < out_every_iterations * system.output_every ) ) {
                 // Check if t+dt would overshoot out_every_iterations*output_every, adjust dt accordingly
+                auto dt = system.p.dt;
                 if ( system.p.t + system.p.dt > out_every_iterations * system.output_every ) {
                     auto next_dt = out_every_iterations * system.output_every - system.p.t;
                     if ( next_dt > 0 ) {
                         system.p.dt = next_dt;
+                        force_fixed_time_step = true;
                     }
-                } else {
-                    dt = system.p.dt;
                 }
-                system.p.dt = dt;
+                auto result = solver->iterate( force_fixed_time_step );
+
+                if ( force_fixed_time_step ) {
+                    force_fixed_time_step = false;
+                    system.p.dt = dt;
+                }
+                
+                if ( !result ) {
+                    break;
+                }
+
             } out_every_iterations++;
             // Cache the history and max values
-            solver.cacheValues();
+            solver->cacheValues();
             // Output Matrices if enabled
-            solver.cacheMatrices();
+            solver->cacheMatrices();
             // Plot
-            running = plotSFMLWindow( solver, system.p.t, complete_duration, system.iteration );
+            running = plotSFMLWindow( *solver.get(), system.p.t, complete_duration, system.iteration );
             , "Main-Loop" );
         complete_duration = PHOENIX::TimeIt::totalRuntime();
-
         system.printCMD( complete_duration, system.iteration );
     }
 #endif
@@ -108,7 +120,7 @@ int main( int argc, char* argv[] ) {
     system.finishCMD();
 
     // Fileoutput
-    solver.finalize();
+    solver->finalize();
 
     // Print Time statistics and output to file
     system.printSummary( PHOENIX::TimeIt::getTimes(), PHOENIX::TimeIt::getTimesTotal() );

@@ -9,7 +9,7 @@
 #include "misc/commandline_io.hpp"
 #include "misc/escape_sequences.hpp"
 #include "misc/timeit.hpp"
-#include "solver/iterator_config.hpp"
+#include "solver/solver_factory.hpp"
 #include "omp.h"
 
 // Automatically determine console width depending on windows or linux
@@ -298,6 +298,16 @@ const std::map<std::string_view, ArgInfo> arguments{
             .long_usecase{ "--iterator RK4 (sets the iterator to RK4)\n--iterator SSFM (sets the iterator to SSFM)" } 
         } 
     },
+    { "adaptiveTimeStep", 
+        { 
+            .name{ "-adaptive, -adaptiveTimestep" }, 
+            .key{ "" }, 
+            .short_description{ "Use adaptive timestepping if available." }, 
+            .long_description{ "Use adaptive timestepping if available." }, 
+            .short_usecase{ "-adaptive" }, 
+            .long_usecase{ "-adaptive" } 
+        } 
+    },
     { "imagTime", 
         { 
             .name{ "--imagTime" }, 
@@ -559,11 +569,11 @@ void PHOENIX::SystemParameters::printHelp( bool verbose, bool markdown ) {
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "iterator" ).print_usecase( iterator, verbose, markdown );
     std::cout << PHOENIX::CLIO::unifyLength( "", "", "Available:", L1, L2, L3 ) << std::endl;
-    for ( auto& it : Iterator::available ) {
-        if ( !it.second.implemented )
-            continue;
-        std::cout << PHOENIX::CLIO::unifyLength( "", "", it.first + ": " + std::string( it.second.name ) + ( it.second.fixed_timestep ? ( " (" + EscapeSequence::YELLOW + "fixed" + EscapeSequence::RESET + ")" ) : ( " (" + EscapeSequence::ORANGE + "adaptive" + EscapeSequence::RESET +")" ) ), L1, L2, L3 ) << std::endl;
+    auto available_iterators = SolverFactory::available_solvers();
+    for ( auto& [key, info] : available_iterators ) {
+        std::cout << PHOENIX::CLIO::unifyLength( "", "", key + ": " + std::string( info.description ) + ( !info.is_adaptive ? ( " (" + EscapeSequence::YELLOW + "fixed" + EscapeSequence::RESET + ")" ) : ( " (" + EscapeSequence::ORANGE + "adaptive" + EscapeSequence::RESET +")" ) ), L1, L2, L3 ) << std::endl;
     }
+    arguments.at( "adaptiveTimeStep" ).print_usecase( use_adaptive_timestep, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "imagTime" ).print_usecase( imag_time_amplitude, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
@@ -692,11 +702,14 @@ void PHOENIX::SystemParameters::printSummary( std::map<std::string, std::vector<
 
     // Additional Information
     std::cout << EscapeSequence::BOLD << PHOENIX::CLIO::centerString( " Infos ", console_width, '-' ) << EscapeSequence::RESET << std::endl;
-    std::cout << "Calculations done using the '" << iterator << " - " << Iterator::available.at(iterator).name << "' solver" << std::endl;
-    if ( !Iterator::available.at(iterator).fixed_timestep ) {
+    auto available_iterators = SolverFactory::available_solvers();
+    std::cout << "Calculations done using the '" << iterator << " - " << available_iterators.at( iterator ).description << "' solver" << std::endl;
+    if ( use_adaptive_timestep ) {
         std::cout << " = Tolerance used: " << tolerance << std::endl;
         std::cout << " = dt_max used: " << dt_max << std::endl;
         std::cout << " = dt_min used: " << dt_min << std::endl;
+    } else {
+        std::cout << " = Fixed timestep used: " << p.dt << std::endl;
     }
 
     std::cout << "Calculated until t = " << p.t << "ps" << std::endl;

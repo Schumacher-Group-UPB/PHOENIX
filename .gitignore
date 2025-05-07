@@ -4,3 +4,14 @@ main.o
 kerncraft
 stencil
 data
+*.exe
+*.ncu-*
+*.dll
+*.txt
+*.m
+.vscode
+.clang-format
+*.pdf
+*.mat
+*.npy
+*.pptx

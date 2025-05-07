@@ -78,7 +78,9 @@ class SystemParameters {
     // Initialize the system randomly
     bool randomly_initialize_system;
 
+    // User Choice for iterator
     std::string iterator;
+    bool use_adaptive_timestep;
 
     // Seed for random number generator
     Type::uint32 random_seed;

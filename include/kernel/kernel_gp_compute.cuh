@@ -1,7 +1,7 @@
 #pragma once
 #include "cuda/typedef.cuh"
 #include "cuda/cuda_macro.cuh"
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
 
 /*
  * The Main Compute Kernel is structured using small inlined subkernels. These subkernels define the system components.

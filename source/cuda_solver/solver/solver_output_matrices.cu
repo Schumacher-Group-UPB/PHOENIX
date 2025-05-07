@@ -3,7 +3,7 @@
 #include <future>
 #include <mutex>
 #include "cuda/typedef.cuh"
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
 
 // TODO: to ensure the async call outputs the correct matrices, we need to make sure the lambda takes a *copy* of the host arrays.
 // This will be fine, because copying 100MB in memory is much faster than writing to disk.

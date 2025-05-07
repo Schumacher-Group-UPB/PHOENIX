@@ -3,7 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
 #include "misc/commandline_io.hpp"
 #include "cuda/cuda_matrix.cuh"
 

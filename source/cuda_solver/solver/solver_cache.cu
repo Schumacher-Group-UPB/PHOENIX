@@ -2,7 +2,7 @@
 #include <string>
 
 #include "cuda/typedef.cuh"
-#include "solver/gpu_solver.hpp"
+#include "solver/solver.hpp"
 
 void PHOENIX::Solver::cacheValues() {
     // System Time
