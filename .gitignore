@@ -1,8 +1,5 @@
 obj
 output
-main.o
-kerncraft
-stencil
 data
 *.exe
 *.ncu-*
@@ -15,3 +12,6 @@ data
 *.mat
 *.npy
 *.pptx
+*.zip
+*.tar
+*.exe

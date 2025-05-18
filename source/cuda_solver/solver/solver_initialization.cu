@@ -23,6 +23,9 @@ void Solver::initialize() {
     // Row offset for a subgrid- i +/- row offset is the row above/below
     system.p.subgrid_row_offset = system.p.subgrid_N_c + 2 * system.p.halo_size;
 
+    std::cout << CLIO::prettyPrint( "Building Solver '" + name_ + ": " + description_ + "'", CLIO::Control::Info ) << std::endl;
+    std::cout << CLIO::prettyPrint( "Butcher Tableau:\n" + EscapeSequence::GRAY + butcher_tableau_, CLIO::Control::Info ) << std::endl;
+
     // Initialize all matrices
     initializeMatricesFromSystem();
     // Then output all matrices to file. If --output was not passed in argv, this method outputs everything.
@@ -32,10 +35,7 @@ void Solver::initialize() {
 }
 
 void Solver::initializeMatricesFromSystem() {
-    std::cout << EscapeSequence::BOLD
-              << "-------------------- Initializing Host and Device Matrices "
-                 "------------------------"
-              << EscapeSequence::RESET << std::endl;
+    std::cout << EscapeSequence::BOLD << "-------------------- Initializing Host and Device Matrices ------------------------" << EscapeSequence::RESET << std::endl;
 
     // First, construct all required host matrices
     bool use_fft = system.fft_every < system.t_max or system.iterator == "ssfm";
