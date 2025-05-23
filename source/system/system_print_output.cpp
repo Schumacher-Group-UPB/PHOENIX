@@ -12,6 +12,10 @@
 #include "solver/solver_factory.hpp"
 #include "omp.h"
 
+#ifndef PHOENIX_VERSION
+    #define PHOENIX_VERSION "unknown"
+#endif
+
 // Automatically determine console width depending on windows or linux
 #ifdef _WIN32
     #include <windows.h>
@@ -65,8 +69,8 @@ void print_name() {
     ss.clear();
 
     // Version Information
-    ss << "Version: " << EscapeSequence::BOLD << EscapeSequence::BLUE << "0.2.0a" << EscapeSequence::RESET;
-    std::cout << PHOENIX::CLIO::centerStringRaw( ss.str(), console_width, "Version: 0.2.0a" ) << std::endl;
+    ss << "Version: " << EscapeSequence::BOLD << EscapeSequence::BLUE << PHOENIX_VERSION << EscapeSequence::RESET;
+    std::cout << PHOENIX::CLIO::centerStringRaw( ss.str(), console_width, "Version: " + std::string(PHOENIX_VERSION) ) << std::endl;
     //std::cout << PHOENIX::CLIO::centerString( "https://github.com/Schumacher-Group-UPB/PHOENIX", console_width ) << std::endl;
 
     // Citation Information

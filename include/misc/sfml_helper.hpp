@@ -12,6 +12,8 @@
     #include <SFML/Window.hpp>
     #include "sfml_window.hpp"
     #include "colormap.hpp"
+    #include "resources/vik.hpp"
+    #include "resources/viko.hpp"
 #endif
 
 /*
@@ -98,6 +100,7 @@ void initSFMLWindow( PHOENIX::Solver& solver ) {
         getWindow().construct( 1920, 540, solver.system.p.N_c * 3, solver.system.p.N_r, "PHOENIX_ v0.3.0-alpha" );
 
     // if .pal in __local_colorpalette, read gnuplot __local_colorpalette, else read as .txt
+    /*
     if ( solver.system.filehandler.color_palette.find( ".pal" ) != std::string::npos ) {
         __local_colorpalette.readColorPaletteFromGnuplotDOTPAL( solver.system.filehandler.color_palette );
         __local_colorpalette_phase.readColorPaletteFromGnuplotDOTPAL( solver.system.filehandler.color_palette_phase );
@@ -108,6 +111,9 @@ void initSFMLWindow( PHOENIX::Solver& solver ) {
         __local_colorpalette.readColorPaletteFromTXT( "resources/" + solver.system.filehandler.color_palette + ".txt" );
         __local_colorpalette_phase.readColorPaletteFromTXT( "resources/" + solver.system.filehandler.color_palette_phase + ".txt" );
     }
+    */
+    __local_colorpalette.readColorPaletteFromMemory( PHOENIX::Misc::Resources::cmap_vik);
+    __local_colorpalette_phase.readColorPaletteFromMemory( PHOENIX::Misc::Resources::cmap_viko);
     __local_colorpalette.initColors();
     __local_colorpalette_phase.initColors();
     getWindow().init();

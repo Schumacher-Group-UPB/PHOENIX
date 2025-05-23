@@ -7,6 +7,9 @@
 #include "misc/colormap.hpp"
 #include "cuda/typedef.cuh"
 
+// Resources
+#include "resources/font.hpp"
+
 class BasicWindow;
 
 class WindowObject {
@@ -110,7 +113,7 @@ class BasicWindow {
         mainTexture.create( tx_w, tx_h );
         pixMat.clear();
         pixMat.reserve( ( tx_w + 1 ) * ( tx_h + 1 ) );
-        font.loadFromFile( "resources/font.ttf" );
+        font.loadFromMemory( PHOENIX::Misc::Resources::font_ttf.data(), PHOENIX::Misc::Resources::font_ttf.size() );
         textheight = 25;
         printtext.setFont( font );
         printtext.setCharacterSize( textheight );
