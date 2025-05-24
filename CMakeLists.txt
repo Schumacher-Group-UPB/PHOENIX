@@ -140,7 +140,11 @@ macro(enable_sfml tgt)
             if(SFML_STATIC)
                 target_compile_definitions(${tgt} PRIVATE SFML_STATIC)
                 find_package(Freetype REQUIRED)
-                target_link_libraries(${tgt} PRIVATE opengl32 winmm gdi32 Freetype::Freetype)
+                if(WIN32)
+                    target_link_libraries(${tgt} PRIVATE opengl32 winmm gdi32 Freetype::Freetype)
+                else()
+                    target_link_libraries(${tgt} PRIVATE Freetype::Freetype)
+                endif()
             endif()
 
             if(NOT SFML_STATIC)
@@ -187,6 +191,13 @@ endmacro()
 
 
 set(EXE_NAME "PHOENIX_${BUILD_ARCH}_${PRECISION}")
+if(SFML)
+    string(APPEND EXE_NAME "_sfml")
+
+    if(SFML_STATIC)
+        string(APPEND EXE_NAME "_s")
+    endif()
+endif()
 
 string(TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S")
 
@@ -203,7 +214,7 @@ add_custom_target(FinalMessage ALL
     COMMAND ${CMAKE_COMMAND} -E echo "=============================================="
     COMMAND ${CMAKE_COMMAND} -E echo ">> Summary:"
     COMMAND ${CMAKE_COMMAND} -E echo "   -  Precision       : ${PRECISION}"
-    COMMAND ${CMAKE_COMMAND} -E echo "   -  SFML Renderer   : ${SFML} $<$<BOOL:${SFML_STATIC}>:(static)>"
+    COMMAND ${CMAKE_COMMAND} -E echo "   -  SFML Renderer   : ${SFML} $<$<BOOL:${SFML_STATIC}>:[static]>"
     COMMAND ${CMAKE_COMMAND} -E echo "Phoenix is now ready!"
     COMMENT "Final build summary"
 )
@@ -308,6 +319,7 @@ if(BUILD_ARCH STREQUAL "gpu")
             $<$<CXX_COMPILER_ID:MSVC>:-Xcompiler=/std:c++20>
             $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Xcompiler=-std=c++20>
             -x cu
+            -Wno-deprecated-gpu-targets
         >
     )
 
