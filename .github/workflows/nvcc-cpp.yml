@@ -24,4 +24,4 @@ jobs:
     - name: Build Project with CUDA
       run: |
         export PATH=/usr/local/cuda/bin:$PATH
-        make -j4 FP32=TRUE COMPILER=nvcc
+        cmake -B build -S . --fresh -DBUILD_ARCH=gpu -DPRECISION=fp32 -DSFML=OFF && cmake --build build -j8 --config Release
