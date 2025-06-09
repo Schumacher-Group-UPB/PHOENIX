@@ -5,7 +5,7 @@ set(PHOENIX_VERSION "v0.3.2")
 # -------------------------------------------------------------------
 # ------------ Mandatory choice:  BUILD_ARCH = cpu | gpu ------------
 # -------------------------------------------------------------------
-set(BUILD_ARCH "" CACHE STRING "cpu  or  gpu")
+set(BUILD_ARCH "gpu" CACHE STRING "cpu  or  gpu")
 set_property(CACHE BUILD_ARCH PROPERTY STRINGS cpu gpu)
 
 if(BUILD_ARCH STREQUAL "")
@@ -207,7 +207,7 @@ add_custom_target(FinalMessage ALL
     COMMAND ${CMAKE_COMMAND} -E echo "==           PHOENIX BUILD SYSTEM           "
     COMMAND ${CMAKE_COMMAND} -E echo "=============================================="
     COMMAND ${CMAKE_COMMAND} -E echo "==  Version        : ${PHOENIX_VERSION}"
-    COMMAND ${CMAKE_COMMAND} -E echo "==  Build Type     : ${CMAKE_BUILD_TYPE}"
+    COMMAND ${CMAKE_COMMAND} -E echo "==  Build Type     : $<CONFIG>"
     COMMAND ${CMAKE_COMMAND} -E echo "==  Architecture   : ${BUILD_ARCH}"
     COMMAND ${CMAKE_COMMAND} -E echo "==  Output Path    : ${RUNTIME_DIR}/${BUILD_ARCH}"
     COMMAND ${CMAKE_COMMAND} -E echo "==  Built At       : ${BUILD_TIME}"
@@ -238,9 +238,15 @@ if(BUILD_ARCH STREQUAL "cpu")
     add_executable(${EXE_NAME} ${CPP_SOURCES} ${CPU_WRAPPERS})
 
     target_compile_options(${EXE_NAME} PRIVATE
-        $<$<CXX_COMPILER_ID:GNU,Clang>:-std=c++20 -fopenmp -O3 -x c++ -funroll-loops -finline-limit=20000>)
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-std=c++20 -fopenmp -x c++ -funroll-loops -finline-limit=20000>)
     if(TUNE STREQUAL "native")
         target_compile_options(${EXE_NAME} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-mtune=native -march=native>)
+    endif()
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        list(APPEND CPU_OPT_FLAGS -O3)
+    else()
+        list(APPEND CPU_OPT_FLAGS -O0)
     endif()
 
     find_package(OpenMP REQUIRED)

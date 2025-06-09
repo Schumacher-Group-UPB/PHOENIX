@@ -70,7 +70,7 @@ void print_name() {
 
     // Version Information
     ss << "Version: " << EscapeSequence::BOLD << EscapeSequence::BLUE << PHOENIX_VERSION << EscapeSequence::RESET;
-    std::cout << PHOENIX::CLIO::centerStringRaw( ss.str(), console_width, "Version: " + std::string(PHOENIX_VERSION) ) << std::endl;
+    std::cout << PHOENIX::CLIO::centerStringRaw( ss.str(), console_width, "Version: " + std::string( PHOENIX_VERSION ) ) << std::endl;
     //std::cout << PHOENIX::CLIO::centerString( "https://github.com/Schumacher-Group-UPB/PHOENIX", console_width ) << std::endl;
 
     // Citation Information
@@ -117,30 +117,48 @@ struct ArgInfo {
         const size_t L2 = std::min<size_t>( 0.3 * console_width - 1, 50 );
         const size_t L3 = console_width - 15 - L2 - L1;
 
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision( 6 );
+
         std::string default_str = "";
 
         if ( default_value.type() == typeid( int ) ) {
             default_str = "Default is " + std::to_string( std::any_cast<int>( default_value ) ) + unit;
         } else if ( default_value.type() == typeid( PHOENIX::Type::real ) ) {
-            default_str = "Default is " + std::to_string( std::any_cast<PHOENIX::Type::real>( default_value ) ) + unit;
+            oss.str( "" );
+            oss.clear();
+            oss << std::any_cast<PHOENIX::Type::real>( default_value );
+            default_str = "Default is " + oss.str() + unit;
         } else if ( default_value.type() == typeid( PHOENIX::Type::complex ) ) {
-            default_str = "Default is " + std::to_string( PHOENIX::CUDA::real( std::any_cast<PHOENIX::Type::complex>( default_value ) ) ) + "+i" + std::to_string( PHOENIX::CUDA::imag( std::any_cast<PHOENIX::Type::complex>( default_value ) ) ) + unit;
+            oss.str( "" );
+            oss.clear();
+            oss << PHOENIX::CUDA::real( std::any_cast<PHOENIX::Type::complex>( default_value ) );
+            std::string real_str = oss.str();
+
+            oss.str( "" );
+            oss.clear();
+            oss << std::showpos << PHOENIX::CUDA::imag( std::any_cast<PHOENIX::Type::complex>( default_value ) );
+            std::string imag_str = oss.str();
+
+            default_str = "Default is " + real_str + imag_str + "i" + unit;
         } else if ( default_value.type() == typeid( std::string ) ) {
             default_str = "Default is '" + std::any_cast<std::string>( default_value ) + "'" + unit;
         }
 
         bool include_dot = ( verbose ? long_description : short_description ).back() != '.';
         bool first = false;
-        for ( auto description : ( verbose ? long_description : short_description ) | std::views::split( '\n' ) ) {
+        for ( auto description : std::string_view( verbose ? long_description : short_description ) | std::views::split( '\n' ) ) {
+            std::string line{ std::ranges::begin( description ), std::ranges::end( description ) };
             if ( !first ) {
-                std::cout << PHOENIX::CLIO::unifyLength( name, key, std::string{ std::ranges::begin( description ), std::ranges::end( description ) } + ( include_dot ? ". " : " " ) + default_str, L1, L2, L3 ) << std::endl;
+                std::cout << PHOENIX::CLIO::unifyLength( name, key, line + ( include_dot ? ". " : " " ) + default_str, L1, L2, L3 ) << std::endl;
                 first = true;
             } else {
-                std::cout << PHOENIX::CLIO::unifyLength( "", "", std::string{ std::ranges::begin( description ), std::ranges::end( description ) }, L1, L2, L3 ) << std::endl;
+                std::cout << PHOENIX::CLIO::unifyLength( "", "", line, L1, L2, L3 ) << std::endl;
             }
         }
-        for ( auto usecase : ( verbose ? long_usecase : short_usecase ) | std::views::split( '\n' ) ) {
-            std::cout << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "", "", "Example: " + std::string{ std::ranges::begin( usecase ), std::ranges::end( usecase ) }, L1, L2, L3 ) << EscapeSequence::RESET << std::endl;
+        for ( auto usecase : std::string_view( verbose ? long_usecase : short_usecase ) | std::views::split( '\n' ) ) {
+            std::string line{ std::ranges::begin( usecase ), std::ranges::end( usecase ) };
+            std::cout << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "", "", "Example: " + line, L1, L2, L3 ) << EscapeSequence::RESET << std::endl;
         }
     }
 
@@ -575,13 +593,13 @@ void PHOENIX::SystemParameters::printHelp( bool verbose, bool markdown ) {
     std::cout << PHOENIX::CLIO::unifyLength( "", "", "Available:", L1, L2, L3 ) << std::endl;
     auto available_iterators = SolverFactory::available_solvers();
     for ( auto& [key, info] : available_iterators ) {
-        std::cout << PHOENIX::CLIO::unifyLength( "", "", key + ": " + std::string( info.description ) + ( !info.is_adaptive ? ( " (" + EscapeSequence::YELLOW + "fixed" + EscapeSequence::RESET + ")" ) : ( " (" + EscapeSequence::ORANGE + "adaptive" + EscapeSequence::RESET +")" ) ), L1, L2, L3 ) << std::endl;
+        std::cout << PHOENIX::CLIO::unifyLength( "", "", key + ": " + std::string( info.description ) + ( !info.is_adaptive ? ( " (" + EscapeSequence::YELLOW + "fixed" + EscapeSequence::RESET + ")" ) : ( " (" + EscapeSequence::ORANGE + "adaptive" + EscapeSequence::RESET + ")" ) ), L1, L2, L3 ) << std::endl;
     }
     arguments.at( "adaptiveTimeStep" ).print_usecase( use_adaptive_timestep, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "imagTime" ).print_usecase( imag_time_amplitude, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
-    arguments.at( "boundary" ).print_usecase( std::string( "x: " ) + ( p.periodic_boundary_x ? "periodic" : "zero" ) + " y: " + ( p.periodic_boundary_y ? "periodic" : "zero" ), verbose, markdown );
+    arguments.at( "boundary" ).print_usecase(std::string( p.periodic_boundary_x ? "periodic" : "zero" ) + " " + ( p.periodic_boundary_y ? "periodic" : "zero" ), verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
 
     std::cout << PHOENIX::CLIO::unifyLength( "System Parameters", "", "", L1, L2, L3 ) << std::endl;
