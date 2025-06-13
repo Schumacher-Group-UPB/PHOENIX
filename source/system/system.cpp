@@ -150,6 +150,7 @@ void PHOENIX::SystemParameters::calculateAuto() {
     // Magic timestep
     magic_timestep = 0.5 * p.dx * p.dy / dt_scaling_factor;
     if ( do_overwrite_dt ) {
+        std::cout << PHOENIX::CLIO::prettyPrint( "Set dt to magic time step: " + std::to_string( magic_timestep ), PHOENIX::CLIO::Control::Info ) << std::endl;
         p.dt = magic_timestep;
     }
     // Calculate scaled imaginary values

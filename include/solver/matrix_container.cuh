@@ -85,11 +85,11 @@ struct MatrixContainer {
         buffer_wavefunction_iplus.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "buffer_wavefunction_iplus" );
 #endif
 
-        initial_state_plus = PHOENIX::Type::device_vector<Type::complex>( N_c * N_r );
+        initial_state_plus = PHOENIX::Type::host_vector<Type::complex>( N_c * N_r );
         if ( use_reservoir ) {
             reservoir_plus.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "reservoir_plus" );
             buffer_reservoir_plus.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "buffer_reservoir_plus" );
-            initial_reservoir_plus = PHOENIX::Type::device_vector<Type::complex>( N_c * N_r );
+            initial_reservoir_plus = PHOENIX::Type::host_vector<Type::complex>( N_c * N_r );
         }
 
         // Pump, Pulse and Potential Matrices
@@ -149,11 +149,11 @@ struct MatrixContainer {
         wavefunction_iminus.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "wavefunction_iminus" );
 #endif
         buffer_wavefunction_minus.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "buffer_wavefunction_minus" );
-        initial_state_minus = PHOENIX::Type::device_vector<Type::complex>( N_c * N_r );
+        initial_state_minus = PHOENIX::Type::host_vector<Type::complex>( N_c * N_r );
         if ( use_reservoir ) {
             reservoir_minus.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "reservoir_minus" );
             buffer_reservoir_minus.construct( N_r, N_c, subgrids_columns, subgrids_rows, halo_size, "buffer_reservoir_minus" );
-            initial_reservoir_minus = PHOENIX::Type::device_vector<Type::complex>( N_c * N_r );
+            initial_reservoir_minus = PHOENIX::Type::host_vector<Type::complex>( N_c * N_r );
         }
 
         // Pump, Pulse and Potential Matrices

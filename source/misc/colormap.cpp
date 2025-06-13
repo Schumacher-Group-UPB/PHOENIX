@@ -6,6 +6,8 @@
 
 // TODO: optional: return as tuple (with std::tie(r,g,b)) such that the Color class is not needed outside this class
 ColorPalette::Color &ColorPalette::getColor( double value, bool invert, bool cutoff ) {
+    if (std::isnan(value))
+        return black;
     if ( value == 0 && cutoff )
         return black;
     if ( invert )

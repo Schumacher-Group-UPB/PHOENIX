@@ -107,14 +107,15 @@ class Envelope {
     // Evaluates all the current temporal envelopes and stores them in the temporal_envelope vector
     void updateTemporal( const PHOENIX::Type::real t );
 
-    // We use template functions here to avoid circular dependencies
+    // We use template functions here to avoid circular dependencies. TODO: use forward declaration and move this to envelope.cpp
     template <class FH>
     void prepareCache( FH& filehandler, const Dimensions& dim ) {
         // Load Temporal Components
         temporal_time_points = std::vector<std::vector<std::vector<PHOENIX::Type::real>>>( load_path_temporal.size() );
         for ( int c = 0; c < load_path_temporal.size(); c++ ) {
-            if ( load_path_temporal[c] == "" )
+            if ( load_path_temporal[c] == "" ) {
                 continue;
+            }
             temporal_time_points[c] = filehandler.loadListFromFile( load_path_temporal[c], "temporal" );
             if ( temporal_time_points[c].size() != 3 ) {
                 std::cout << PHOENIX::CLIO::prettyPrint( "Error: Temporal envelope must have 3 columns: time, real, imag. PHOENIX_ will most likely crash!", PHOENIX::CLIO::Control::FullWarning ) << std::endl;
