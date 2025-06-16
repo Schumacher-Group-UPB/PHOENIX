@@ -33,7 +33,7 @@
 #include "system/system_parameters.hpp"
 #include "system/filehandler.hpp"
 #include "misc/timeit.hpp"
-#include "misc/sfml_helper.hpp"
+#include "misc/gui.hpp"
 #include "solver/solver.hpp"
 #include "solver/solver_factory.hpp"
 
@@ -55,7 +55,7 @@ int main( int argc, char* argv[] ) {
     solver->initialize();
 
     // Create Main Plotwindow. Needs to be compiled with -DSFML_RENDER
-    initSFMLWindow( *solver.get() );
+    auto gui_window = PHOENIX::PhoenixGUI(*solver.get());
 
     // Some Helper Variables
     bool running = true;
@@ -110,7 +110,7 @@ int main( int argc, char* argv[] ) {
             // Output Matrices if enabled
             solver->cacheMatrices();
             // Plot
-            running = plotSFMLWindow( *solver.get(), system.p.t, complete_duration, system.iteration );
+            running = gui_window.update( system.p.t, complete_duration, system.iteration );
             , "Main-Loop" );
         complete_duration = PHOENIX::TimeIt::totalRuntime();
         system.printCMD( complete_duration, system.iteration );
