@@ -12,10 +12,10 @@
     #include <SFML/Graphics.hpp>
     #include <SFML/Window.hpp>
     #include "misc/sfml_window.hpp"
-    #include "misc/colormap.hpp"
-    #include "resources/vik.hpp"
-    #include "resources/viko.hpp"
-#endif
+    #endif
+#include "misc/colormap.hpp"
+#include "resources/vik.hpp"
+#include "resources/viko.hpp"
 
 namespace PHOENIX {
 
