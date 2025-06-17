@@ -27,6 +27,7 @@ public:
 
 private:
     Solver& solver_;
+    #ifdef SFML_RENDER
     BasicWindow window_;
     ColorPalette color_phase_, color_amp_;
 
@@ -36,16 +37,17 @@ private:
     Button b_add_dt_, b_sub_dt_;
     Button b_snapshot_, b_reset_to_snapshot_;
     Button b_reset_to_initial_, b_cycle_subplot_;
-
+    
     // Snapshot data
     double snapshot_time_ = 0.0;
     Type::host_vector<Type::complex> snapshot_wavefunction_plus_, snapshot_wavefunction_minus_;
     Type::host_vector<Type::complex> snapshot_reservoir_plus_, snapshot_reservoir_minus_;
-
+    
     // Internal state
     int inset_mode_ = 0;
     size_t current_subplot_ = 0;
     Type::host_vector<Type::complex> plot_array_;
+    #endif
 
     static std::string toScientific(Type::real in);
     #ifdef SFML_RENDER
