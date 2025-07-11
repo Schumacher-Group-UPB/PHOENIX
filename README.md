@@ -14,7 +14,7 @@ If you would like to use PHOENIX or if you are missing certain functionalities i
 We'd appreciate your feedback and should you need technical support we would be happy to help. 
 
 If you use PHOENIX in your research, please cite: 
-J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. [!Computer Physics Communications, 315, 109689 (2025)](https://img.shields.io/badge/ScienceDirect-Available-green)](https://www.sciencedirect.com/science/article/pii/S0010465525001912)
+J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. [![Computer Physics Communications, 315, 109689 (2025)](https://www.sciencedirect.com/science/article/pii/S0010465525001912)]
 
 ## Table of Contents
 
