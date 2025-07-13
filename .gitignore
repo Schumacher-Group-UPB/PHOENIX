@@ -15,3 +15,8 @@ data
 *.zip
 *.tar
 *.exe
+build_*
+.ipynb_checkpoints
+__pycache__
+tmp_*
+bin/

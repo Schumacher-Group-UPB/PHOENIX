@@ -1,9 +1,9 @@
 #pragma once
 
 #include "cuda/typedef.cuh"
-#ifdef USE_CPU
-    #include <immintrin.h>
-#endif
+//#ifdef USE_CPU
+//    #include <immintrin.h>
+//#endif
 
 // Macro to copy to contents of the buffers into shared memory. The threads can then use threadIdx.x to access the shared memory.
 #ifdef USE_CPU

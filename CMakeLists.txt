@@ -27,7 +27,7 @@ set(TUNE "native" CACHE STRING "CPU tuning: native | other")
 set_property(CACHE TUNE PROPERTY STRINGS native other)
 
 set(ARCH "none" CACHE STRING "CUDA arch: none | all | <smNumber>")
-set_property(CACHE ARCH PROPERTY STRINGS none all 50 52 60 61 70 72 75 80 86 89 90)
+set_property(CACHE ARCH PROPERTY STRINGS none all 50 52 60 61 70 72 75 80 86 89 90 100 120)
 
 set(NUMA "false" CACHE STRING "Enable NUMA and set domain count")
 
@@ -305,7 +305,7 @@ if(BUILD_ARCH STREQUAL "gpu")
     if(ARCH STREQUAL "none")
         set_property(TARGET ${EXE_NAME} PROPERTY CUDA_ARCHITECTURES OFF)
     elseif(ARCH STREQUAL "all")
-        set_property(TARGET ${EXE_NAME} PROPERTY CUDA_ARCHITECTURES 50;52;60;61;70;72;75;80;86;89;90)
+        set_property(TARGET ${EXE_NAME} PROPERTY CUDA_ARCHITECTURES 50;52;60;61;70;72;75;80;86;89;90;100;120)
     else()
         set_property(TARGET ${EXE_NAME} PROPERTY CUDA_ARCHITECTURES ${ARCH})
     endif()
@@ -317,7 +317,7 @@ if(BUILD_ARCH STREQUAL "gpu")
 
     target_compile_options(${EXE_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:
-            -O0
+            -O3
             -std=c++20
             -rdc=true
             --expt-extended-lambda
