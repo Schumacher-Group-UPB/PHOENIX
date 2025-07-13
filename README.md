@@ -74,8 +74,6 @@ We provide prebuilt binaries with every release on the [releases page](https://g
     * `curl https://github.com/robertschade/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip`
     * `tar -xf PHOENIX-latest.zip`
     * `cd PHOENIX-latest`
-    * `python3 -m venv venv`
-    * `source venv/bin/activate`
     * `pip install .`
   2. Start Jupyter Notebook server
     * open terminal and run `jupyter-notebook.exe`
@@ -91,7 +89,7 @@ We provide prebuilt binaries with every release on the [releases page](https://g
     * `pip install .`
   2. Start Jupyter Notebook server
     * `source venv/bin/activate`
-    * `juypter notebook`
+    * `jupyter notebook`
     * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 
@@ -106,7 +104,7 @@ We provide prebuilt binaries with every release on the [releases page](https://g
     * `pip install .`
   3. Start Jupyter Notebook server
     * `source venv/bin/activate`
-    * `juypter notebook`
+    * `jupyter notebook`
     * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 
