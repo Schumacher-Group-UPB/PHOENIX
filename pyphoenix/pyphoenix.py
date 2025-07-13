@@ -80,11 +80,12 @@ class pyphoenix:
             binname=binname+"_sfml"
         else:
             binname=binname+"*"
-        if platform.system()=="Windows":
-            binname=binname+".exe"
         if self.debug:
             print("searching for ",binname)
-        re=glob.glob(binname, recursive = True)
+        binname2=binname
+        if platform.system()=="Windows":
+            binname2=binname2+".exe"
+        re=glob.glob(binname2, recursive = True)
         found=False
         for e in re:
             runstring=e+" --help"
@@ -112,6 +113,8 @@ class pyphoenix:
             #baseurl="https://github.com/Schumacher-Group-UPB/PHOENIX/releases/download/"
             tag="latest"
             binname2=os.path.basename(binname).replace("*","")+"_"+plat+"_"+platform.machine()
+            if platform.system()=="Windows":
+                binname2=binname2+".exe"
             url=baseurl+"/"+tag+"/"+binname2
             if self.debug:
                 print("Trying to download",url)

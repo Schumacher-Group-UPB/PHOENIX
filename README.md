@@ -45,34 +45,72 @@ We offer a Docker container that has all dependencies included and provides and 
 * For NVIDIA GPUs: a working NVIDIA GPU driver
 
 #### Steps:
-* Run in a terminal: `docker run -it --gpus=all -p 8888:8888 robertschade/phoenix:latest`
+* Run in a terminal: 
+  * if you want to use an NVIDIA GPU: `docker run -it --gpus=all -p 8888:8888 robertschade/phoenix:latest` 
+  * otherwise: `docker run -it -p 8888:8888 robertschade/phoenix:latest` 
 * open `http://localhost:8888` in a web browser
 * navigate to `examples` and open a notebook in one of the subdirectories
 
 ### Prebuilt Binaries
 We provide prebuilt binaries with every release on the [releases page](https://github.com/robertschade/PHOENIX/releases).
 
-#### Prerequisites:
+#### Prerequisites
 * For NVIDIA GPUs: a working NVIDIA GPU driver and NVIDIA CUDA
-* Python and Python packages: `numpy matplotlib h5py jupyter scipy xmltodict`
+* Python:
+  * For Windows:
+    1. Install Python (https://www.python.org/downloads/windows/) 
+      * Important: enable "add python.exe to PATH" and "use admin priviledges when installing py.exe"
+  * For MacOS:
+    1. install Homebrew ([guide](https://brew.sh/))
+    2. install gcc: run in terminal `brew install gcc`
+    2. install python: run in terminal `brew install python`
+  * For Linux:
+    * Python is most likely already installed from your distribution
+
+####  
+
 * Windows:
-  1. Install Python (https://www.python.org/downloads/windows/) 
-    * Important: enable "add python.exe to PATH" and "use admin priviledges when installing py.exe"
-  2. Install required Python packages
-    * open terminal (right click on windows logo in task bar and click terminal) and run `pip3 install numpy matplotlib h5py jupyter scipy xmltodict`
-  3. To download and unpack latest PHOENIX release run the following in a terminal:
-    * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip`
+  1. To download and unpack latest PHOENIX release run the following in a terminal:
+    * `curl https://github.com/robertschade/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip`
     * `tar -xf PHOENIX-latest.zip`
-  4. Run Jupyter Notebook server
+    * `cd PHOENIX-latest`
+    * `python3 -m venv venv`
+    * `source venv/bin/activate`
+    * `pip install .`
+  2. Start Jupyter Notebook server
     * open terminal and run `jupyter-notebook.exe`
-    * a web browser winndow should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
+    * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 * MacOS: 
-  1. Homebrew installed ([guide](https://brew.sh/))
-  2. gcc installed (`brew install gcc`)
+  1. To download and unpack latest PHOENIX release run the following in a terminal:
+    * `curl https://github.com/robertschade/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
+    * `unzip PHOENIX-latest.zip`
+    * `cd PHOENIX-latest`
+    * `python3 -m venv venv`
+    * `source venv/bin/activate`
+    * `pip install .`
+  2. Start Jupyter Notebook server
+    * `source venv/bin/activate`
+    * `juypter notebook`
+    * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
+    * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
+
 * Linux:
-  1. libfftw3 and libsfml installed
-  2. 
+  1. install libfftw3, cmake and libsfml with the mechanism of your Linux distribution
+  2. To download and unpack latest PHOENIX release run the following in a terminal:
+    * `curl https://github.com/robertschade/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
+    * `unzip PHOENIX-latest.zip`
+    * `cd PHOENIX-latest`
+    * `python3 -m venv venv`
+    * `source venv/bin/activate`
+    * `pip install .`
+  3. Start Jupyter Notebook server
+    * `source venv/bin/activate`
+    * `juypter notebook`
+    * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
+    * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
+
+#### Steps
 
 2. **Install Required Libraries**  
    - GPU versions require only CUDA.
