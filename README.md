@@ -110,35 +110,9 @@ We provide prebuilt binaries with every release on the [releases page](https://g
     * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 
-#### Steps
-
-2. **Install Required Libraries**  
-   - GPU versions require only CUDA.
-   - For CPU versions, install [FFTW](https://www.fftw.org/).  
-   - If using the SFML version, ensure [SFML](https://www.sfml-dev.org/download.php) is properly installed.
-
-
 ---
 
 In case you struggle installing the requirements or building PHOENIX you can follow our detailed [step by step guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual.md).
-## System Requirements
-
-To run PHOENIX, the following components are required:
-
-### Mandatory
-- **Windows**: [MSVC](https://visualstudio.microsoft.com/de/downloads/)  
-  **Linux or Mac**: [GCC](https://gcc.gnu.org/)
-- [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)  
-  Ensure the `nvcc` compiler is installed and added to your PATH.
-  
-### Optional
-- [SFML](https://www.sfml-dev.org/download.php) v2.6.x for graphical rendering
-- [FFTW](https://www.fftw.org/) for the CPU-only version of PHOENIX
-
-#### Additional Notes for Windows
-- Install a UNIX-based software distribution such as [msys2](https://www.msys2.org/) or any WSL-compatible Linux distribution for Makefile compatibility.
-- Add the `cl.exe` (MSVC) and `nvcc.exe` (CUDA) executables to your PATH. Follow [these steps](https://stackoverflow.com/questions/9546324/adding-a-directory-to-the-path-environment-variable-in-windows) for PATH setup.
-- Enable "C++ Desktop Development" in the Visual Studio installer.
 
 ---
 
