@@ -20,3 +20,6 @@ build_*
 __pycache__
 tmp_*
 bin/
+*-info
+*.swp
+build

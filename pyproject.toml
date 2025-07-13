@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+packages=["phoenix"]
+
+#[tool.setuptools.packages.find]
+#where = ["pyphoenix"]
+
+[tool.setuptools]
+packages = ["pyphoenix"]
+
+[project]
+name = "phoenix"
+version = "0.1.0"
+dependencies = ["requests","numpy","scipy","matplotlib","h5py","jupyter","xmltodict"]
+description = "Python Wrapper for the PHOENIX solver"
+authors = [
+    {name = "Workgroup Stefan Schumacher"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+[project.urls]
+"Homepage" = "https://github.com/Schumacher-Group-UPB/PHOENIX"

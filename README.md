@@ -6,11 +6,9 @@
 
 PHOENIX is a high-performance, solver for the nonlinear two-dimensional Schrödinger equation that can operate on CPUs and GPUs (CUDA-accelerated). Originally designed for simulating exciton-polariton condensates, it has a broad range of applications in fields of nonlinear optics and atomic condensates. 
 
-The project comes with a variety of examples, including Jupyter Notebooks and Matlab files, that demonstrate how to use PHOENIX in scientific research. You can explore these examples in the [examples folder](/examples/). Simply download one of the precompiled binaries from the [latest release](https://github.com/Schumacher-Group-UPB/PHOENIX/releases/) and place it in the same folder as the example you wish to run. Make sure to edit the configuration files to match your executable.
+The project comes with a variety of examples, including Jupyter Notebooks and Matlab files, that demonstrate how to use PHOENIX in scientific research. You can explore these examples in the [examples folder](/examples/). 
 
-In case you struggle installing the requirements or building PHOENIX you can follow our detailed [step by step guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual.md).
-
-If you would like to use PHOENIX or if you are missing certain functionalities in the code, please do not hesitate to [contact us by Email](mailto:jawi1@campus.uni-paderborn.de).
+If you would like to use PHOENIX or if you are missing certain functionalities in the code, please do not hesitate to [open an issue](https://github.com/Schumacher-Group-UPB/PHOENIX/issues/new) on Github.
 We'd appreciate your feedback and should you need technical support we would be happy to help. 
 
 If you use PHOENIX in your research, please cite: 
@@ -36,6 +34,55 @@ J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. [Comput
 
 ---
 
+## Quickstart Guide
+An easy way to try out PHOENIX are the Jupyter notebooks available in the `examples` directory.
+
+### Docker Container
+We offer a Docker container that has all dependencies included and provides and easy way to try out PHOENIX via the included example Jupyter Notebooks.
+#### Prerequisites:
+* Windows/MacOS: Docker Desktop ([install guide](https://docs.docker.com/desktop/))
+* Linux: Docker Engine ([install guide](https://docs.docker.com/engine/install/)) or Docker Desktop ([install guide](https://docs.docker.com/desktop/setup/install/linux/))
+* For NVIDIA GPUs: a working NVIDIA GPU driver
+
+#### Steps:
+* Run in a terminal: `docker run -it --gpus=all -p 8888:8888 robertschade/phoenix:latest`
+* open `http://localhost:8888` in a web browser
+* navigate to `examples` and open a notebook in one of the subdirectories
+
+### Prebuilt Binaries
+We provide prebuilt binaries with every release on the [releases page](https://github.com/robertschade/PHOENIX/releases).
+
+#### Prerequisites:
+* For NVIDIA GPUs: a working NVIDIA GPU driver and NVIDIA CUDA
+* Python and Python packages: `numpy matplotlib h5py jupyter scipy xmltodict`
+* Windows:
+  1. Install Python (https://www.python.org/downloads/windows/) 
+    * Important: enable "add python.exe to PATH" and "use admin priviledges when installing py.exe"
+  2. Install required Python packages
+    * open terminal (right click on windows logo in task bar and click terminal) and run `pip3 install numpy matplotlib h5py jupyter scipy xmltodict`
+  3. To download and unpack latest PHOENIX release run the following in a terminal:
+    * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip`
+    * `tar -xf PHOENIX-latest.zip`
+  4. Run Jupyter Notebook server
+    * open terminal and run `jupyter-notebook.exe`
+    * a web browser winndow should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
+    * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
+* MacOS: 
+  1. Homebrew installed ([guide](https://brew.sh/))
+  2. gcc installed (`brew install gcc`)
+* Linux:
+  1. libfftw3 and libsfml installed
+  2. 
+
+2. **Install Required Libraries**  
+   - GPU versions require only CUDA.
+   - For CPU versions, install [FFTW](https://www.fftw.org/).  
+   - If using the SFML version, ensure [SFML](https://www.sfml-dev.org/download.php) is properly installed.
+
+
+---
+
+In case you struggle installing the requirements or building PHOENIX you can follow our detailed [step by step guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual.md).
 ## System Requirements
 
 To run PHOENIX, the following components are required:
@@ -54,21 +101,6 @@ To run PHOENIX, the following components are required:
 - Install a UNIX-based software distribution such as [msys2](https://www.msys2.org/) or any WSL-compatible Linux distribution for Makefile compatibility.
 - Add the `cl.exe` (MSVC) and `nvcc.exe` (CUDA) executables to your PATH. Follow [these steps](https://stackoverflow.com/questions/9546324/adding-a-directory-to-the-path-environment-variable-in-windows) for PATH setup.
 - Enable "C++ Desktop Development" in the Visual Studio installer.
-
----
-
-## Quickstart Guide
-
-1. **Download Precompiled Binary**  
-   Download the latest release from the [releases page](https://github.com/Schumacher-Group-UPB/PHOENIX/releases).
-
-2. **Install Required Libraries**  
-   - GPU versions require only CUDA.  
-   - For CPU versions, install [FFTW](https://www.fftw.org/).  
-   - If using the SFML version, ensure [SFML](https://www.sfml-dev.org/download.php) is properly installed.
-
-3. **Run the Executable**  
-   Place the executable in the same folder as the desired example and configure the example files as needed.
 
 ---
 

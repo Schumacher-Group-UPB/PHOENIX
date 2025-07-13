@@ -1,3 +1,5 @@
+# This is a basic wrapper for PHOENIX for use for example in Jupyter Notebooks
+
 import subprocess
 import xmltodict
 import pathlib
@@ -9,7 +11,7 @@ import urllib
 import os
 import stat
 
-class phoenix:
+class pyphoenix:
     bin_path=None
     have_bin=None
     use_gpu=None
