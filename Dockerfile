@@ -12,9 +12,9 @@ RUN . /opt/PHOENIX/venv/bin/activate && pip install numpy matplotlib h5py jupyte
 
 
 RUN cd /opt/PHOENIX && cmake -B build_cpu_fp64 -S . -DBUILD_ARCH=cpu -DTUNE=other -DPRECISION=fp64 -DSFML=ON -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF && cmake --build build_cpu_fp64 -j8 --config Release
-#RUN cd /opt/PHOENIX && cmake -B build_cpu_fp32 -S . -DBUILD_ARCH=cpu -DTUNE=other -DPRECISION=fp32 -DSFML=ON -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF && cmake --build build_cpu_fp32 -j8 --config Release
-#RUN cd /opt/PHOENIX && cmake -B build_gpu_fp64 -S . -DBUILD_ARCH=gpu -DTUNE=other -DPRECISION=fp64 -DSFML=ON -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF -DARCH=all && cmake --build build_gpu_fp64 -j8 --config Release
-#RUN cd /opt/PHOENIX && cmake -B build_gpu_fp32 -S . -DBUILD_ARCH=gpu -DTUNE=other -DPRECISION=fp32 -DSFML=ON -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF -DARCH=all && cmake --build build_gpu_fp32 -j8 --config Release
+RUN cd /opt/PHOENIX && cmake -B build_cpu_fp32 -S . -DBUILD_ARCH=cpu -DTUNE=other -DPRECISION=fp32 -DSFML=ON -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF && cmake --build build_cpu_fp32 -j8 --config Release
+RUN cd /opt/PHOENIX && cmake -B build_gpu_fp64 -S . -DBUILD_ARCH=gpu -DTUNE=other -DPRECISION=fp64 -DSFML=ON -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF -DARCH=all && cmake --build build_gpu_fp64 -j8 --config Release
+RUN cd /opt/PHOENIX && cmake -B build_gpu_fp32 -S . -DBUILD_ARCH=gpu -DTUNE=other -DPRECISION=fp32 -DSFML=ON -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF -DARCH=all && cmake --build build_gpu_fp32 -j8 --config Release
 
 EXPOSE 127.0.0.1:8888:8888/tcp
 WORKDIR /opt/PHOENIX/

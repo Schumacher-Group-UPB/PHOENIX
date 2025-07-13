@@ -23,6 +23,9 @@ class phoenix:
     def __init__(self,precision="fp32",use_gpu=True,gpu_id=0,sfml=False,hint_path=None,result_path=None,debug=False):
         self.precision=precision
         self.use_gpu=use_gpu
+        if platform.system()=="Darwin":
+            self.use_gpu=False
+            print("Warning: GPU computation is not yet supported in PHOENIX for MacOS.")
         self.debug=debug
         self.sfml=sfml
         self.has_gpu=self.check_gpu()
@@ -40,7 +43,7 @@ class phoenix:
                 path=os.path.abspath(os.environ["PHOENIX_PATH"])
                 self.find_binary(path)
             else:
-                self.find_binary(os.path.abspath("."))                
+                self.find_binary(os.path.abspath("../.."))                
         else:
             self.find_binary(os.path.abspath(hint_path))
 
@@ -66,7 +69,7 @@ class phoenix:
         if self.use_gpu:
             binname=binname+"_gpu"
         else:
-            binname=binname+"_gpu"
+            binname=binname+"_cpu"
         if self.precision=="fp32":
             binname=binname+"_fp32"
         else:
