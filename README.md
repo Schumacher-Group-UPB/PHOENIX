@@ -52,7 +52,7 @@ We offer a Docker container that has all dependencies included and provides and 
 * navigate to `examples` and open a notebook in one of the subdirectories
 
 ### Prebuilt Binaries
-We provide prebuilt binaries with every release on the [releases page](https://github.com/robertschade/PHOENIX/releases).
+We provide prebuilt binaries with every release on the [releases page](https://github.com/Schumacher-Group-UPB/PHOENIX/releases).
 
 #### Prerequisites
 * For NVIDIA GPUs: a working NVIDIA GPU driver and NVIDIA CUDA
@@ -71,7 +71,7 @@ We provide prebuilt binaries with every release on the [releases page](https://g
 
 * Windows:
   1. To download and unpack latest PHOENIX release run the following in a terminal:
-    * `curl https://github.com/robertschade/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip`
+    * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip`
     * `tar -xf PHOENIX-latest.zip`
     * `cd PHOENIX-latest`
     * `pip install .`
@@ -81,7 +81,7 @@ We provide prebuilt binaries with every release on the [releases page](https://g
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 * MacOS: 
   1. To download and unpack latest PHOENIX release run the following in a terminal:
-    * `curl https://github.com/robertschade/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
+    * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
     * `unzip PHOENIX-latest.zip`
     * `cd PHOENIX-latest`
     * `python3 -m venv venv`
@@ -96,7 +96,7 @@ We provide prebuilt binaries with every release on the [releases page](https://g
 * Linux:
   1. install libfftw3, cmake and libsfml with the mechanism of your Linux distribution
   2. To download and unpack latest PHOENIX release run the following in a terminal:
-    * `curl https://github.com/robertschade/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
+    * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
     * `unzip PHOENIX-latest.zip`
     * `cd PHOENIX-latest`
     * `python3 -m venv venv`

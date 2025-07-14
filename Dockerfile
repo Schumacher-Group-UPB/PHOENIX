@@ -4,7 +4,8 @@ FROM nvidia/cuda:12.9.1-devel-ubuntu24.04
 RUN apt-get update && apt-get install -y build-essential libfftw3-dev libsfml-dev build-essential python3-venv git cmake python3-pip curl wget
 RUN apt clean
 
-RUN cd /opt && git clone --recursive https://github.com/robertschade/PHOENIX && cd PHOENIX && git checkout master
+RUN cd /opt && git clone --recursive https://github.com/robertschade/PHOENIX && cd PHOENIX && git checkout latest
+#RUN cd /opt && git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX && cd PHOENIX && git checkout latest
 
 RUN cd /opt/PHOENIX && python3 -m venv venv
 RUN . /opt/PHOENIX/venv/bin/activate && cd /opt/PHOENIX && pip install .

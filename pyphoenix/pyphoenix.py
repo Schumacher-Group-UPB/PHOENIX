@@ -10,6 +10,7 @@ import glob
 import urllib
 import os
 import stat
+import tempfile
 
 class pyphoenix:
     bin_path=None
@@ -18,11 +19,12 @@ class pyphoenix:
     precision=None
     debug=None
     sfml=None
+    tetm=None
     has_gpu=None
     gpu_id=None
+    doprint=None
     
-    
-    def __init__(self,precision="fp32",use_gpu=True,gpu_id=0,sfml=False,hint_path=None,result_path=None,debug=False):
+    def __init__(self,precision="fp32",use_gpu=True,gpu_id=0,sfml=False,tetm=False,hint_path=None,result_path=None,doprint=True,debug=False):
         self.precision=precision
         self.use_gpu=use_gpu
         if platform.system()=="Darwin":
@@ -30,13 +32,17 @@ class pyphoenix:
             print("Warning: GPU computation is not yet supported in PHOENIX for MacOS.")
         self.debug=debug
         self.sfml=sfml
+        self.tetm=tetm
         self.has_gpu=self.check_gpu()
         self.gpu_id=gpu_id
         self.have_bin=False
+        self.doprint=doprint
         if use_gpu and not self.has_gpu:
             print("Warning: GPU requested but GPU not detected, falling back to CPU simulation.")
         if result_path is None:
-            self.result_path=os.path.abspath("tmp_phoenix_results")
+            os.makedirs("phoenix_tmp", exist_ok=True)
+            tmpdir=tempfile.TemporaryDirectory(prefix="phoenix_tmp",delete=False,dir="phoenix_tmp")
+            self.result_path=os.path.abspath(tmpdir.name)
         else:
             self.result_path=os.path.abspath(result_path)
         if hint_path is None:
@@ -109,8 +115,8 @@ class pyphoenix:
         if not found:
             plat=platform.system()
             print("Warning: no working binary of PHOENIX found, trying to download suitable binary from last release from Github for",plat,platform.machine(),". This probably won't work because your system might be missing dependencies to run this binary.")
-            baseurl="https://github.com/robertschade/PHOENIX/releases/download/"
-            #baseurl="https://github.com/Schumacher-Group-UPB/PHOENIX/releases/download/"
+            #baseurl="https://github.com/robertschade/PHOENIX/releases/download/"
+            baseurl="https://github.com/Schumacher-Group-UPB/PHOENIX/releases/download/"
             tag="latest"
             binname2=os.path.basename(binname).replace("*","")+"_"+plat+"_"+platform.machine()
             if platform.system()=="Windows":
@@ -171,6 +177,8 @@ class pyphoenix:
         #sfml
         if not self.sfml:
             runstring=runstring+" -nosfml"
+        if self.tetm:
+            runstring=runstring+" -tetm"
         
         if self.debug:
             print(runstring)
@@ -184,17 +192,18 @@ class pyphoenix:
         
         process = subprocess.Popen(runstring.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env, universal_newlines = True)
         out_block=[]
-        for line in process.stdout:
-            if self.debug:
-                print(line)
-            else:
-                if line.find("T =")>=0 or line.find("Progress:")>=0 or line.find("Current System:")>=0 or line.find("Runtime:")>=0 or line.find("Time per ps:")>=0:
-                    out_block.append(line)
-                if line.find("Time per ps:")>=0:
-                    clear_output(wait=True)
-                    for l in out_block:
-                        sys.stdout.write(l)
-                    out_block=[]
+        if self.doprint:
+            for line in process.stdout:
+                if self.debug:
+                    print(line)
+                else:
+                    if line.find("T =")>=0 or line.find("Progress:")>=0 or line.find("Current System:")>=0 or line.find("Runtime:")>=0 or line.find("Time per ps:")>=0:
+                        out_block.append(line)
+                    if line.find("Time per ps:")>=0:
+                        clear_output(wait=True)
+                        for l in out_block:
+                            sys.stdout.write(l)
+                        out_block=[]
         self.stdout, self.stderr = process.communicate()
         if process.returncode!=0:
             print("Something went wrong. Please consult https://github.com/Schumacher-Group-UPB/PHOENIX. You can open an issue at https://github.com/Schumacher-Group-UPB/PHOENIX/issues/new.")
