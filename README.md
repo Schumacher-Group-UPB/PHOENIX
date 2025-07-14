@@ -42,7 +42,7 @@ We offer a Docker container that has all dependencies included and provides and 
 #### Prerequisites:
 * Windows/MacOS: Docker Desktop ([install guide](https://docs.docker.com/desktop/))
 * Linux: Docker Engine ([install guide](https://docs.docker.com/engine/install/)) or Docker Desktop ([install guide](https://docs.docker.com/desktop/setup/install/linux/))
-* For NVIDIA GPUs: a working NVIDIA GPU driver
+* For NVIDIA GPUs: a working NVIDIA GPU driver and Docker enabled for GPUs
 
 #### Steps:
 * Run in a terminal: 
