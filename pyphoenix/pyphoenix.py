@@ -10,7 +10,6 @@ import glob
 import urllib
 import os
 import stat
-import tempfile
 
 class pyphoenix:
     bin_path=None
@@ -41,8 +40,13 @@ class pyphoenix:
             print("Warning: GPU requested but GPU not detected, falling back to CPU simulation.")
         if result_path is None:
             os.makedirs("phoenix_tmp", exist_ok=True)
-            tmpdir=tempfile.TemporaryDirectory(prefix="phoenix_tmp",delete=False,dir="phoenix_tmp")
-            self.result_path=os.path.abspath(tmpdir.name)
+            itmp=0
+            tmpdir=os.path.join("phoenix_tmp",str(itmp))
+            while os.path.isdir(tmpdir):
+                itmp=itmp+1
+                tmpdir=os.path.join("phoenix_tmp",str(itmp))
+
+            self.result_path=os.path.abspath(tmpdir)
         else:
             self.result_path=os.path.abspath(result_path)
         if hint_path is None:
