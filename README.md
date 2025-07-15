@@ -102,7 +102,12 @@ We provide prebuilt binaries with every release on the [releases page](https://g
     * `python3 -m venv venv`
     * `source venv/bin/activate`
     * `pip install .`
-  3. Start Jupyter Notebook server
+  3. Build Phoenix (because a prebuilt binary for the many difefrent Linux distributions is hard to do):
+    * For GPU with fp64 precision: `cmake -B build_gpu_fp64 -S . -DBUILD_ARCH=gpu -DTUNE=other -DPRECISION=fp64 -DSFML=OFF -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF -DARCH=all && cmake --build build_gpu_fp64 -j8 --config Release`
+    * For GPU with fp32 precision: `cmake -B build_gpu_fp32 -S . -DBUILD_ARCH=gpu -DTUNE=other -DPRECISION=fp32 -DSFML=OFF -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF -DARCH=all && cmake --build build_gpu_fp32 -j8 --config Release`
+    * For CPU with fp64 precision: `cmake -B build_cpu_fp64 -S . -DBUILD_ARCH=cpu -DTUNE=other -DPRECISION=fp64 -DSFML=OFF -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF && cmake --build build_cpu_fp64 -j8 --config Release`
+    * For CPU with fp32 precision: `cmake -B build_cpu_fp32 -S . -DBUILD_ARCH=cpu -DTUNE=other -DPRECISION=fp32 -DSFML=OFF -DSFML_STATIC=OFF -DBUILD_SFML_FROM_SOURCE=OFF && cmake --build build_cpu_fp32 -j8 --config Release`
+  4. Start Jupyter Notebook server
     * `source venv/bin/activate`
     * `jupyter notebook`
     * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
