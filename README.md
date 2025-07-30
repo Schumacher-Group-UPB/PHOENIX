@@ -373,9 +373,3 @@ This outputs your matrix as a `.txt` file for easy analysis.
 ---
 
 These instructions are designed to guide users through customizing the PHOENIX solver with minimal prior C++ experience. For further assistance, refer to existing code and comments within the files to better understand the structure. The compiler will flag errors, which can help identify and correct mistakes during the editing process.
-
----
-
-## Current Issues
-- SSFM does not work for TE/TM modes.
-- Code refactoring required to improve readability.
