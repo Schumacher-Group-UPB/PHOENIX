@@ -761,7 +761,36 @@ void PHOENIX::SystemParameters::printSummary( std::map<std::string, std::vector<
     cudaGetDeviceProperties( &prop, device );
 
     std::cout << "Device Used: " << EscapeSequence::GREEN << EscapeSequence::BOLD << prop.name << EscapeSequence::RESET << std::endl;
-    std::cout << "  Peak Memory Bandwidth (GB/s): " << 2.0 * prop.memoryClockRate * ( prop.memoryBusWidth / 8 ) / 1.0e6 << std::endl;
+
+    // Get current device (or use your existing device index if you have one)
+    int dev = 0;
+    cudaGetDevice(&dev);
+
+    /*
+     *
+     * Since the member 'memoryClockRate' was removed from the 'cudaDeviceProp'-struct in CUDA 13+ we need to consider two cases
+     *
+     */
+
+    #if defined(CUDART_VERSION) && (CUDART_VERSION >= 13000)  // CUDA 13+: memoryClockRate was removed from cudaDeviceProp
+	int memClockKHz = 0;
+	int memBusWidthBits = 0;
+    
+	cudaDeviceGetAttribute(&memClockKHz, cudaDevAttrMemoryClockRate, dev);
+	cudaDeviceGetAttribute(&memBusWidthBits, cudaDevAttrGlobalMemoryBusWidth, dev);
+
+	// memClockKHz is in kHz; bus width is in bits
+	double peakGBs = 2.0 * static_cast<double>(memClockKHz)
+                     * (static_cast<double>(memBusWidthBits) / 8.0) / 1.0e6;
+
+	std::cout << "  Peak Memory Bandwidth (GB/s): " << peakGBs << std::endl;
+
+    #else // CUDA 12.x and earlier
+	std::cout << "  Peak Memory Bandwidth (GB/s): "
+		<< 2.0 * prop.memoryClockRate * ( prop.memoryBusWidth / 8 ) / 1.0e6
+		<< std::endl;
+    #endif
+
     std::cout << "  Total Global Memory (GB): " << (float)( prop.totalGlobalMem ) / 1024.0 / 1024.0 / 1024.0 << std::endl;
     std::cout << "  Total L2 Memory (MB): " << (float)( prop.l2CacheSize ) / 1024.0 / 1024.0 << std::endl;
 #endif
