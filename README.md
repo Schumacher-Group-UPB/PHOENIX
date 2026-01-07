@@ -4,7 +4,7 @@
 # Highly optimized Solver for the Nonlinear 2D Schrödinger Equation (GPU or CPU)
 [![ScienceDirect](https://img.shields.io/badge/ScienceDirect-Available-green)](https://www.sciencedirect.com/science/article/pii/S0010465525001912) [![Build CPU](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/c-cpp.yml) [![Build GPU](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/nvcc-cpp.yml/badge.svg)](https://github.com/Schumacher-Group-UPB/PHOENIX/actions/workflows/nvcc-cpp.yml) [![Issues](https://img.shields.io/github/issues/Schumacher-Group-UPB/PHOENIX.svg?maxAge=2592000)](https://github.com/Schumacher-Group-UPB/PHOENIX/issues) 
 
-PHOENIX is a high-performance, solver for the nonlinear two-dimensional Schrödinger equation that can operate on CPUs and GPUs (CUDA-accelerated). Originally designed for simulating exciton-polariton condensates, it has a broad range of applications in fields of nonlinear optics and atomic condensates. 
+PHOENIX is a high-performance solver for the nonlinear two-dimensional Schrödinger equation that can operate on CPUs and GPUs (CUDA-accelerated). Originally designed for simulating exciton-polariton condensates, it has a broad range of applications in fields of nonlinear optics and atomic condensates. 
 
 The project comes with a variety of examples, including Jupyter Notebooks and Matlab files, that demonstrate how to use PHOENIX in scientific research. You can explore these examples in the [examples folder](/examples/). 
 
@@ -38,7 +38,7 @@ J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. [Comput
 An easy way to try out PHOENIX are the Jupyter notebooks available in the `examples` directory.
 
 ### Docker Container
-We offer a Docker container that has all dependencies included and provides and easy way to try out PHOENIX via the included example Jupyter Notebooks.
+We offer a Docker container that has all dependencies included and provides an easy way to try out PHOENIX via the included example Jupyter Notebooks.
 #### Prerequisites:
 * Windows/MacOS: Docker Desktop ([install guide](https://docs.docker.com/desktop/))
 * Linux: Docker Engine ([install guide](https://docs.docker.com/engine/install/)) or Docker Desktop ([install guide](https://docs.docker.com/desktop/setup/install/linux/))
@@ -70,17 +70,17 @@ We provide prebuilt binaries with every release on the [releases page](https://g
 ####  
 
 * Windows:
-  1. To download and unpack latest PHOENIX release run the following in a terminal:
+  1. To download and unpack the latest PHOENIX release run the following commands in a terminal:
     * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip`
     * `tar -xf PHOENIX-latest.zip`
     * `cd PHOENIX-latest`
     * `pip install .`
   2. Start Jupyter Notebook server
     * open terminal and run `jupyter-notebook.exe`
-    * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
+    * a web browser window should open. If this is not the case, manually copy the url shown in the terminal into a web browser and navigate to `PHOENIX-latest/examples`
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 * MacOS: 
-  1. To download and unpack latest PHOENIX release run the following in a terminal:
+  1. To download and unpack the latest PHOENIX release run the following commands in a terminal:
     * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
     * `unzip PHOENIX-latest.zip`
     * `cd PHOENIX-latest`
@@ -90,12 +90,12 @@ We provide prebuilt binaries with every release on the [releases page](https://g
   2. Start Jupyter Notebook server
     * `source venv/bin/activate`
     * `jupyter notebook`
-    * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
+    * a web browser window should open. If this is not the case, manually copy the url shown in the terminal into a web browser and navigate to `PHOENIX-latest/examples`
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 
 * Linux:
   1. install libfftw3, cmake and libsfml with the mechanism of your Linux distribution
-  2. To download and unpack latest PHOENIX release run the following in a terminal:
+  2. To download and unpack the latest PHOENIX release run the following commands in a terminal:
     * `curl https://github.com/Schumacher-Group-UPB/PHOENIX/archive/refs/tags/latest.zip -o PHOENIX-latest.zip -L`
     * `unzip PHOENIX-latest.zip`
     * `cd PHOENIX-latest`
@@ -110,13 +110,74 @@ We provide prebuilt binaries with every release on the [releases page](https://g
   4. Start Jupyter Notebook server
     * `source venv/bin/activate`
     * `jupyter notebook`
-    * a web browser window should open, if not open url shown in the terminal in a web browser and navigate to `PHOENIX-latest/examples`
+    * a web browser window should open. If this is not the case, manually copy the url shown in the terminal into a web browser and navigate to `PHOENIX-latest/examples`
     * in the subdirectories, e.g., `example_1` you can find jupyter notebooks to try out PHOENIX
 
 ---
 
 In case you struggle installing the requirements or building PHOENIX you can follow our detailed [step by step guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual.md).
 
+---
+## Building PHOENIX from source (recommended)
+
+If the precompiled versions don’t meet your needs, or you wish to modify the source code, you can build PHOENIX yourself.
+
+### Preparation
+- If you use an NVIDIA GPU install the necessary drivers as listed on their website: (https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/choose-an-installation-method.html).
+
+1. **Clone the Repository**
+    ```bash
+    git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
+    ```
+    Ensure the `--recursive` flag is used in order to fetch the SFML submodule.
+2. **Building SFML (in SFML folder of PHOENIX)**
+    install SFML as stated on their website:
+       ```bash
+       sudo apt install \
+	    libxrandr-dev \
+	    libxcursor-dev \
+	    libxi-dev \
+	    libudev-dev \
+	    libfreetype-dev \
+	    libflac-dev \
+	    libvorbis-dev \
+	    libgl1-mesa-dev \
+	    libegl1-mesa-dev \
+	    libfreetype-dev
+       ```
+    if an error occurs that openAL is not found it can be fixed by executing
+       ```bash
+       sudo apt install libopenal-dev
+       ```
+   create makefiles and build SFML
+       ```bash
+       cmake -B build
+       cmake --build build
+       ```
+3. **Building PHOENIX**
+    install keyring and install necessary CUDA-package:
+       ```bash
+       wget https://developer.download.nvidia.com/compute/cuda/repos/${distro}/x86_64/cuda-keyring_1.1-1_all.deb
+       dpkg -i cuda-keyring_1.1-1_all.deb
+       apt update
+   
+       sudo apt install cuda-toolkit
+       ```
+   *IMPORTANT*: Do not install the `nvidia-cuda-toolkit` because it removes nvidia-open which is required for desktop rendering!
+
+   Add nvcc to path:
+       ```bash
+       echo -e '\n#Add CUDA-compiler to path:\nexport PATH=/usr/local/cuda/bin:$PATH\nexport LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+        ```
+   Configure CMAKE (in PHOENIX folder)
+       ```bash
+       	cmake -S . -B build_gpu_fp64 -DBUILD_ARCH=gpu -DSFML=ON -DPRECISION=fp64
+       ```
+   
+    Build: (in build folder, so here the build_gpu_fp64 folder)
+       ```bash
+       	make SFML=TRUE SFML_PATH=/home/user/path/PHOENIX/external/SFML/ FP32=FALSE ARCH=CC
+       ```
 ---
 
 ## Building PHOENIX
