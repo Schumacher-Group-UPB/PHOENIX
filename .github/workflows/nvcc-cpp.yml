@@ -14,14 +14,33 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - uses: Jimver/cuda-toolkit@v0.2.22
-      id: cuda-toolkit
-      with:
-        cuda: '12.4.0'
-    
-    - run: nvcc -V
+    #- uses: Jimver/cuda-toolkit@v0.2.22
+    #  id: cuda-toolkit
+    #  with:
+    #    cuda: '12.4.0'
 
-    - name: Build Project with CUDA
+    - name: Install build dependencies
+      run: |
+        sudo apt-get install -y build-essential cmake
+
+    - name: Install CUDA toolkit
+      run: |
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get install -y cuda-toolkit
+    
+    - name: Check nvcc version 
       run: |
         export PATH=/usr/local/cuda/bin:$PATH
-        cmake -B build -S . --fresh -DBUILD_ARCH=gpu -DPRECISION=fp32 -DSFML=OFF && cmake --build build -j8 --config Release
+        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+        nvcc -V
+
+    - name: Build project with CUDA
+      run: |
+        # export paths is necessary again because GitHub launches a new shell
+        
+        export PATH=/usr/local/cuda/bin:$PATH
+        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+        cmake -B build -S . --fresh -DBUILD_ARCH=gpu -DPRECISION=fp32 -DSFML=OFF
+        cmake --build build -j8 --config Release
