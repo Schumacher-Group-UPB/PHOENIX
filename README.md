@@ -16,11 +16,11 @@ J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. [Comput
 
 ## Table of Contents
 
-1. [Quickstart Guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/quickstart.md)
-2. [Building PHOENIX from source]
-    - [Linux (recommended)](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_linux.md)
-    - [Windows](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_windows.md)
-    - [MacOS](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_mac.md)
+1. [Quickstart Guide](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/quickstart.md)
+2. Building PHOENIX from source
+    - [Linux (recommended)](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_linux.md)
+    - [Windows](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_windows.md)
+    - [MacOS](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_mac.md)
 
 
 3. [Advanced Features](#advanced-features)
