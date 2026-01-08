@@ -125,59 +125,77 @@ If the precompiled versions don’t meet your needs, or you wish to modify the s
 ### Preparation
 - If you use an NVIDIA GPU install the necessary drivers as listed on their website: (https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/choose-an-installation-method.html).
 
-1. **Clone the Repository**
-    ```bash
-    git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
-    ```
-    Ensure the `--recursive` flag is used in order to fetch the SFML submodule.
-2. **Building SFML (in SFML folder of PHOENIX)**
-    install SFML as stated on their website:
-       ```bash
-       sudo apt install \
-	    libxrandr-dev \
-	    libxcursor-dev \
-	    libxi-dev \
-	    libudev-dev \
-	    libfreetype-dev \
-	    libflac-dev \
-	    libvorbis-dev \
-	    libgl1-mesa-dev \
-	    libegl1-mesa-dev \
-	    libfreetype-dev
-       ```
-    if an error occurs that openAL is not found it can be fixed by executing
-       ```bash
-       sudo apt install libopenal-dev
-       ```
-   create makefiles and build SFML
-       ```bash
-       cmake -B build
-       cmake --build build
-       ```
-3. **Building PHOENIX**
-    install keyring and install necessary CUDA-package:
-       ```bash
-       wget https://developer.download.nvidia.com/compute/cuda/repos/${distro}/x86_64/cuda-keyring_1.1-1_all.deb
-       dpkg -i cuda-keyring_1.1-1_all.deb
-       apt update
-   
-       sudo apt install cuda-toolkit
-       ```
+- Install a nvidia-keyring and the necessary CUDA-package:
+   ```bash
+   wget https://developer.download.nvidia.com/compute/cuda/repos/${distro}/x86_64/cuda-keyring_1.1-1_all.deb
+   dpkg -i cuda-keyring_1.1-1_all.deb
+   apt update
+   sudo apt install cuda-toolkit
+   ```
    *IMPORTANT*: Do not install the `nvidia-cuda-toolkit` because it removes nvidia-open which is required for desktop rendering!
 
-   Add nvcc to path:
-       ```bash
-       echo -e '\n#Add CUDA-compiler to path:\nexport PATH=/usr/local/cuda/bin:$PATH\nexport LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
-        ```
-   Configure CMAKE (in PHOENIX folder)
-       ```bash
-       	cmake -S . -B build_gpu_fp64 -DBUILD_ARCH=gpu -DSFML=ON -DPRECISION=fp64
-       ```
+- Add nvcc to path:
+	```bash
+	echo -e '\n#Add CUDA-compiler to path:\nexport PATH=/usr/local/cuda/bin:$PATH\nexport LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+	```
+
+### 1. Clone the Repository  
+```bash
+git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
+```
+Ensure the `--recursive` flag is used in order to fetch the SFML submodule.
    
-    Build: (in build folder, so here the build_gpu_fp64 folder)
-       ```bash
-       	make SFML=TRUE SFML_PATH=/home/user/path/PHOENIX/external/SFML/ FP32=FALSE ARCH=CC
-       ```
+### 2. Building SFML   
+Install SFML as stated on their website:  
+   ```bash
+   sudo apt install \
+	libxrandr-dev \
+	libxcursor-dev \
+	libxi-dev \
+	libudev-dev \
+	libfreetype-dev \
+	libflac-dev \
+	libvorbis-dev \
+	libgl1-mesa-dev \
+	libegl1-mesa-dev \
+	libfreetype-dev
+   ```
+   Here an error can occur that openAL is not found. This is resolved by executing
+   ```bash
+   sudo apt install libopenal-dev
+   ```
+   Create makefiles and build SFML:  
+   (execute in SFML folder of PHOENIX) 
+   ```bash
+   cmake -B build
+   cmake --build build
+   ```
+   
+### 3. Building PHOENIX  
+   Configure CMAKE:   
+   (execute in PHOENIX folder)
+   ```bash
+   cmake -S . -B build_gpu_fp64 -DBUILD_ARCH=gpu -DSFML=ON -DPRECISION=fp64
+   ```
+   * **`build_gpu_fp64`**: name of the created folder
+   * **`BUILD_ARCH`**: `gpu` / `cpu`
+   * **`SFML`**: `ON` / `OFF` (graphical output)
+   * **`PRECISION`**: `fp32` / `fp64` (single- and double-precision respectively)
+   
+   Build:  
+   (execute in build folder, so here in the build_gpu_fp64 folder)
+   ```bash
+   make SFML=TRUE SFML_PATH=/custompath/PHOENIX/external/SFML/ FP32=FALSE ARCH=CC
+   ```
+   * **`SFML_PATH`**: Path to your SFML installation folder.
+     
+      Replace `custompath` with the correct path on your machine.
+   * **`FP32`**: Use single precision floats. Can be either set to `TRUE` or `FALSE`.
+      
+      Default is `FALSE`.
+   * **`ARCH`**: CUDA compute capability related your graphics card. (e.g. ARCH=75)
+
+      You can find the compute capability of your graphics card here: https://developer.nvidia.com/cuda/gpus
 ---
 
 ## Building PHOENIX
