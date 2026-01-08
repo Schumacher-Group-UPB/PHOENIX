@@ -33,7 +33,7 @@ Ensure the `--recursive` flag is used in order to fetch the SFML submodule.
    ```bash
    cmake -S . -B build_gpu_fp64 -DBUILD_ARCH=gpu 
    ```
-   * **`build_gpu_fp64`**: name of the created folder
+   * **`build_gpu_fp64`**: name of the created folder  
         Choose a name which fits to your build. If you want a build which runs on the CPU with 32-bit-precision it would make sense to name the folder build_cpu_fp32 
    * **`BUILD_ARCH`**: `gpu` / `cpu`
    
@@ -86,47 +86,64 @@ cmake -S . -B build_gpu_fp32 -DBUILD=gpu
 make FP32=TRUE
 ```
 
+### Build with CPU Kernel
+To build PHOENIX for CPU execution, use the `CPU=TRUE` flag:
+```bash
+make CPU=TRUE COMPILER=g++
+```
+
+Example:
+```bash
+cmake -S . -B build_cpu_fp64 -DBUILD=cpu
+```
+
+```bash
+make CPU=TRUE COMPILER=g++
+```
 
 
+## Build with SFML Rendering (to generate "live" output)
+### 1. Clone the Repository
+```bash
+git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
+```
+Ensure the `--recursive` flag is used to fetch the SFML submodule.
 
+### 2. Building SFML   
+Install SFML as stated on their website:  
+```bash
+sudo apt update \
+sudo apt install \
+ libxrandr-dev \
+ libxcursor-dev \
+ libxi-dev \
+ libudev-dev \
+ libfreetype-dev \
+ libflac-dev \
+ libvorbis-dev \
+ libgl1-mesa-dev \
+ libegl1-mesa-dev \
+ libfreetype-dev
+```
+Here an error can occur that openAL is not found. This is resolved by executing
+```bash
+sudo apt install libopenal-dev
+```
+Create makefiles and build SFML:  
+(execute in SFML folder of PHOENIX) 
+```bash
+cmake -B build
+cmake --build build
+```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Building PHOENIX
-
-If the precompiled versions don’t meet your needs, or you wish to modify the source code, you can build PHOENIX yourself.
-
-### Build with SFML Rendering (to generate "live" output)
-1. **Clone the Repository**
-   ```bash
-   git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
-   ```
-   Ensure the `--recursive` flag is used to fetch the SFML submodule.
-
-2. **Build SFML**  
-   Use CMake or MSVC to compile SFML. Alternatively, download a precompiled version.
-
-3. **Compile PHOENIX**
-   ```bash
-   make SFML=TRUE [SFML_PATH=path/to/SFML FP32=TRUE/FALSE ARCH=CC]
-   ```
-   - **`SFML_PATH`**: Specify the SFML installation directory (if not in the system PATH).  
-   - **`FP32`**: Use single-precision floats (default: double-precision).  
-   - **`ARCH`**: Specify the CUDA compute capability (e.g., `ARCH=75`).
-   - **`OPTIMIZATION=-O0`**: Use to compile on Windows
+### 3. Compile PHOENIX
+```bash
+make SFML=TRUE [SFML_PATH=path/to/SFML FP32=TRUE/FALSE ARCH=CC]
+```
+- **`SFML_PATH`**: Specify the SFML installation directory (if not in the system PATH).  
+- **`FP32`**: Use single-precision floats (default: double-precision).  
+- **`ARCH`**: Specify the CUDA compute capability (e.g., `ARCH=75`).
+- **`OPTIMIZATION=-O0`**: Use to compile on Windows
 
 ### Build Without Rendering
 1. **Clone the Repository**
@@ -139,38 +156,8 @@ If the precompiled versions don’t meet your needs, or you wish to modify the s
    make [ARCH=CC]
    ```
 
-### Build with CPU Kernel
-To build PHOENIX for CPU execution, use the `CPU=TRUE` flag:
-```bash
-make CPU=TRUE COMPILER=g++
-```
 
 
 
 
 
-### 2. Building SFML   
-Install SFML as stated on their website:  
-   ```bash
-   sudo apt install \
-	libxrandr-dev \
-	libxcursor-dev \
-	libxi-dev \
-	libudev-dev \
-	libfreetype-dev \
-	libflac-dev \
-	libvorbis-dev \
-	libgl1-mesa-dev \
-	libegl1-mesa-dev \
-	libfreetype-dev
-   ```
-   Here an error can occur that openAL is not found. This is resolved by executing
-   ```bash
-   sudo apt install libopenal-dev
-   ```
-   Create makefiles and build SFML:  
-   (execute in SFML folder of PHOENIX) 
-   ```bash
-   cmake -B build
-   cmake --build build
-   ```
