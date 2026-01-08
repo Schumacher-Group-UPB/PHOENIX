@@ -12,7 +12,9 @@ If the precompiled versions don’t meet your needs, or you wish to modify the s
    apt update
    sudo apt install cuda-toolkit
    ```
-   Replace `${distro}` with your distribution. Supported distros can be found at `https://developer.download.nvidia.com/compute/cuda/repos/`.   
+   Replace `${distro}` with your distribution.  
+   Supported distros can be found at `https://developer.download.nvidia.com/compute/cuda/repos/`.   
+
    *IMPORTANT*: Do not install the `nvidia-cuda-toolkit` because it removes nvidia-open which is required for desktop rendering!
 
 - Add nvcc to path:
@@ -110,7 +112,7 @@ git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
 Ensure the `--recursive` flag is used to fetch the SFML submodule.
 
 ### 2. Building SFML   
-Install SFML as stated on their website:  
+Install SFML as stated on their [website](https://www.sfml-dev.org/tutorials/3.0/getting-started/cmake/):  
 ```bash
 sudo apt update \
 sudo apt install \
@@ -136,26 +138,21 @@ cmake -B build
 cmake --build build
 ```
 
-### 3. Compile PHOENIX
+### 3. Building PHOENIX
+
+Configure CMAKE:   
+(execute in PHOENIX folder)
 ```bash
-make SFML=TRUE [SFML_PATH=path/to/SFML FP32=TRUE/FALSE ARCH=CC]
+cmake -S . -B build_gpu_fp64 -DBUILD_ARCH=gpu -DSFML=ON
 ```
-- **`SFML_PATH`**: Specify the SFML installation directory (if not in the system PATH).  
-- **`FP32`**: Use single-precision floats (default: double-precision).  
-- **`ARCH`**: Specify the CUDA compute capability (e.g., `ARCH=75`).
-- **`OPTIMIZATION=-O0`**: Use to compile on Windows
-
-### Build Without Rendering
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/Schumacher-Group-UPB/PHOENIX
-   ```
-
-2. **Compile PHOENIX**
-   ```bash
-   make [ARCH=CC]
-   ```
-
+   
+Build:  
+(execute in build folder, so here in the build_gpu_fp64 folder)
+```bash
+make SFML=TRUE SFML_PATH=/custompath/PHOENIX/external/SFML/
+```
+* **`SFML_PATH`**: Path to your SFML installation folder.    
+Replace `custompath` with the correct path on your machine.
 
 
 
