@@ -97,7 +97,7 @@ While nvcc can compile this into CPU code, it generally makes more sense to use 
 You can specify the compiler using the `COMPILER=` flag to `make`.
 
 ```bash
-make [SFML=TRUE/FALSE FP32=TRUE/FALSE TETM=TRUE/FALSE CPU=TRUE COMPILER=g++]
+make SFML=TRUE/FALSE FP32=TRUE/FALSE TETM=TRUE/FALSE CPU=TRUE COMPILER=g++
 ```
 
 ### FP32 - Single Precision
@@ -145,7 +145,7 @@ Download the precompiled PHOENIX executable from [here](https://github.com/AG-Sc
 You are now ready to run PHOENIX for the first time. Copy and execute the following command in your console:
 
 ```sh
-./PHOENIX.exe[.o] --N 400 400 --L 40 40 --boundary zero zero --tmax 1000 --initialState 0.1 add 70 70 0 0 plus 1 0 gauss+noDivide --gammaC 0.15 --pump 100 add 4.5 4.5 0 0 both 1 none gauss+noDivide+ring --outEvery 5 --path output\
+./PHOENIX.exe --N 400 400 --L 40 40 --boundary zero zero --tmax 1000 --initialState 0.1 add 70 70 0 0 plus 1 0 gauss+noDivide --gammaC 0.15 --pump 100 add 4.5 4.5 0 0 both 1 none gauss+noDivide+ring --outEvery 5 --path output\
 ```
 
 This command will:

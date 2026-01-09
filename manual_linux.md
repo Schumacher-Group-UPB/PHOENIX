@@ -156,6 +156,27 @@ Replace `custompath` with the correct path on your machine.
 
 ## Running PHOENIX
 
+You are now ready to run PHOENIX for the first time. Copy and execute the following command in your console in the `bin` folder:
+
+```sh
+./PHOENIX_EXECUTABLE --N 400 400 --L 40 40 --boundary zero zero --tmax 1000 --initialState 0.1 add 70 70 0 0 plus 1 0 gauss+noDivide --gammaC 0.15 --pump 100 add 4.5 4.5 0 0 both 1 none gauss+noDivide+ring --outEvery 5 --path output\
+```
+where `PHOENIX_EXECUTABLE` has to be replaced with the name of your PHOENIX-executable which is located in the `bin` folder.
+
+This command will:
+
+- Execute PHOENIX on a 400x400 grid with zero boundary conditions for a real-space grid of 40x40 micrometers.
+- Evolve the system for 1 ns (`--tmax`).
+- Use PHOENIX-predefined pump and initial conditions, defining the initial state as a vortex with topological charge +1 (`--initialState`).
+- Set the polariton loss rate of the condensate to 0.15 (`--gammaC`).
+- Create a ring-shaped pump (`--pump`).
+- Set the data output rate to every 5 picoseconds (`--outEvery`) and specify the output directory (`--path output`).
+
+For further details on the command syntax, use `./PHOENIX_EXECUTABLE --help`.
+
+
+Since this is not a very handy way of performing calculations, you can also create scripts to perform calculations. Scripts in multiple languages such as Python-notebooks or Matlab-code
+are provided in the `examples` folder and can be modified to your liking.
 
 ---
 
