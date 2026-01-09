@@ -4,7 +4,7 @@ clear; rng('shuffle');
 % Define the filename of your PHOENIX release
 filename = '/bin/gpu/PHOENIX_gpu_fp64_sfml';
 
-cd('~/Applications/PHOENIX');
+cd('~/yourpath/PHOENIX');
 % Specify a custom directory
 customDir = pwd;
 disp(['customDir: "', customDir]);
@@ -73,35 +73,20 @@ I_Noise = 1E-1; psi=I_Noise*(-1+2*rand(N,N)-1i+2*1i*rand(N,N));
 psi(1:N,1:N) = real(psi);
 psi(N+1:2*N,1:N) = imag(psi);
 
-%header = {'#' 'SIZE' num2str(N) num2str(N) num2str(L) num2str(L) num2str(dxy) num2str(dxy)};
-%writecell(header,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ');
-% writecell
-% =====================================================================
 fid = fopen(fullfile(directoryPath_load,'wavefunction_plus.txt'), 'w');
 fprintf(fid, '# SIZE %d %d %f %f %f %f\n', N, N, L, L, dxy, dxy);
 fclose(fid);
-% =====================================================================
 
-%writematrix(psi,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ','WriteMode','append');
-% writematrix
-% ===============================================================================================
 dlmwrite(fullfile(directoryPath_load,'wavefunction_plus.txt'), psi, '-append', 'delimiter', ' ');
-% ===============================================================================================
 
 potential(1:N,1:N) = real(pot*1e3);
 potential(N+1:2*N,1:N) = imag(pot);
-%writecell(header,[directoryPath_load,'potential_plus.txt'],'Delimiter',' ');
-% writecell
-% =====================================================================
+
 fid = fopen(fullfile(directoryPath_load,'potential_plus.txt'), 'w');
 fprintf(fid, '# SIZE %d %d %f %f %f %f\n', N, N, L, L, dxy, dxy);
 fclose(fid);
-% =====================================================================
-%writematrix(potential,[directoryPath_load,'potential_plus.txt'],'Delimiter',' ','WriteMode','append');
-% writematrix
-% ===============================================================================================
+
 dlmwrite(fullfile(directoryPath_load,'potential_plus.txt'), potential, '-append', 'delimiter', ' ');
-% ===============================================================================================
 
 % pulse parameters
 omega = -5.68828730684262;
@@ -134,23 +119,14 @@ end
 
 %% Post-processing
 %post-processing: visualize results
-%psi = readmatrix([directoryPath_result,'wavefunction_plus.txt']);
-% ====================================================================
 psi = dlmread(fullfile(directoryPath_result,'wavefunction_plus.txt'));
-% ====================================================================
 psi=psi(1:N,1:N)+1i*psi(N+1:2*N,1:N);
 Y1 = abs(reshape(psi,N,N)).^2;
 
-%pump = readmatrix([directoryPath_result,'pulse_plus.txt']);
-% ====================================================================
 pump = dlmread(fullfile(directoryPath_result,'pulse_plus.txt'));
-% ====================================================================
 pump=pump(1:N,1:N)+1i*pump(N+1:2*N,1:N);
 
-%pot = readmatrix([directoryPath_result,'potential_plus.txt']);
-% ====================================================================
 pot = dlmread(fullfile(directoryPath_result,'potential_plus.txt'));
-% ====================================================================
 pot=pot(1:N,1:N);
 
 figure(1);
@@ -206,34 +182,21 @@ I_Noise = 1E-1; psi=I_Noise*(-1+2*rand(N,N)-1i+2*1i*rand(N,N));
 
 psi(1:N,1:N) = real(psi);
 psi(N+1:2*N,1:N) = imag(psi);
-%header = {'#' 'SIZE' num2str(N) num2str(N) num2str(L) num2str(L) num2str(dxy) num2str(dxy)};
-%writecell(header,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ');
-% writecell
-% =====================================================================
+
 fid = fopen(fullfile(directoryPath_load,'wavefunction_plus.txt'), 'w');
 fprintf(fid, '# SIZE %d %d %f %f %f %f\n', N, N, L, L, dxy, dxy);
 fclose(fid);
-% =====================================================================
-%writematrix(psi,[directoryPath_load,'wavefunction_plus.txt'],'Delimiter',' ','WriteMode','append');
-% writematrix
-% ===============================================================================================
+
 dlmwrite(fullfile(directoryPath_load,'wavefunction_plus.txt'), psi, '-append', 'delimiter', ' ');
-% ===============================================================================================
 
 potential(1:N,1:N) = real(pot*1e3);
 potential(N+1:2*N,1:N) = imag(pot);
-%writecell(header,[directoryPath_load,'potential_plus.txt'],'Delimiter',' ');
-% writecell
-% =====================================================================
+
 fid = fopen(fullfile(directoryPath_load,'potential_plus.txt'), 'w');
 fprintf(fid, '# SIZE %d %d %f %f %f %f\n', N, N, L, L, dxy, dxy);
 fclose(fid);
-% =====================================================================
-%writematrix(potential,[directoryPath_load,'potential_plus.txt'],'Delimiter',' ','WriteMode','append');
-% writematrix
-% ===============================================================================================
+
 dlmwrite(fullfile(directoryPath_load,'potential_plus.txt'), potential, '-append', 'delimiter', ' ');
-% ===============================================================================================
 
 % pulse parameters
 omega = -5.68178730684262-X*1e-2;
