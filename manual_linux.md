@@ -24,10 +24,8 @@ If the precompiled versions don’t meet your needs, or you wish to modify the s
 
 ### 1. Clone the Repository  
 ```bash
-git clone --recursive https://github.com/Schumacher-Group-UPB/PHOENIX
+git clone https://github.com/Schumacher-Group-UPB/PHOENIX
 ```
-Ensure the `--recursive` flag is used in order to fetch the SFML submodule.
-   
    
 ### 2. Building PHOENIX  
    Configure CMAKE:   
@@ -45,7 +43,7 @@ Ensure the `--recursive` flag is used in order to fetch the SFML submodule.
    make
    ```
 
-   It is recommended to specify the CUDA-architecture. See [Optimization](#optimization).
+   However, it is recommended to specify the CUDA-architecture. See [Optimization](#optimization).
 
 ---
 

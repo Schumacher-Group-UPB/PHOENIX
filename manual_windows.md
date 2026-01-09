@@ -18,14 +18,13 @@ To successfully execute PHOENIX for the first time, follow the steps outlined be
 
 PHOENIX is designed to run on CPUs or Nvidia GPUs. Verify your hardware to ensure compatibility:
 
-- **Windows**: Open the Start menu, type "Device Manager," and press Enter to launch the Control Panel. Expand the "Display adapters" section to see your GPU listed. Right-click on the listed GPU and select "Properties" to view the manufacturer details if necessary.
-- **Linux**: Use the command `lspci` to identify the GPU.
+- Open the Start menu, type "Device Manager," and press Enter to launch the Control Panel. Expand the "Display adapters" section to see your GPU listed. Right-click on the listed GPU and select "Properties" to view the manufacturer details if necessary.
 
 #### Steps 2 - 4 will give you detailed instructions on how to install the mandatory requirements. If you have already installed them or do not need help, please continue with step 5.
 
-#### 2. Install Visual Studio Microsoft (Windows) or the GNU Compiler GCC (linux)
+#### 2. Install Visual Studio Microsoft 
 
-Select the right software for your operating system. Download and install it. If you are installing Microsoft Visual Studios, make sure you check "C++ Desktop Development section" during the installation process (see Screenshot). **Do not make any changes to the installation path for Visual Studio!**
+When installing Microsoft Visual Studio, make sure you check "C++ Desktop Development section" during the installation process (see Screenshot). **Do not make any changes to the installation path for Visual Studio!**
 ![vs_install](https://github.com/user-attachments/assets/dbff5749-e292-438c-8261-84c42905ffff)
 
 #### 3. Install CUDA and MSYS2
@@ -37,14 +36,14 @@ Download MSYS2 [here](https://www.msys2.org/) and install it.
 
 Open your Enviroment Variables
 
-- **Windows**: Right-click on Start-button then click on "System" in the context menu. Click "Advanced system settings" and go to "Advanced" tab. Now click Enviroment Variables. Here, double-click on "Path" in the lower section. Click on new to add to your path.
+- Right-click on Start-button then click on "System" in the context menu. Click "Advanced system settings" and go to "Advanced" tab. Now click Enviroment Variables. Here, double-click on "Path" in the lower section. Click on new to add to your path.
 
 Now you need to find the path to your cl.exe of Visual Studio and nvcc.exe for CUDA, if you have not changed the preset path during installation you should find your executable at the same location as marked orange in the screenshot.
 ![add_path](https://github.com/user-attachments/assets/1e2d479c-993f-4ce5-acc9-61212484992b)
 
 Note that in your case the version-number in the path (\14.37.32822\ for VS and \v12.3\ for CUDA) can be different.
 
-#### Great! Now you can continue with executing PHOENIX for the very first time.
+#### Great! Now you can continue with building PHOENIX.
 
 # Recommended: Build PHOENIX yourself
 
@@ -52,9 +51,20 @@ We use a simple Makefile to create binaries for either Windows or Linux. How to 
 
 ### Errors on Compilation even though VS and CUDA are installed, CUDA and cl are in the path variable
 
-If you get syntax or missing file errors, your Visual Studio installation may be incompatible with your current CUDA version. Try updating or downgrading either CUDA or VS, depending on what's older on your system. Older versions of VS can be downloaded [from here](https://learn.microsoft.com/en-us/visualstudio/releases/2022/release-history#fixed-version-bootstrappers). Don't forget to add the new VS installation to your path. You can download older version for CUDA directly from Nvidias website. 
+If you get syntax or missing file errors, your Visual Studio installation may be incompatible with your current CUDA version. Try updating or downgrading either CUDA or VS, depending on what's older on your system. Older versions of VS can be downloaded [from here](https://learn.microsoft.com/en-us/visualstudio/releases/2022/release-history#fixed-version-bootstrappers). Don't forget to add the new VS installation to your path. You can download older version for CUDA directly from NVIDIA's website. 
 
 Current working combinations: VS Community Edition or VS Build Tools 17.9.2 - CUDA 12.4
+
+### Build without rendering
+1 - Clone the repository using 
+```bash
+git clone https://github.com/Schumacher-Group-UPB/PHOENIX
+```
+
+2 - Compile PHOENIX using 
+```bash
+make TETM=TRUE/FALSE ARCH=NONE/ALL/XY
+```
 
 ### Optional: Build with SFML rendering
 1 -  Clone the repository using
@@ -65,27 +75,21 @@ This will also download the SFML repository. I suggest also downloading a precom
 
 2 - Build SFML using CMake and/or MSVC
 
-Alternatively, download SFML 2.6.1 or higher for MSVC if you are on Windows or for gcc if you are on linux.
+Alternatively, download SFML 2.6.1 or higher for MSVC.
 
 3 - Compile PHOENIX using 
 
 ```
-make SFML=TRUE/FALSE [SFML_PATH=external/SFML/ FP32=TRUE/FALSE ARCH=NONE/ALL/XY]
+make SFML=TRUE/FALSE SFML_PATH=external/SFML/ FP32=TRUE/FALSE ARCH=NONE/ALL/XY
 ```
-Note, that arguments in `[]` are optional and default to `FALSE` (or `NONE`) if omitted. Pass only one parameter to the arguments, for example *either* `TRUE` *or* `FALSE`.
+Note, that the arguments after `make` are optional and default to `FALSE` (or `NONE`) if omitted. Pass only one parameter to the arguments, for example *either* `TRUE` *or* `FALSE`.
 
-When using SFML rendering, you need to either install all SFML libraries correctly, or copy the .dll files that come either with building SFML yourself or with the download of precompiled versions to the main folder of your PHOENIX executable. If you do not do this and still compile with SFML support, PHOENIX will crash on launch. For the compilation, you also *need* to provide the path to your SFML installation if it's not already in your systems path. You can do this by setting the `SFML_PATH=...` variable when compiling, similar to passing `SFML=TRUE`. The SFML path needs to contain the SFML `include/...` as well as the `lib/...` folder. These are NOT contained directly in the recursively cloned SFML repository, but rather get created when building SFML yourself. They are also contained in any precompiled version of SFML, so I suggest to simply download a precompiled version.
-
-### Build without rendering
-1 - Clone the repositry using 
-```bash
-git clone https://github.com/Schumacher-Group-UPB/PHOENIX
-```
-
-2 - Compile PHOENIX using 
-```bash
-make [TETM=TRUE/FALSE ARCH=NONE/ALL/XY]`
-```
+When using SFML rendering, you need to install all SFML libraries correctly, or copy the .dll files that come either with building SFML yourself or with the download of precompiled versions
+to the main folder of your PHOENIX executable.
+If you do not do this and still compile with SFML support, PHOENIX will crash on launch. For the compilation, you also *need* to provide the path to your SFML installation if it's not already in your systems path.
+You can do this by setting the `SFML_PATH=...` variable when compiling, similar to passing `SFML=TRUE`. The SFML path needs to contain the SFML `include/...` as well as the `lib/...` folder.
+These are NOT contained directly in the recursively cloned SFML repository, but rather get created when building SFML yourself.
+They are also contained in any precompiled version of SFML, so we suggest to simply download a precompiled version.
 
 ### Build with CPU Kernel
 If you want to compile this program as a CPU version, you can do this by adding the `CPU=TRUE` compiler flag to `make`.
@@ -99,7 +103,7 @@ make [SFML=TRUE/FALSE FP32=TRUE/FALSE TETM=TRUE/FALSE CPU=TRUE COMPILER=g++]
 ### FP32 - Single Precision
 By default, the program is compiled using double precision 64b floats.
 For some cases, FP32 may be sufficient for convergent simulations.
-To manually change the precision to 32b floats, use
+To manually change the precision to 32-bit floats, use
 
 ```
 FP32=TRUE
@@ -108,13 +112,13 @@ FP32=TRUE
 when using the makefile.
 
 ### CUDA Architexture
-You can also specify the architexture used when compiling PHOENIX. The release binaries are compiled with a variety of Compute Capabilities (CC). To ensure maximum performance, picking the CC for your specific GPU and using 
+You can also specify the CUDA architexture used when compiling PHOENIX to ensure maximum performance. 
 
 ```
-ARCH=xy
+ARCH=CC
 ```
 
-when using the Makefile, where xy is your CC, is most beneficial.
+`CC` has to be substituted with the compute capability of your graphics card. You can find the compute capability [here](https://developer.nvidia.com/cuda/gpus).
 
 ### When building on Windows
 If you build PHOENIX on Windows it is required to use the Optimization flag
@@ -161,4 +165,14 @@ Upon successful execution, the time-evolution will be displayed. After the progr
 
 Congratulations on performing your first GPU-accelerated calculation using PHOENIX. For a comprehensive introduction to all other features of PHOENIX, please refer to the extended documentation.
 
-If you want to compile your own (modified) version of PHOENIX please read on.
+---
+
+## Troubleshooting
+
+### Compilation Errors Despite Correct Setup
+- **Cause**: Version mismatch between Visual Studio and CUDA.  
+- **Solution**: Update or downgrade one of the components. Compatible combinations:  
+  - VS Community 17.9.2 + CUDA 12.4
+
+### Missing SFML DLLs
+Ensure the required `.dll` files are copied to the folder containing your executable.
