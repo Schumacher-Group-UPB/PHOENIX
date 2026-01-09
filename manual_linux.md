@@ -102,7 +102,7 @@ cmake -S . -B build_cpu_fp64 -DBUILD=cpu
 ```bash
 make CPU=TRUE COMPILER=g++
 ```
-
+---
 
 ## Build with SFML Rendering (to generate "live" output)
 ### 1. Clone the Repository
@@ -154,7 +154,12 @@ make SFML=TRUE SFML_PATH=/custompath/PHOENIX/external/SFML/
 * **`SFML_PATH`**: Path to your SFML installation folder.    
 Replace `custompath` with the correct path on your machine.
 
+---
 
+## Running PHOENIX
+
+
+---
 
 
 
