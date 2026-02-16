@@ -1,5 +1,5 @@
 # Dispersion visualization via linear response theory
-[![arXiv](https://img.shields.io/badge/arXiv-2507.07099-b31b1b.svg)](https://arxiv.org/pdf/2507.07099)
+Linked publication: [![arXiv](https://img.shields.io/badge/arXiv-2507.07099-b31b1b.svg)](https://arxiv.org/pdf/2507.07099)
 
 This section demonstrates how PHOENIX can be used to calculate the linear response of microresonator systems. The example shows how exceptional rings emerge in spin-orbit coupled planar microresonators exhibiting circular dichroism.
 
