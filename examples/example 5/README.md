@@ -12,4 +12,4 @@ The two spinor field-components are denoted by $\pm$. Here $m_\mathrm{eff}= 10^{
 
 <img width="3693" height="2040" alt="figure2_update" src="https://github.com/user-attachments/assets/16f8dcb4-3464-4594-b4e6-472d0e688678" />
 
-The figure displays $-\Im(\chi)$ for the diagonal elements $\chi_{++} =  \frac{\mathrm{FFT}(\psi_+)}{\mathrm{FFT}(R_+)}$ and $\chi_{--} =  \frac{\mathrm{FFT}(\psi_-)}{\mathrm{FFT}(R_-)}$ (surfaces), which dominate the system response for small TE-TM splitting. For comparison the eigenvalues (dots) of the effective 2x2 Hamiltonian showing perfect agreement.
+The figure displays $-\Im(\chi)$ for the diagonal elements (a) $\chi_{++} =  \frac{\mathrm{FFT}(\psi_+)}{\mathrm{FFT}(R_+)}$ and (b) $\chi_{--} =  \frac{\mathrm{FFT}(\psi_-)}{\mathrm{FFT}(R_-)}$ (surfaces), which dominate the system response for small TE-TM splitting. For comparison the eigenvalues (dots) of the effective 2x2 Hamiltonian showing perfect agreement.
