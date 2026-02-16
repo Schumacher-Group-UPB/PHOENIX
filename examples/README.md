@@ -16,3 +16,8 @@ This folder contains examples demonstrating the capabilities of PHOENIX for mode
 
 4. [Example 4: Phase-Space Sampling and Quantum-State Tomography](example_4/README.md)  
    Analyzes quantum coherence and statistical properties of polariton condensates using Monte Carlo simulations.
+
+# Related Publications
+   
+1. [Exceptional rings in nonlinear non-Hermitian planar optical microcavities](example_5/README.md)  
+   Analyzes linear response of spin-orbit coupled microresonators with circular dichroism.
