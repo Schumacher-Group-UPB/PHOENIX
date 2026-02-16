@@ -19,6 +19,5 @@ This folder contains examples demonstrating the capabilities of PHOENIX for mode
 
 # Selected further applications
    
-1. [Exceptional rings in nonlinear non-Hermitian planar optical microcavities](example_5/README.md) [![arXiv](https://img.shields.io/badge/arXiv-2507.07099-b31b1b.svg)](https://arxiv.org/abs/2507.07099)
-
+1. [Exceptional rings in nonlinear non-Hermitian planar optical microcavities](example_5/README.md) [![arXiv](https://img.shields.io/badge/arXiv-2507.07099-b31b1b.svg)](https://arxiv.org/abs/2507.07099) 
    Analyzes linear response of spin-orbit coupled microresonators with circular dichroism.
