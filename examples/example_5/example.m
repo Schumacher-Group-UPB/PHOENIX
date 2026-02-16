@@ -14,7 +14,7 @@
 %         (i) intrinsic dichroism: γ₊ ≠ γ₋ (requires PHOENIX source modification)
 %         (ii) induced by off-resonant, polarized pumping below threshold
 %    - CW pumping creates steady-state asymmetry in losses
-%    - Weak Gaussian probe extracts linear optical response
+%    - Weak Gaussian pulse probes linear optical response
 %
 %  WORKFLOW:
 %    1. Clean previous output files
