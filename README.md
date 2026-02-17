@@ -17,26 +17,28 @@ J. Wingenbach, D. Bauch, X. Ma, R. Schade, C. Plessl, and S. Schumacher. [Comput
 ## Table of Contents
 
 1. Quickstart Guide
-    - [Docker container](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_docker.md)
-    - [Prebuilt binaries](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_binaries.md)
+    - [Docker container](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_docker.md)
+    - [Prebuilt binaries](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_binaries.md)
 2. Building PHOENIX from source
-    - [Linux (recommended)](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_linux.md)
-    - [Windows](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_windows.md)
-    - [MacOS](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/manual_mac.md)
+    - [Linux (recommended)](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_linux.md)
+    - [Windows](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_windows.md)
+    - [MacOS](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/manual_mac.md)
 
-3. [Custom Kernel Development](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/new-documentation/custom_kernel.md)
+3. [Custom Kernel Development](https://github.com/Schumacher-Group-UPB/PHOENIX/blob/master/custom_kernel.md)
 
 ---
 
 ## Benchmarks
 
-PHOENIX has been benchmarked against MATLAB solvers and CPU implementations. Below are the runtime results (1024x1024 grid per iteration):
+PHOENIX has been benchmarked on different GPUs and CPUs. Below are the runtime results (1024x1024 grid per iteration):
 
 | System                     | FP32 GPU | FP64 GPU | FP32 CPU | FP64 CPU |
 |----------------------------|----------|----------|----------|----------|
 | RTX 3070 Ti / Ryzen 6c     | 311 µs   | 1120 µs  | 8330 µs  | 12800 µs |
 | RTX 4090 / Ryzen 24c       | 94 µs    | 313 µs   | TBD      | TBD      |
 | A100 / AMD Milan 7763      | 125 µs   | 232 µs   | 378 µs   | 504 µs   |
+
+Please refer to [Computer Physics Communications, 315, 109689 (2025)](https://www.sciencedirect.com/science/article/pii/S0010465525001912) for an in-depth analysis.
 
 ---
 
