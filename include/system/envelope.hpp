@@ -15,7 +15,7 @@ namespace PHOENIX {
 class Envelope {
    public:
     // Parameters to Construct the Envelope from
-    std::vector<PHOENIX::Type::real> amp, width_x, width_y, x, y, exponent;
+    std::vector<PHOENIX::Type::real> amp, width_x, width_y, x, y, exponent, k0_x, k0_y;
     std::vector<int> m;
     std::vector<PHOENIX::Type::real> freq, sigma, t0;
     std::vector<std::string> s_type, s_pol, s_behavior, s_temp;
@@ -86,7 +86,7 @@ class Envelope {
 
     static inline int AllGroups = -1;
 
-    void addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m );
+    void addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m, PHOENIX::Type::real k0_x = 0.0, PHOENIX::Type::real k0_y = 0.0 );
     void addSpacial( const std::string& path, PHOENIX::Type::real amp, const std::string& s_behaviour, const std::string& s_pol );
     void addTemporal( PHOENIX::Type::real t0, PHOENIX::Type::real sigma, PHOENIX::Type::real freq, const std::string& s_temp );
     void addTemporal( const std::string& path );

@@ -504,26 +504,26 @@ const std::map<std::string_view, ArgInfo> arguments{
     { "envelope",
         { 
             .name{ "--[envelope]" },
-            .key{ "<double> <string> <double> <double> <double> <double> <string> <double> <double> <string>" },
-            .short_description{ "Time INdependent Envelope Syntax. Envelopes can be --pump, --pulse, --fftMask, --initialWavefunction, --initialReservoir, --potential. Keys are amplitude, behaviour (add, multiply, replace, adaptive, complex), widthX, widthY, posX, posY, pol (plus, minus, both), exponent, charge, type (gauss, ring)" },
+            .key{ "<double> <string> <double> <double> <double> <double> <string> <double> <double> <string> [momenta <double> <double>]" },
+            .short_description{ "Time INdependent Envelope Syntax. Envelopes can be --pump, --pulse, --fftMask, --initialWavefunction, --initialReservoir, --potential. Keys are amplitude, behaviour (add, multiply, replace, adaptive, complex), widthX, widthY, posX, posY, pol (plus, minus, both), exponent, charge, type (gauss, ring). Optional: momenta k0_x k0_y applies a spatial phase exp(i*(k0_x*(x-x0)+k0_y*(y-y0)))." },
             .long_description{ "Time INdependent Envelope Syntax. This is the general syntax for any of the available envelopes, which includes: --pump, --pulse, --fftMask, --initialWavefunction, --initialReservoir, --potential. Each Envelope is defined by a set of spatial parameters:\namplitude: numerical value\nbehaviour: Method to apply this envelope to its group. Envelopes that have the same temporal properties (see later) are grouped together and are superimposed upon running PHOENIX. The "
                             "methods here include:\n- add - Adds the envelope to its group\n- multiply - Multiplies the current group matrix with this envelope\n- replace - Replaces "
                             "the current group matrix with this envelope\n- adaptive - Sets the amplitude of each cell to the current value of the group matrix. This is usefull to e.g.cut out parts of the matrix.\n- complex - Multiply this envelope with i\nwidthX: With in X direction\nwidthY: Width in Y direction\nposX: Position in X direction\nposY: Position in Y direction\npol: Polarization of this envelope. This value can be either 'plus', 'minus' or 'both', applying to the plus or minus "
                             "component, respectively.\nexponent: Gaussian exponent. Larger values result in steeper Gaussians.\ncharge: Topological Charge of this envelope. This value results in a complex phase winding and should only be used for complex envelopes. Can be either int or 'none'\ntype: Type of this envelope. Can be a superposition of the following:\n- gauss: Gaussian envelope\n- ring: Ring envelope\n- noDivide: No renormalization using the width. This prohibits the division of the "
                             "amplitude by its width.\n- local: Use local space (-1:1) instead of (-L/2:L/2). Convinient for e.g. FFT filter envelopes." },
             .short_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide" },
-            .long_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide (basic Gaussian envelope)\n--[envelope] 15 add 20 10 50 0 both 3 none ring+noDivide (steeper ring envelope, asymmetrical, shifted to x,y = 50,0)\n--[envelope] 1 add 0.3 0.3 0 0 plus 1 none local+noDivide (local mapped envelope from -1:1 instead of -L/2:L/2, plus component only)" } 
+            .long_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide (basic Gaussian envelope)\n--[envelope] 15 add 20 10 50 0 both 3 none ring+noDivide (steeper ring envelope, asymmetrical, shifted to x,y = 50,0)\n--[envelope] 1 add 0.3 0.3 0 0 plus 1 none local+noDivide (local mapped envelope from -1:1 instead of -L/2:L/2, plus component only)\n--[envelope] 15 add 2 2 0 0 both 1 none gauss+noDivide momenta 1.0 0.5 (Gaussian with momentum kick k0_x=1.0, k0_y=0.5, adds phase exp(i*(k0_x*x+k0_y*y)))" }
         } 
     },
     { "envelope_time",
         {
              .name{ "--[envelope]" },
-            .key{ "<double> <string> <double> <double> <double> <double> <string> <double> <double> <string> time <double> <double> <double>" },
-            .short_description{ "Time Dependent Envelope Syntax. Additional keys are t0, sigma, freq." },
+            .key{ "<double> <string> <double> <double> <double> <double> <string> <double> <double> <string> [momenta <double> <double>] time <double> <double> <double>" },
+            .short_description{ "Time Dependent Envelope Syntax. Additional keys are t0, sigma, freq. Optional momenta keyword (before 'time') adds spatial phase exp(i*(k0_x*(x-x0)+k0_y*(y-y0)))." },
             .long_description{ "Time Dependent Envelope Syntax. The spatial parameters are equivalent to the previous envelope and temporal parameters are indicated with the additional 'time' keyword. The available keys include:\nkind: Type of oscillator. Can be either of iexp ~exp(iwt/sigma), cos ~ cos(wt/sigma) or gauss ~ exp(-t/sigma)^w. In the latter, frequency becomes the power of the function instead.\nt0: Center time.\nfreq: Frequency (w) of the oscillator or power of the function." },
             .short_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide time iexp 200 50 0.1" },
             .long_usecase{ "--[envelope] 15 add 10 10 0 0 both 1 none gauss+noDivide time iexp 200 50 0 (Example from before, with complex oscillator, centered at 200ps with width 50ps and f=0 for no oscillator component.\n--[envelope] 15 add 10 10 0 0 both 1 3 gauss+noDivide time iexp 0 1e5 0.1 (Envelope with topological charge = 3, no center with t0 = 0, high sigma for constant temporal envelope, and frequency f=0.1THz. This envelope will be constant of amplitude and oscillate with a given "
-                        "frequency)" } 
+                        "frequency)\n--[envelope] 1 add 2 2 0 0 both 1 none gauss+noDivide momenta 1.0 0.0 time iexp 0 1e5 0 (Propagating pulse with momentum k0_x=1.0 and constant temporal envelope)" }
         } 
     },
     { "envelope_loaded",

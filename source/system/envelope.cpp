@@ -32,13 +32,15 @@ eval_enum _cast_string_list_to_enum( const std::string& input, std::string split
     return ret;
 }
 
-void PHOENIX::Envelope::addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m ) {
+void PHOENIX::Envelope::addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m, PHOENIX::Type::real k0_x, PHOENIX::Type::real k0_y ) {
     this->amp.push_back( amp );
     this->width_x.push_back( width_x );
     this->width_y.push_back( width_y );
     this->x.push_back( x );
     this->y.push_back( y );
     this->exponent.push_back( exponent );
+    this->k0_x.push_back( k0_x );
+    this->k0_y.push_back( k0_y );
     this->s_type.push_back( s_type );
     auto type = _cast_string_list_to_enum<EnvType>( s_type, "+", TypeFromString );
     this->type.push_back( type );
@@ -63,6 +65,8 @@ void PHOENIX::Envelope::addSpacial( const std::string& path, PHOENIX::Type::real
     x.push_back( 0 );
     y.push_back( 0 );
     exponent.push_back( 0 );
+    k0_x.push_back( 0 );
+    k0_y.push_back( 0 );
     s_type.push_back( "" );
     type.push_back( EnvType::Gauss );
     this->s_pol.push_back( s_pol );
@@ -186,12 +190,22 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
             // Type
             auto stype = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_type", index );
 
-            ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm );
+            // Optional momenta keyword
+            PHOENIX::Type::real k0_x_val = 0.0, k0_y_val = 0.0;
+            auto momenta_peek = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_momenta_peek", index );
+            if ( momenta_peek == "momenta" ) {
+                k0_x_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_x", index );
+                k0_y_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_y", index );
+            } else {
+                index--;
+            }
+
+            ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm, k0_x_val, k0_y_val );
         }
 
         std::cout << PHOENIX::CLIO::prettyPrint( "Added Spacial Component to Envelope '" + key + "'", PHOENIX::CLIO::Control::Success | PHOENIX::CLIO::Control::Secondary ) << std::endl;
 
-        // If the next argument is "osc", then we read the temporal component if time is not false
+        // If the next argument is "time", then we read the temporal component if time is not false
         auto next = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_next", index );
 
         if ( not time or next != "time" ) {
@@ -292,13 +306,16 @@ void PHOENIX::Envelope::calculate( PHOENIX::Type::complex* buffer, const int gro
                         amplitude = amplitude / CUDA::sqrt<PHOENIX::Type::real>( 2 * 3.1415 * width_x[c] * width_y[c] );
                 }
 
+                // Momentum phase: exp(i*(k0_x*(cx-x0) + k0_y*(cy-y0)))
+                PHOENIX::Type::complex momentum_phase = CUDA::exp( PHOENIX::Type::complex( 0.0, k0_x[c] * ( cx - x[c] ) + k0_y[c] * ( cy - y[c] ) ) );
+
                 // If the behaviour is adaptive, the amplitude is set to the current value of the buffer instead.
                 if ( behavior[c] & PHOENIX::Envelope::Behavior::Adaptive )
                     amplitude = amp[c] * buffer[i];
                 if ( behavior[c] & PHOENIX::Envelope::Behavior::Complex )
                     amplitude = PHOENIX::Type::complex( 0.0, CUDA::real( amplitude ) );
 
-                PHOENIX::Type::complex contribution = amplitude * pre_fractor * exp_function * charge;
+                PHOENIX::Type::complex contribution = amplitude * pre_fractor * exp_function * charge * momentum_phase;
                 // Add, multiply or replace the contribution to the buffer.
                 if ( behavior[c] & PHOENIX::Envelope::Behavior::Add )
                     buffer[i] = buffer[i] + contribution;
@@ -354,6 +371,8 @@ std::string PHOENIX::Envelope::toString() const {
                    << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "Width Y: ", std::to_string( width_y[i] ), unit, 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
                    << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "At X: ", std::to_string( x[i] ), unit, 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
                    << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "At Y: ", std::to_string( y[i] ), unit, 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
+                   << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "Momentum k0_x: ", std::to_string( k0_x[i] ), "1/mum", 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
+                   << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "Momentum k0_y: ", std::to_string( k0_y[i] ), "1/mum", 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
                    << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "Gauss Exponent: ", std::to_string( exponent[i] ), "", 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
                    << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "Type: ", s_type[i], "", 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
                    << "    " << b << EscapeSequence::GRAY << PHOENIX::CLIO::unifyLength( "Polarization: ", s_pol[i], "", 25, 25, 25, " " ) << EscapeSequence::RESET << std::endl
