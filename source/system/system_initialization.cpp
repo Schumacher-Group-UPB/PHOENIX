@@ -157,6 +157,9 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     if ( ( index = PHOENIX::CLIO::findInArgv( "--outEvery", argc, argv ) ) != -1 )
         output_every = PHOENIX::CLIO::getNextInput( argv, argc, "output_every", ++index );
 
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "fileout-precision", "fileoutPrecision" }, argc, argv, 0, "--" ) ) != -1 )
+        filehandler.fileout_precision = (int)PHOENIX::CLIO::getNextInput( argv, argc, "fileout_precision", ++index );
+
     history_matrix_output_increment = 1u;
     history_matrix_start_x = 0;
     history_matrix_start_y = 0;

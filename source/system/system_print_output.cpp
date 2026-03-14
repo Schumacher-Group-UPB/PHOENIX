@@ -527,15 +527,26 @@ const std::map<std::string_view, ArgInfo> arguments{
         } 
     },
     { "envelope_loaded",
-        { 
+        {
             .name{ "--[envelope]" },
             .key{ "load <string> <double> <string> <string> time load <string>" },
             .short_description{ "Loaded Envelope Syntax. Space and Time can be loaded." },
             .long_description{ "Loaded Envelope Syntax. Both the spatial as well as the temporal components can be loaded from files, indicated by replacing the respective set of parameters with 'load ...'. Loading a spatial matrix requires a matrix input, loading temporal input requires a t:value pair per line in the file. The final temporal envelope is then linearly interpolated from the input points. The remaining parameters are:\nSpatial "
                             "Component:\npath: Path to the spatial envelope.\namp: Scaling amplitude. The loaded envelope will be multiplied by this value.\nBehaviour: Same as before.\npol: Polarization. Same as before.\nTemporal Components:\npath: Parth to the spatial envelope." },
             .short_usecase{ "--[envelope] load 'path/to/spatial/envelope' 1 add both load 'path/to/temporal/envelope'" },
-            .long_usecase{ "--[envelope] load 'path/to/spatial/envelope' 1 add both load 'path/to/temporal/envelope' (loads a spatial and temporal envelope from the given paths)" } 
-        } 
+            .long_usecase{ "--[envelope] load 'path/to/spatial/envelope' 1 add both load 'path/to/temporal/envelope' (loads a spatial and temporal envelope from the given paths)" }
+        }
+    },
+    { "fileoutPrecision",
+        {
+            .name{ "--fileout-precision, --fileoutPrecision" },
+            .key{ "<int>" },
+            .unit{ "" },
+            .short_description{ "Text output precision" },
+            .long_description{ "Number of significant digits used when writing text (.txt) output files. Set to -1 for full floating-point precision (default). Has no effect on binary formats (npy, ash, mat)." },
+            .short_usecase{ "--fileout-precision 6" },
+            .long_usecase{ "--fileout-precision 6 (6 significant digits in .txt output)\n--fileout-precision -1 (full precision, default)" }
+        }
     },
 };
 // clang-format on
@@ -571,6 +582,8 @@ void PHOENIX::SystemParameters::printHelp( bool verbose, bool markdown ) {
     arguments.at( "outEvery" ).print_usecase( output_every, verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
     arguments.at( "output" ).print_usecase( "", verbose, markdown );
+    std::cout << PHOENIX::CLIO::fillLine( console_width, minor_seperator ) << std::endl;
+    arguments.at( "fileoutPrecision" ).print_usecase( std::to_string( filehandler.fileout_precision ), verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;
     arguments.at( "historyMatrix" ).print_usecase( "", verbose, markdown );
     std::cout << PHOENIX::CLIO::fillLine( console_width, seperator ) << std::endl;

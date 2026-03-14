@@ -22,6 +22,7 @@ class FileHandler {
    public:
     std::map<std::string, std::ofstream> files;
     std::string outputPath, outputName, color_palette, color_palette_phase, outputFiletype;
+    int fileout_precision = -1; // -1 = full precision (default); otherwise sets significant digits for txt output
 
     FileHandler();
     FileHandler( int argc, char** argv );

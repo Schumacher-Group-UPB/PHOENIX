@@ -283,6 +283,8 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::complex* buffer, Type
         // Header
         out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
         std::stringstream output_buffer;
+        if ( fileout_precision != -1 )
+            output_buffer << std::setprecision( fileout_precision );
         // Real
         for ( int i = row_start; i < row_stop; i += increment ) {
             for ( int j = col_start; j < col_stop; j += increment ) {
@@ -375,6 +377,8 @@ void PHOENIX::FileHandler::outputMatrixToFile( const Type::real* buffer, Type::u
         // Header
         out << "# SIZE " << col_stop - col_start << " " << row_stop - row_start << " " << header << " :: PHOENIX_ MATRIX\n";
         std::stringstream output_buffer;
+        if ( fileout_precision != -1 )
+            output_buffer << std::setprecision( fileout_precision );
         // Real
         for ( int i = row_start; i < row_stop; i += increment ) {
             for ( int j = col_start; j < col_stop; j += increment ) {
@@ -445,7 +449,7 @@ void PHOENIX::FileHandler::outputListToFile( const std::string& path, std::vecto
             if ( j >= data.size() )
                 fileout << "NaN ";
             continue;
-            fileout << std::setprecision( 10 ) << data[j][i] << " ";
+            fileout << std::setprecision( fileout_precision != -1 ? fileout_precision : 10 ) << data[j][i] << " ";
         }
         fileout << "\n";
     }
