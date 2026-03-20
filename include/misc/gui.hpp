@@ -3,7 +3,10 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#include <complex>
+#include <deque>
+#include <vector>
+#include <memory>
+#include <string>
 #include "solver/solver.hpp"
 #include "misc/commandline_io.hpp"
 #include "cuda/cuda_matrix.cuh"
@@ -12,73 +15,154 @@
     #include <SFML/Graphics.hpp>
     #include <SFML/Window.hpp>
     #include "misc/sfml_window.hpp"
-    #endif
+    #include "imgui.h"
+    #include "imgui-SFML.h"
+#endif
+
 #include "misc/colormap.hpp"
 #include "resources/vik.hpp"
 #include "resources/viko.hpp"
+#include "resources/viridis.hpp"
+#include "resources/plasma.hpp"
+#include "resources/inferno.hpp"
+#include "resources/magma.hpp"
+#include "resources/hot.hpp"
+#include "resources/turbo_cmap.hpp"
+#include "resources/grayscale.hpp"
 
 namespace PHOENIX {
 
 class PhoenixGUI {
 public:
-    explicit PhoenixGUI(Solver& solver);
+    explicit PhoenixGUI( Solver& solver );
+    ~PhoenixGUI();
     void init();
-    bool update(double simulation_time, double elapsed_time, size_t iterations);
+    bool update( double simulation_time, double elapsed_time, size_t iterations );
+    bool is_paused() const { return paused_; }
 
 private:
     Solver& solver_;
-    #ifdef SFML_RENDER
-    BasicWindow window_;
-    ColorPalette color_phase_, color_amp_;
+    bool paused_ = false;
 
-    // GUI Controls
-    CheckBox cb_toggle_fft_, cb_min_and_max_;
-    Button b_add_outevery_, b_sub_outevery_;
-    Button b_add_dt_, b_sub_dt_;
-    Button b_snapshot_, b_reset_to_snapshot_;
-    Button b_reset_to_initial_, b_cycle_subplot_;
-    
-    // Snapshot data
-    double snapshot_time_ = 0.0;
-    Type::host_vector<Type::complex> snapshot_wavefunction_plus_, snapshot_wavefunction_minus_;
-    Type::host_vector<Type::complex> snapshot_reservoir_plus_, snapshot_reservoir_minus_;
-    
-    // Internal state
-    int inset_mode_ = 0;
-    size_t current_subplot_ = 0;
-    Type::host_vector<Type::complex> plot_array_;
-    #endif
+#ifdef SFML_RENDER
+    // ---- Window & colormaps ----
+    BasicWindow  window_;
+    struct ColormapEntry { std::string name; ColorPalette palette; };
+    std::vector<ColormapEntry> colormaps_;
+    void buildColormaps();
 
-    static std::string toScientific(Type::real in);
-    #ifdef SFML_RENDER
+    // ---------------------------------------------------------------
+    // Registry: one entry for every matrix the GUI can display
+    // ---------------------------------------------------------------
+    struct MatrixDescriptor {
+        std::string label;
+        CUDAMatrix<Type::complex>* complex_mat = nullptr;
+        CUDAMatrix<Type::real>*    real_mat    = nullptr;
+        bool is_phase  = false;
+        bool available = true;   // false → greyed out / skipped
+    };
+    std::vector<MatrixDescriptor> matrix_registry_;
+
+    // ---------------------------------------------------------------
+    // Panel: one independent ImGui viewer window
+    // ---------------------------------------------------------------
+    struct MatrixPanel {
+        int      selected    = 0;                      // index into matrix_registry_
+        int      panel_id   = 0;                      // stable unique ID (never changes)
+        ImGuiID  saved_dock_id = 0;                   // last known dock node — restored on title change
+        std::unique_ptr<sf::RenderTexture> tex;
+        std::vector<sf::Vertex>  pix;
+        int  tex_w = 0, tex_h = 0;
+        bool open  = true;
+        std::string title;                            // ImGui window ID: "Label##view_N"
+        // min/max history for the embedded mini-plot
+        std::deque<float> hist_max, hist_min;
+        static constexpr int kMaxHist = 512;
+        // optional fixed colormap range
+        bool   use_manual_range = false;
+        double manual_min = 0.0, manual_max = 1.0;
+        // logarithmic display
+        bool log_scale = false;
+        // line-cut mode
+        bool show_matrix = true;  // if false → show 1D line cut instead of image
+        int  slice_axis  = 0;     // 0 = X (select column, plot along Y), 1 = Y (select row, plot along X)
+        int  slice_index = 0;     // which column/row index
+        // per-panel download cadence
+        int download_every   = 1;   // blit every N updatePanel calls
+        int download_counter = 0;
+        // per-panel colormap: -1 = auto (viko for phase, vik for amplitude)
+        int colormap_idx = -1;
+        // display mode for complex matrices
+        enum class DisplayMode { Abs2 = 0, Abs, Real, Imag, Phase };
+        DisplayMode display_mode = DisplayMode::Abs2;
+        // line-cut component visibility (only relevant when show_matrix == false)
+        bool show_abs_curve = true;
+        bool show_re_curve  = true;
+        bool show_im_curve  = true;
+        bool show_arg_curve = false;  // arg(Z) hidden by default
+        // ---- Zoom & pan state for 2D image view ----
+        float zoom_scale = 1.0f;   // 1.0 = fully zoomed out; max 64.0
+        float pan_u      = 0.0f;   // horizontal pan in logical UV space [0, 1 - 1/zoom]
+        float pan_v      = 0.0f;   // vertical   pan in logical UV space [0, 1 - 1/zoom]
+    };
+    std::vector<MatrixPanel> panels_;
+    int next_panel_id_ = 1;
+
+    // ---------------------------------------------------------------
+    // Temporal envelope history for the Envelopes window
+    // ---------------------------------------------------------------
+    struct EnvelopeHistory {
+        std::string label;
+        std::deque<float> times;
+        std::deque<float> values;     // |temporal_envelope| (abs) summed over groups
+        std::deque<float> values_re;  // Re(temporal_envelope) summed over groups
+        std::deque<float> values_im;  // Im(temporal_envelope) summed over groups
+        static constexpr int kMaxHist = 1024;
+    };
+    std::vector<EnvelopeHistory> env_histories_;
+    bool show_env_window_  = false;
+    bool show_plot_window_ = false;
+
+    // ---- Snapshot data ----
+    struct Snapshot {
+        std::string label;
+        double      time = 0.0;
+        Type::host_vector<Type::complex> wf_plus, wf_minus;
+        Type::host_vector<Type::complex> rv_plus, rv_minus;
+    };
+    std::vector<Snapshot> snapshots_;
+    int snapshot_selected_ = -1;
+
+    // ---- Parameter panel ----
+    SystemParameters::KernelParameters params_saved_;
+    bool params_show_panel_ = false;
+
+    // ---- Layout state ----
+    bool     layout_initialized_ = false;
+    ImGuiID  default_dock_id_    = 0;    // right-side dock node; new panels auto-dock here
+
+    // ---- Internal helpers ----
+    void buildRegistry();
+    void addPanel( int initial_selected = 0 );
+    void updatePanel( MatrixPanel& p );
+    void updateEnvelopeHistories();
+
+    void renderMenuBar();
+    void renderMatrixPanel( MatrixPanel& p );
+    void renderControlWindow( double sim_t, double elapsed, size_t iter );
+    void renderParametersPanel();
+    void renderPlotsPanel();
+    void renderEnvelopePlotWindow();
+    void tileViews();
+    void doHandleSnapshots( bool take, bool restore_snap, bool restore_initial, bool delete_snap );
+
     template <typename T>
-    void plot(CUDAMatrix<T>& matrix, bool angle, int N_cols, int N_rows, int posX, int posY, int skip, ColorPalette& cp, const std::string& title, bool plot_min_max) {
-        T min, max;
-        if (angle) {
-            plot_array_ = matrix.staticAngle(true).getFullMatrix();
-            min = -3.1415926535;
-            max = 3.1415926535;
-        } else {
-            std::tie(min, max) = matrix.extrema();
-            min = CUDA::abs2(min);
-            max = CUDA::abs2(max);
-            plot_array_ = matrix.staticCWiseAbs2(true).getFullMatrix();
-        }
-        window_.blitMatrixPtr(plot_array_.data(), min, max, cp, N_cols, N_rows, posX, posY, 1, skip);
+    void blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorPalette& cp );
+#endif
 
-        if (plot_min_max) {
-            int cols = N_cols / skip;
-            int rows = N_rows / skip;
-            int text_height = window_.textheight / skip;
-            window_.scaledPrint(posX + 5, posY + rows - text_height - 5, text_height,
-                title + "Min: " + toScientific(std::sqrt(CUDA::abs(min))) +
-                " Max: " + toScientific(std::sqrt(CUDA::abs(max))), sf::Color::White);
-        }
-    }
-    #else
-    template <typename T>
-    void plot(CUDAMatrix<T>& matrix, bool angle, int N_cols, int N_rows, int posX, int posY, int skip, ColorPalette& cp, const std::string& title, bool plot_min_max) {}
-    #endif
+    static std::string toScientific( Type::real in );
+
+    // Legacy stubs — defined in the #else branch of gui.cu
     void setupGUI();
     void handleGUIEvents();
     void drawGUI();

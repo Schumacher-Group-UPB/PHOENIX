@@ -129,8 +129,12 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::real w, Ty
         Type::complex hamilton_regular_plus = args.p.m2_over_dx2_p_dy2 * in_wf_plus + horizontal_plus + vertical_plus;
         Type::complex hamilton_regular_minus = args.p.m2_over_dx2_p_dy2 * in_wf_minus + horizontal_minus + vertical_minus;
 
-        const Type::complex in_rv_plus = io.in_rv_plus[i];
-        const Type::complex in_rv_minus = io.in_rv_minus[i];
+        Type::complex in_rv_plus{};
+        Type::complex in_rv_minus{};
+        if constexpr ( tmp_use_reservoir ) {
+            in_rv_plus  = io.in_rv_plus[i];
+            in_rv_minus = io.in_rv_minus[i];
+        }
         const Type::real in_psi_plus_norm = CUDA::abs2( in_wf_plus );
         const Type::real in_psi_minus_norm = CUDA::abs2( in_wf_minus );
 
@@ -173,19 +177,21 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::real w, Ty
         io.out_wf_plus[i] = result;
 
         // MARK: Reservoir Plus
-        result = -( args.p.gamma_r + args.p.R * in_psi_plus_norm ) * in_rv_plus;
+        if constexpr ( tmp_use_reservoir ) {
+            result = -( args.p.gamma_r + args.p.R * in_psi_plus_norm ) * in_rv_plus;
 
-        for ( int k = 0; k < args.pump_pointers.n; k++ ) {
-            const auto gauss = args.pump_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pump_pointers.amp_next[k];
-            PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
-            result += args.dev_ptrs.pump_plus[i + offset] * gauss; // TODO: remove this complex multiplication!
+            for ( int k = 0; k < args.pump_pointers.n; k++ ) {
+                const auto gauss = args.pump_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pump_pointers.amp_next[k];
+                PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
+                result += args.dev_ptrs.pump_plus[i + offset] * gauss; // TODO: remove this complex multiplication!
+            }
+
+            // MARK: Stochastic-2
+            if ( args.p.stochastic_amplitude > 0.0 )
+                result += args.p.R * in_rv_plus / args.p.dV;
+
+            io.out_rv_plus[i] = result;
         }
-
-        // MARK: Stochastic-2
-        if ( args.p.stochastic_amplitude > 0.0 )
-            result += args.p.R * in_rv_plus / args.p.dV;
-
-        io.out_rv_plus[i] = result;
 
         // MARK: Wavefunction Minus
         result = args.p.one_over_h_bar_s * args.p.m_eff_scaled * hamilton_regular_minus;
@@ -219,19 +225,21 @@ PHOENIX_GLOBAL PHOENIX_COMPILER_SPECIFIC void gp_scalar( int i, Type::real w, Ty
         io.out_wf_minus[i] = result;
 
         // MARK: Reservoir Minus
-        result = -( args.p.gamma_r + args.p.R * in_psi_minus_norm ) * in_rv_minus;
+        if constexpr ( tmp_use_reservoir ) {
+            result = -( args.p.gamma_r + args.p.R * in_psi_minus_norm ) * in_rv_minus;
 
-        for ( int k = 0; k < args.pump_pointers.n; k++ ) {
-            const auto gauss = args.pump_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pump_pointers.amp_next[k];
-            PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
-            result += args.dev_ptrs.pump_minus[i + offset] * gauss; // TODO: remove this complex multiplication!
+            for ( int k = 0; k < args.pump_pointers.n; k++ ) {
+                const auto gauss = args.pump_pointers.amp[k]*(Type::real(1.0)-w) + w*args.pump_pointers.amp_next[k];
+                PHOENIX::Type::uint32 offset = args.p.subgrid_N2_with_halo * k;
+                result += args.dev_ptrs.pump_minus[i + offset] * gauss; // TODO: remove this complex multiplication!
+            }
+
+            // MARK: Stochastic-2
+            if ( args.p.stochastic_amplitude > 0.0 )
+                result += args.p.R * in_rv_minus / args.p.dV;
+
+            io.out_rv_minus[i] = result;
         }
-
-        // MARK: Stochastic-2
-        if ( args.p.stochastic_amplitude > 0.0 )
-            result += args.p.R * in_rv_minus / args.p.dV;
-
-        io.out_rv_minus[i] = result;
     }
 }
 

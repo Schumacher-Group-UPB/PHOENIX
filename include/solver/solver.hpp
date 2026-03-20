@@ -60,6 +60,24 @@ class Solver {
 
     Type::device_vector<Type::real> time; // [0] is t, [1] is dt
 
+    // Set to true from the GUI (or any other code) when KernelParameters change at runtime.
+    // SOLVER_SEQUENCE will tear down and recapture the CUDA graph on the next call.
+    bool parameters_are_dirty = false;
+
+    // CUDA graph state — moved from static locals in the SOLVER_SEQUENCE macro so
+    // the GUI can trigger a recapture by setting parameters_are_dirty = true.
+#ifndef USE_CPU
+    bool             cuda_graph_created_  = false;
+    cudaGraph_t      cuda_graph_          = nullptr;
+    cudaGraphExec_t  cuda_graph_instance_ = nullptr;
+    cudaStream_t     cuda_graph_stream_   = nullptr;
+    cudaGraphNode_t* cuda_graph_nodes_    = nullptr;
+    size_t           cuda_graph_num_nodes_= 0;
+#else
+    bool cuda_graph_created_ = false;
+    std::vector<KernelArguments> cpu_kernel_arguments_;
+#endif
+
     // The parameters are all pointers so that the cuda compute graph uses the updated values
     struct KernelArguments {
         TemporalEvelope::Pointers pulse_pointers;     // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
@@ -139,7 +157,14 @@ class Solver {
    public:
     // Virtual functions for the solvers
     virtual void step( bool variable_time_step ) = 0;
-    virtual ~Solver() = default;
+    virtual ~Solver() {
+#ifndef USE_CPU
+        if ( cuda_graph_instance_ ) cudaGraphExecDestroy( cuda_graph_instance_ );
+        if ( cuda_graph_ )          cudaGraphDestroy( cuda_graph_ );
+        if ( cuda_graph_stream_ )   cudaStreamDestroy( cuda_graph_stream_ );
+        delete[] cuda_graph_nodes_;
+#endif
+    }
 
     bool iterate( bool force_fixed_time_step = false);
 

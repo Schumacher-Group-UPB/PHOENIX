@@ -641,13 +641,23 @@
     // Edit: Oh God what a mess.
     #define SOLVER_SEQUENCE( with_graph, content )                                                                                                                                                                 \
         {                                                                                                                                                                                                          \
-            static bool cuda_graph_created = false;                                                                                                                                                                \
-            static cudaGraph_t graph;                                                                                                                                                                              \
-            static cudaGraphExec_t instance;                                                                                                                                                                       \
-            static cudaStream_t stream;                                                                                                                                                                            \
-            static cudaGraphNode_t *nodes;                                                                                                                                                                         \
-            static size_t num_nodes;                                                                                                                                                                               \
-            if ( not cuda_graph_created or not with_graph ) {                                                                                                                                                      \
+            /* Graph state lives on the solver instance (moved from static locals). */                                                                                                                             \
+            auto &cuda_graph_created = this->cuda_graph_created_;                                                                                                                                                  \
+            auto &graph     = this->cuda_graph_;                                                                                                                                                                   \
+            auto &instance  = this->cuda_graph_instance_;                                                                                                                                                          \
+            auto &stream    = this->cuda_graph_stream_;                                                                                                                                                            \
+            auto &nodes     = this->cuda_graph_nodes_;                                                                                                                                                             \
+            auto &num_nodes = this->cuda_graph_num_nodes_;                                                                                                                                                         \
+            /* Recapture if: first time, graphs disabled, or parameters changed at runtime. */                                                                                                                     \
+            if ( not cuda_graph_created or not with_graph or this->parameters_are_dirty ) {                                                                                                                        \
+                /* Destroy stale resources before recapturing. */                                                                                                                                                   \
+                if ( cuda_graph_created and this->parameters_are_dirty ) {                                                                                                                                         \
+                    cudaGraphExecDestroy( instance );  instance = nullptr;                                                                                                                                          \
+                    cudaGraphDestroy( graph );         graph    = nullptr;                                                                                                                                          \
+                    cudaStreamDestroy( stream );       stream   = nullptr;                                                                                                                                          \
+                    delete[] nodes;                    nodes    = nullptr;                                                                                                                                          \
+                    cuda_graph_created = false;                                                                                                                                                                     \
+                }                                                                                                                                                                                                  \
                 std::vector<Solver::KernelArguments> v_kernel_arguments;                                                                                                                                           \
                 for ( Type::uint32 subgrid = 0; subgrid < system.p.subgrids_columns * system.p.subgrids_rows; subgrid++ ) {                                                                                        \
                     v_kernel_arguments.push_back( generateKernelArguments( subgrid ) );                                                                                                                            \
@@ -678,6 +688,7 @@
                     cudaStreamEndCapture( stream, &graph );                                                                                                                                                        \
                     cudaGraphInstantiate( &instance, graph, NULL, NULL, 0 );                                                                                                                                       \
                     cuda_graph_created = true;                                                                                                                                                                     \
+                    this->parameters_are_dirty = false;                                                                                                                                                            \
                     cudaGraphGetNodes( graph, nullptr, &num_nodes );                                                                                                                                               \
                     nodes = new cudaGraphNode_t[num_nodes];                                                                                                                                                        \
                     cudaGraphGetNodes( graph, nodes, &num_nodes );                                                                                                                                                 \
@@ -746,8 +757,15 @@
     #define SOLVER_SEQUENCE( with_graph, content )                                                                                                                     \
         {                                                                                                                                                              \
             PHOENIX::Type::stream_t stream;                                                                                                                            \
-            static bool first_time = false;                                                                                                                            \
-            static std::vector<Solver::KernelArguments> v_kernel_arguments;                                                                                            \
+            /* Kernel argument state lives on the solver instance (moved from statics). */                                                                             \
+            auto &first_time         = this->cuda_graph_created_;                                                                                                      \
+            auto &v_kernel_arguments = this->cpu_kernel_arguments_;                                                                                                    \
+            /* If parameters were dirtied, regenerate kernel arguments on next step. */                                                                                \
+            if ( this->parameters_are_dirty ) {                                                                                                                        \
+                v_kernel_arguments.clear();                                                                                                                            \
+                first_time = false;                                                                                                                                    \
+                this->parameters_are_dirty = false;                                                                                                                    \
+            }                                                                                                                                                          \
             Type::uint32 current_halo = system.p.halo_size;                                                                                                            \
             if ( not first_time ) {                                                                                                                                    \
                 for ( Type::uint32 subgrid = 0; subgrid < system.p.subgrids_columns * system.p.subgrids_rows; subgrid++ ) {                                            \

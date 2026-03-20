@@ -38,7 +38,7 @@ class ColorPalette {
         }
         
         for (int i = 0; i < repetitions; ++i) {
-            for (int j = 0; j < container.size()-3; j += 3) {
+            for (int j = 0; j < (int)container.size(); j += 3) {
                 int r = container[j];
                 int g = container[j + 1];
                 int b = container[j + 2];

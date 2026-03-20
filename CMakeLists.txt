@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.25)
 project(Phoenix LANGUAGES CXX)
 set(PHOENIX_VERSION "v0.3.2")
 
+include(FetchContent)
+
 # -------------------------------------------------------------------
 # ------------ Mandatory choice:  BUILD_ARCH = cpu | gpu ------------
 # -------------------------------------------------------------------
@@ -37,10 +39,50 @@ set_property(CACHE PRECISION PROPERTY STRINGS fp32 fp64)
 set(PRETTYCMD "all" CACHE STRING "Pretty CMD: all | colors | symbols | none")
 set_property(CACHE PRETTYCMD PROPERTY STRINGS all colors symbols none)
 
-option(SFML "Enable SFML renderer" OFF)
-set(SFML_PATH "${PROJECT_SOURCE_DIR}/external/SFML/" CACHE PATH "Optional custom root for SFML installation")
-option(BUILD_SFML_FROM_SOURCE "Build SFML from external/SFML" ON)
+option(SFML "Enable SFML+ImGui renderer" OFF)
 option(SFML_STATIC "Use static linking for sfml" OFF)
+
+# --- FetchContent: SFML 2.6.2 + Dear ImGui + imgui-sfml (only when SFML=ON) ---
+if(SFML)
+    set(SFML_BUILD_EXAMPLES   OFF CACHE BOOL "" FORCE)
+    set(SFML_BUILD_DOC        OFF CACHE BOOL "" FORCE)
+    set(SFML_BUILD_TEST_SUITE OFF CACHE BOOL "" FORCE)
+    set(SFML_USE_STATIC_STD_LIBS OFF CACHE BOOL "" FORCE)
+    if(SFML_STATIC)
+        set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
+        set(SFML_STATIC_LIBRARIES  ON  CACHE BOOL "" FORCE)
+    else()
+        set(BUILD_SHARED_LIBS      ON  CACHE BOOL "" FORCE)
+        set(SFML_STATIC_LIBRARIES  OFF CACHE BOOL "" FORCE)
+    endif()
+    FetchContent_Declare(SFML
+        GIT_REPOSITORY https://github.com/SFML/SFML.git
+        GIT_TAG        2.6.2
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(SFML)
+
+    # Dear ImGui – no CMakeLists, populated manually so we get imgui_SOURCE_DIR
+    FetchContent_Declare(imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        v1.89.9-docking
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_GetProperties(imgui)
+    if(NOT imgui_POPULATED)
+        FetchContent_Populate(imgui)
+    endif()
+
+    # imgui-sfml 2.6 – SFML 2.x compatible; needs IMGUI_DIR pointing at imgui source
+    set(IMGUI_DIR          ${imgui_SOURCE_DIR} CACHE PATH "" FORCE)
+    set(IMGUI_SFML_FIND_SFML OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(imgui-sfml
+        GIT_REPOSITORY https://github.com/SFML/imgui-sfml.git
+        GIT_TAG        v2.6
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(imgui-sfml)
+endif()
 
 set(RUNTIME_DIR "${PROJECT_SOURCE_DIR}/bin" CACHE PATH "Where to put built executables")
 
@@ -50,7 +92,12 @@ set(RUNTIME_DIR "${PROJECT_SOURCE_DIR}/bin" CACHE PATH "Where to put built execu
 file(GLOB_RECURSE CPP_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/source/*.cpp")
 file(GLOB_RECURSE CU_SOURCES  CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/source/*.cu")
 
-include_directories("${SFML_PATH}/include/")
+# Exclude gui backends from auto-glob; add the single active backend explicitly.
+list(FILTER CU_SOURCES  EXCLUDE REGEX ".*/source/gui/.*")
+list(FILTER CPP_SOURCES EXCLUDE REGEX ".*/source/gui/.*")
+list(FILTER CU_SOURCES  EXCLUDE REGEX ".*/source/misc/gui\\.cu$")
+list(APPEND CU_SOURCES "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui.cu")
+
 include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_SOURCE_DIR}/")
 
@@ -118,74 +165,30 @@ endmacro()
 
 macro(enable_sfml tgt)
     if(SFML)
-        if(BUILD_SFML_FROM_SOURCE)
-            set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-            set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
-            set(SFML_BUILD_TEST_SUITE OFF CACHE BOOL "" FORCE)
-            set(SFML_USE_STATIC_STD_LIBS OFF CACHE BOOL "" FORCE)
-
-            if(SFML_STATIC)
-                set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-                set(SFML_STATIC_LIBRARIES ON CACHE BOOL "" FORCE)
-            else()
-                set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
-                set(SFML_STATIC_LIBRARIES OFF CACHE BOOL "" FORCE)
-            endif()
-
-            add_subdirectory("${SFML_PATH}" EXCLUDE_FROM_ALL)
-            
-            target_link_directories(${tgt} PRIVATE ${CMAKE_BINARY_DIR}/SFML/lib)
-            target_link_libraries(${tgt} PRIVATE sfml-graphics sfml-window sfml-system)
-
-            if(SFML_STATIC)
-                target_compile_definitions(${tgt} PRIVATE SFML_STATIC)
-                find_package(Freetype REQUIRED)
-                if(WIN32)
-                    target_link_libraries(${tgt} PRIVATE opengl32 winmm gdi32 Freetype::Freetype)
-                else()
-                    target_link_libraries(${tgt} PRIVATE Freetype::Freetype)
-                endif()
-            endif()
-
-            if(NOT SFML_STATIC)
-                add_custom_command(TARGET ${tgt} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        $<TARGET_FILE:sfml-graphics>
-                        $<TARGET_FILE:sfml-window>
-                        $<TARGET_FILE:sfml-system>
-                        $<TARGET_FILE_DIR:${tgt}>
-                )
-            endif()
-                
-        else()
-            if(SFML_PATH)
-                list(APPEND CMAKE_PREFIX_PATH ${SFML_PATH})
-            endif()
-
-            if(SFML_STATIC)
-                set(SFML_STATIC_LIBRARIES ON)
-                find_package(SFML 2 COMPONENTS graphics window system REQUIRED)
-                target_compile_definitions(${tgt} PRIVATE SFML_STATIC)
-                
-                target_link_libraries(${tgt} PRIVATE sfml-graphics sfml-window sfml-system)
-                find_package(Freetype REQUIRED)
-                target_link_libraries(${tgt} PRIVATE opengl32 winmm gdi32 Freetype::Freetype)
-
-            else()
-                find_package(SFML 2 COMPONENTS graphics window system REQUIRED)
-                target_link_libraries(${tgt} PRIVATE sfml-graphics sfml-window sfml-system)
-
-                add_custom_command(TARGET ${tgt} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        $<TARGET_FILE:sfml-graphics>
-                        $<TARGET_FILE:sfml-window>
-                        $<TARGET_FILE:sfml-system>
-                        $<TARGET_FILE_DIR:${tgt}>
-                )
-            endif()
-        endif()
-
+        # Link SFML (fetched via FetchContent above) and imgui-sfml
+        target_link_libraries(${tgt} PRIVATE
+            sfml-graphics sfml-window sfml-system
+            ImGui-SFML::ImGui-SFML)
         target_compile_definitions(${tgt} PRIVATE SFML_RENDER)
+
+        if(SFML_STATIC)
+            target_compile_definitions(${tgt} PRIVATE SFML_STATIC)
+            # SFML built from source (FetchContent) bundles its own Freetype.
+            # Only link the platform system libs required for a static SFML build.
+            if(WIN32)
+                target_link_libraries(${tgt} PRIVATE opengl32 winmm gdi32)
+            endif()
+        else()
+            # Copy DLLs to output directory on Windows
+            add_custom_command(TARGET ${tgt} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:sfml-graphics>
+                    $<TARGET_FILE:sfml-window>
+                    $<TARGET_FILE:sfml-system>
+                    $<TARGET_FILE:ImGui-SFML::ImGui-SFML>
+                    $<TARGET_FILE_DIR:${tgt}>
+            )
+        endif()
     endif()
 endmacro()
 
@@ -214,7 +217,7 @@ add_custom_target(FinalMessage ALL
     COMMAND ${CMAKE_COMMAND} -E echo "=============================================="
     COMMAND ${CMAKE_COMMAND} -E echo ">> Summary:"
     COMMAND ${CMAKE_COMMAND} -E echo "   -  Precision       : ${PRECISION}"
-    COMMAND ${CMAKE_COMMAND} -E echo "   -  SFML Renderer   : ${SFML} $<$<BOOL:${SFML_STATIC}>:[static]>"
+    COMMAND ${CMAKE_COMMAND} -E echo "   -  GUI (SFML+ImGui): ${SFML} $<$<BOOL:${SFML_STATIC}>:[static]>"
     COMMAND ${CMAKE_COMMAND} -E echo "Phoenix is now ready!"
     COMMENT "Final build summary"
 )
@@ -222,7 +225,7 @@ add_custom_target(FinalMessage ALL
 # Conditionally add optional messages
 if(NOT SFML)
     add_custom_command(TARGET FinalMessage PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E echo "     ℹ  To enable SFML, use: -DSFML=ON")
+        COMMAND ${CMAKE_COMMAND} -E echo "     i  To enable SFML+ImGui GUI, use: -DSFML=ON")
 endif()
 
 if(NOT PRECISION STREQUAL "fp64")
