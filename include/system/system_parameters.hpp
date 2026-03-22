@@ -99,6 +99,7 @@ class SystemParameters {
 
     // Flags for the different system branches. These will be set after the input is read.
     bool use_reservoir, use_pulses, use_pumps, use_potentials, use_stochastic, use_twin_mode, use_fft_mask;
+    bool use_dense = false; // When true, all matrices are allocated regardless of envelope presence
 
     // Output of Variables
     std::vector<std::string> output_keys;

@@ -39,10 +39,12 @@ void Solver::initializeMatricesFromSystem() {
 
     // First, construct all required host matrices
     bool use_fft = system.fft_every < system.t_max or system.iterator == "ssfm";
+    if ( system.use_dense ) use_fft = true; // Dense mode: always allocate FFT matrices
     // For now, both the plus and the minus components are the same. TODO: Change
-    Type::uint32 pulse_size = system.pulse.groupSize();
-    Type::uint32 pump_size = system.pump.groupSize();
-    Type::uint32 potential_size = system.potential.groupSize();
+    const Type::uint32 min_slots = system.use_dense ? 1u : 0u;
+    Type::uint32 pulse_size     = std::max( min_slots, (Type::uint32)system.pulse.groupSize() );
+    Type::uint32 pump_size      = std::max( min_slots, (Type::uint32)system.pump.groupSize() );
+    Type::uint32 potential_size = std::max( min_slots, (Type::uint32)system.potential.groupSize() );
     matrix.constructAll( system.p.N_c, system.p.N_r, system.use_twin_mode, use_fft, system.use_stochastic, system.use_reservoir, k_max_, pulse_size, pump_size, potential_size, pulse_size, pump_size, potential_size, system.p.subgrids_columns, system.p.subgrids_rows, system.p.halo_size );
 
     // ==================================================

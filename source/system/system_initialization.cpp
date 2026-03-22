@@ -249,6 +249,17 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
         use_reservoir = false;
     }
 
+    if ( PHOENIX::CLIO::findInArgv( "-dense", argc, argv ) != -1 ) {
+        use_dense      = true;
+        use_reservoir  = true;
+        use_pumps      = true;
+        use_pulses     = true;
+        use_potentials = true;
+        use_fft_mask   = true;
+        // use_stochastic intentionally NOT forced: requires nonzero amplitude to be physically valid
+        std::cout << PHOENIX::CLIO::prettyPrint( "Dense mode: all matrices allocated at startup", PHOENIX::CLIO::Control::Info ) << std::endl;
+    }
+
     std::cout << PHOENIX::CLIO::prettyPrint( "Using Reservoir: " + std::to_string( use_reservoir ), PHOENIX::CLIO::Control::Info ) << std::endl;
     std::cout << PHOENIX::CLIO::prettyPrint( "Using Pumps: " + std::to_string( use_pumps ), PHOENIX::CLIO::Control::Info ) << std::endl;
     std::cout << PHOENIX::CLIO::prettyPrint( "Using Pulses: " + std::to_string( use_pulses ), PHOENIX::CLIO::Control::Info ) << std::endl;

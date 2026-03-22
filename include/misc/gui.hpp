@@ -104,6 +104,7 @@ private:
         float zoom_scale = 1.0f;   // 1.0 = fully zoomed out; max 64.0
         float pan_u      = 0.0f;   // horizontal pan in logical UV space [0, 1 - 1/zoom]
         float pan_v      = 0.0f;   // vertical   pan in logical UV space [0, 1 - 1/zoom]
+        bool  square_aspect = false; // letterbox so grid pixels appear square
     };
     std::vector<MatrixPanel> panels_;
     int next_panel_id_ = 1;
@@ -158,6 +159,112 @@ private:
 
     template <typename T>
     void blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorPalette& cp );
+
+public:
+    // ---------------------------------------------------------------
+    // Envelope Editor (public so anonymous-namespace helpers in gui.cu can use them)
+    // ---------------------------------------------------------------
+
+    // Per-component spatial editing state
+    struct SpatialComponentEdit {
+        float amp = 1.f, width_x = 1.f, width_y = 1.f;
+        float x = 0.f, y = 0.f, exponent = 1.f;
+        float k0_x = 0.f, k0_y = 0.f;
+        int   m = 0;               // topological charge (0 = none)
+        // Type flags
+        bool  flag_gauss    = true;
+        bool  flag_ring     = false;
+        bool  flag_noDivide = true;
+        bool  flag_outerExp = false;
+        bool  flag_local    = false;
+        // 0=plus, 1=minus, 2=both
+        int   polarization_idx = 2;
+        // 0=add, 1=multiply, 2=replace, 3=adaptive, 4=complex
+        int   behavior_idx     = 0;
+    };
+
+    // Single temporal group editing state
+    struct TemporalComponentEdit {
+        int   type_idx = 0;   // 0=constant, 1=gauss, 2=iexp, 3=cos
+        float t0 = 0.f, sigma = 1.f, freq = 0.f;
+    };
+
+    // Registry entry for a targetable matrix slot
+    struct EnvelopeDescriptor {
+        std::string                label;
+        Envelope*                  source_env   = nullptr;
+        CUDAMatrix<Type::real>*    real_target  = nullptr;   // pump+/-, potential+/-
+        CUDAMatrix<Type::complex>* cmplx_target = nullptr;   // pulse+/-, psi+/-, n+/-
+        Type::host_vector<Type::complex>* host_target = nullptr; // initial_state+/- (host only)
+        bool                       is_complex   = false;
+        Envelope::Polarization     polarization = Envelope::Polarization::Plus;
+        bool                       available    = true;
+        std::string                unavail_reason;
+    };
+
+    // Full envelope editor panel state
+    struct EnvelopeEditorPanel {
+        int         panel_id = 0;
+        bool        open     = true;
+        std::string title;
+        ImGuiID     saved_dock_id = 0;
+
+        int selected_target = 0;   // index into envelope_registry_
+
+        std::vector<SpatialComponentEdit> components;
+        int  selected_component = -1;
+        TemporalComponentEdit temporal;
+
+        // Preview texture (CPU-computed via Envelope::calculate)
+        std::unique_ptr<sf::RenderTexture> preview_tex;
+        std::vector<sf::Vertex>            preview_pix;
+        int  preview_w = 0, preview_h = 0;
+        bool preview_dirty = true;
+
+        // Preview display options (mirrors MatrixPanel)
+        enum class PreviewMode { Abs2 = 0, Abs, Real, Imag, Phase };
+        PreviewMode preview_mode    = PreviewMode::Abs2;
+        int         colormap_idx    = -1;
+        bool        use_manual_range = false;
+        double      manual_min = 0.0, manual_max = 1.0;
+        bool        log_scale  = false;
+
+        // Zoom/pan (same logic as MatrixPanel)
+        float zoom_scale = 1.f, pan_u = 0.f, pan_v = 0.f;
+        bool  square_aspect = false; // letterbox so grid pixels appear square
+
+        // Interactive drag state
+        enum class DragMode { None, Move, ResizeX, ResizeY };
+        DragMode drag_mode        = DragMode::None;
+        int      drag_component   = -1;
+        ImVec2   drag_start_mouse = {};
+        float    drag_start_x = 0.f, drag_start_y = 0.f;
+        float    drag_start_wx = 0.f, drag_start_wy = 0.f;
+
+        std::string last_apply_status;
+
+        // Live apply — every preview rebuild is immediately pushed to the GPU matrix
+        bool live_apply = false;
+
+        // ---- Revision history (one entry per Apply) ----
+        struct Revision {
+            std::string                       label;       // "Rev N  (t=X ps)"
+            std::vector<SpatialComponentEdit> components;
+            TemporalComponentEdit             temporal;
+        };
+        std::vector<Revision> revisions;
+        int selected_revision = -1;
+    };
+
+    std::vector<EnvelopeDescriptor>  envelope_registry_;
+    std::vector<EnvelopeEditorPanel> env_editor_panels_;
+    int next_env_editor_id_ = 1;
+
+    void buildEnvelopeRegistry();
+    void addEnvelopeEditorPanel();
+    void renderEnvelopeEditorPanel( EnvelopeEditorPanel& p );
+    void rebuildPreview( EnvelopeEditorPanel& p );
+    void applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revision = true );
 #endif
 
     static std::string toScientific( Type::real in );
