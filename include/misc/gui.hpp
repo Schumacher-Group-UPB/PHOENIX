@@ -246,6 +246,21 @@ public:
         // Live apply — every preview rebuild is immediately pushed to the GPU matrix
         bool live_apply = false;
 
+        // ---- Noise overlay (applied on top of envelope in preview & apply) ----
+        struct NoiseState {
+            bool     enabled            = false; // include noise in preview & apply
+            float    amplitude          = 0.1f;
+            int      type_idx           = 0;     // 0=Uniform, 1=Gaussian, 2=Correlated
+            float    correlation_length = 1.0f;  // same units as L_x / L_y
+            int      seed               = 0;     // 0 = new random each rebuild
+            uint32_t last_used_seed     = 0;     // stored after each preview; apply reuses it
+        };
+        NoiseState noise;
+
+        // ---- Matrix snapshot (current device data, loaded when no source envelope) ----
+        std::vector<Type::complex> matrix_snapshot;
+        bool                       matrix_snapshot_is_real = false;
+
         // ---- Revision history (one entry per Apply) ----
         struct Revision {
             std::string                       label;       // "Rev N  (t=X ps)"

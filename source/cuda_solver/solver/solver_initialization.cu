@@ -1,12 +1,11 @@
 #include <memory>
 #include <algorithm>
-#include <random>
-#include <ranges>
 #include <vector>
 #include "cuda/typedef.cuh"
 #include "solver/solver.hpp"
 #include "misc/escape_sequences.hpp"
 #include "misc/commandline_io.hpp"
+#include "system/noise.hpp"
 
 namespace PHOENIX {
 
@@ -71,13 +70,9 @@ void Solver::initializeMatricesFromSystem() {
 
     // Then, check whether we should initialize the system randomly. Add that random value to the initial state.
     if ( system.randomly_initialize_system ) {
-        // Fill the buffer with random values
-        std::mt19937 gen{ system.random_seed };
-        std::uniform_real_distribution<Type::real> dist{ -system.random_system_amplitude, system.random_system_amplitude };
-        std::ranges::for_each( matrix.initial_state_plus.begin(), matrix.initial_state_plus.end(), [&dist, &gen]( Type::complex& z ) { z += Type::complex{ dist( gen ), dist( gen ) }; } );
-        // Also fill minus component if use_twin_mode is true
+        Noise::addUniformNoise( matrix.initial_state_plus.data(), matrix.initial_state_plus.size(), system.random_system_amplitude, system.random_seed );
         if ( system.use_twin_mode )
-            std::ranges::for_each( matrix.initial_state_minus.begin(), matrix.initial_state_minus.end(), [&dist, &gen]( Type::complex& z ) { z += Type::complex{ dist( gen ), dist( gen ) }; } );
+            Noise::addUniformNoise( matrix.initial_state_minus.data(), matrix.initial_state_minus.size(), system.random_system_amplitude, system.random_seed + 1 );
     }
     // Copy the initial state to the device wavefunction, synchronize it to the device and synchronize the halos
     matrix.wavefunction_plus.setTo( matrix.initial_state_plus );

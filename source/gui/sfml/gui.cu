@@ -6,8 +6,10 @@
 #include <numbers>
 #include <algorithm>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <iomanip>
+#include "system/noise.hpp"
 
 namespace PHOENIX {
 
@@ -1409,8 +1411,7 @@ static void populatePanelFromEnvelope( PhoenixGUI::EnvelopeEditorPanel& p,
     const Envelope* env = desc.source_env;
     p.components.clear();
     if ( !env || env->amp.empty() ) {
-        p.components.emplace_back();    // default Gaussian component for empty envelopes
-        p.selected_component = 0;
+        p.selected_component = -1;     // leave components empty; snapshot loaded by caller
         p.preview_dirty = true;
         return;
     }
@@ -1455,6 +1456,27 @@ static void populatePanelFromEnvelope( PhoenixGUI::EnvelopeEditorPanel& p,
         else                                                       p.temporal.type_idx = 0;
     }
     p.preview_dirty = true;
+}
+
+// Download the current matrix data for the selected target into p.matrix_snapshot.
+// Called whenever the user switches target, so the preview can show the current state
+// when no envelope components are defined.
+static void loadMatrixSnapshot( PhoenixGUI::EnvelopeEditorPanel& p,
+                                const PhoenixGUI::EnvelopeDescriptor& desc ) {
+    p.matrix_snapshot.clear();
+    p.matrix_snapshot_is_real = false;
+    if ( desc.host_target ) {
+        p.matrix_snapshot.assign( desc.host_target->begin(), desc.host_target->end() );
+    } else if ( desc.cmplx_target ) {
+        const auto& hv = desc.cmplx_target->getHostVector(); // auto-downloads from device
+        p.matrix_snapshot.assign( hv.begin(), hv.end() );
+    } else if ( desc.real_target ) {
+        const auto& hv = desc.real_target->getHostVector();
+        p.matrix_snapshot.resize( hv.size() );
+        for ( size_t i = 0; i < hv.size(); ++i )
+            p.matrix_snapshot[i] = Type::complex{ hv[i], 0 };
+        p.matrix_snapshot_is_real = true;
+    }
 }
 
 } // anonymous namespace
@@ -1565,11 +1587,9 @@ void PhoenixGUI::addEnvelopeEditorPanel() {
     }
 
     // Populate components from existing envelope (loads CLI-defined parameters)
-    if ( p.selected_target >= 0 && p.selected_target < (int)envelope_registry_.size() )
+    if ( p.selected_target >= 0 && p.selected_target < (int)envelope_registry_.size() ) {
         populatePanelFromEnvelope( p, envelope_registry_[p.selected_target] );
-    else {
-        p.components.emplace_back();
-        p.selected_component = 0;
+        loadMatrixSnapshot( p, envelope_registry_[p.selected_target] );
     }
 
     p.preview_dirty = true;
@@ -1610,11 +1630,33 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
         cp = &colormaps_[idx].palette;
     }
 
+    // Resolve noise seed once per rebuild (so apply reuses the same pattern)
+    if ( p.noise.enabled ) {
+        if ( p.noise.seed != 0 )
+            p.noise.last_used_seed = (uint32_t)p.noise.seed;
+        else if ( p.noise.last_used_seed == 0 )
+            p.noise.last_used_seed = (uint32_t)std::random_device{}();
+        // seed=0 + last_used_seed!=0: keep reusing last_used_seed until Re-roll or seed changes
+    }
+
     if ( desc.is_complex ) {
-        // Complex target (pulse): calculate into complex buffer
+        // Complex target: calculate into complex buffer
         std::vector<Type::complex> buf( N, Type::complex{ 0.0, 0.0 } );
         if ( !p.components.empty() )
             tmp.calculate( buf.data(), Envelope::AllGroups, desc.polarization, dim );
+        else if ( !p.matrix_snapshot.empty() && (int)p.matrix_snapshot.size() == N && !p.noise.enabled )
+            buf = p.matrix_snapshot;  // show current device data when no components defined
+
+        if ( p.noise.enabled ) {
+            const uint32_t s    = p.noise.last_used_seed;
+            const Type::real amp = (Type::real)p.noise.amplitude;
+            switch ( p.noise.type_idx ) {
+                case 1:  Noise::addGaussianNoise( buf.data(), N, amp, s ); break;
+                case 2:  Noise::addCorrelatedNoise( buf.data(), (size_t)W, (size_t)H, amp, s,
+                             (Type::real)p.noise.correlation_length, sys.p.dx, sys.p.dy ); break;
+                default: Noise::addUniformNoise( buf.data(), N, amp, s ); break;
+            }
+        }
 
         const bool is_phase = ( p.preview_mode == EnvelopeEditorPanel::PreviewMode::Phase );
         auto rawVal = [&]( int i ) -> double {
@@ -1654,6 +1696,20 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
         std::vector<Type::real> buf( N, Type::real{ 0.0 } );
         if ( !p.components.empty() )
             tmp.calculate( buf.data(), Envelope::AllGroups, desc.polarization, dim );
+        else if ( !p.matrix_snapshot.empty() && (int)p.matrix_snapshot.size() == N && !p.noise.enabled ) {
+            for ( int i = 0; i < N; i++ ) buf[i] = CUDA::real( p.matrix_snapshot[i] );
+        }
+
+        if ( p.noise.enabled ) {
+            const uint32_t s    = p.noise.last_used_seed;
+            const Type::real amp = (Type::real)p.noise.amplitude;
+            switch ( p.noise.type_idx ) {
+                case 1:  Noise::addGaussianNoise( buf.data(), N, amp, s ); break;
+                case 2:  Noise::addCorrelatedNoise( buf.data(), (size_t)W, (size_t)H, amp, s,
+                             (Type::real)p.noise.correlation_length, sys.p.dx, sys.p.dy ); break;
+                default: Noise::addUniformNoise( buf.data(), N, amp, s ); break;
+            }
+        }
 
         auto displayVal = [&]( int i ) -> double {
             double v = (double)buf[i];
@@ -1715,20 +1771,49 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
 
     Envelope tmp = buildEnvelopeFromPanel( p );
 
+    const size_t N_apply = (size_t)sys.p.N_c * (size_t)sys.p.N_r;
+
+    // Helper lambda to apply noise to a buffer after envelope calculation
+    auto applyNoise = [&]( Type::complex* ptr ) {
+        if ( !p.noise.enabled ) return;
+        const uint32_t s    = p.noise.last_used_seed;
+        const Type::real amp  = (Type::real)p.noise.amplitude;
+        const Type::real corr = (Type::real)p.noise.correlation_length;
+        switch ( p.noise.type_idx ) {
+            case 1:  Noise::addGaussianNoise( ptr, N_apply, amp, s ); break;
+            case 2:  Noise::addCorrelatedNoise( ptr, sys.p.N_c, sys.p.N_r, amp, s, corr, sys.p.dx, sys.p.dy ); break;
+            default: Noise::addUniformNoise( ptr, N_apply, amp, s ); break;
+        }
+    };
+    auto applyNoiseReal = [&]( Type::real* ptr ) {
+        if ( !p.noise.enabled ) return;
+        const uint32_t s    = p.noise.last_used_seed;
+        const Type::real amp  = (Type::real)p.noise.amplitude;
+        const Type::real corr = (Type::real)p.noise.correlation_length;
+        switch ( p.noise.type_idx ) {
+            case 1:  Noise::addGaussianNoise( ptr, N_apply, amp, s ); break;
+            case 2:  Noise::addCorrelatedNoise( ptr, sys.p.N_c, sys.p.N_r, amp, s, corr, sys.p.dx, sys.p.dy ); break;
+            default: Noise::addUniformNoise( ptr, N_apply, amp, s ); break;
+        }
+    };
+
     if ( desc.host_target ) {
         // Initial-state target: write into host_vector, then seed wavefunction from it
         tmp.calculate( desc.host_target->data(), Envelope::AllGroups, desc.polarization, dim );
+        applyNoise( desc.host_target->data() );
         if ( desc.cmplx_target )
             desc.cmplx_target->setTo( *desc.host_target ).hostToDeviceSync();
     } else if ( desc.real_target ) {
         auto* ptr = desc.real_target->getHostPtr( 0 );
         if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; return; }
         tmp.calculate( ptr, Envelope::AllGroups, desc.polarization, dim );
+        applyNoiseReal( ptr );
         desc.real_target->hostToDeviceSync( 0 );
     } else if ( desc.cmplx_target ) {
         auto* ptr = desc.cmplx_target->getHostPtr( 0 );
         if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; return; }
         tmp.calculate( ptr, Envelope::AllGroups, desc.polarization, dim );
+        applyNoise( ptr );
         desc.cmplx_target->hostToDeviceSync( 0 );
     }
 
@@ -1803,6 +1888,7 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
                     if ( ImGui::Selectable( d.label.c_str(), sel ) ) {
                         p.selected_target = i;
                         populatePanelFromEnvelope( p, d );
+                        loadMatrixSnapshot( p, d );
                     }
                     if ( sel ) ImGui::SetItemDefaultFocus();
                 }
@@ -1908,6 +1994,55 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
             }
             if ( disabled ) ImGui::EndDisabled();
         }
+    }
+
+    // -- Noise overlay --
+    ImGui::Separator();
+    if ( ImGui::CollapsingHeader( "Noise##noise_hdr" ) ) {
+        if ( ImGui::Checkbox( "Enable noise overlay##nen", &p.noise.enabled ) )
+            p.preview_dirty = true;
+
+        if ( !p.noise.enabled ) ImGui::BeginDisabled();
+
+        static const char* noise_type_names[] = { "Uniform", "Gaussian", "Correlated" };
+        ImGui::SetNextItemWidth( 120.f );
+        if ( ImGui::Combo( "Type##ntype", &p.noise.type_idx, noise_type_names, 3 ) )
+            p.preview_dirty = true;
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth( 100.f );
+        if ( ImGui::DragFloat( "Amplitude##namp", &p.noise.amplitude, 1e-4f, 0.f, 1e9f, "%.3e" ) )
+            p.preview_dirty = true;
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Uniform: max absolute value; Gaussian/Correlated: std-dev." );
+
+        if ( p.noise.type_idx == 2 ) {
+            ImGui::SetNextItemWidth( 140.f );
+            if ( ImGui::DragFloat( "Corr. length##ncorr", &p.noise.correlation_length,
+                                   0.01f, 0.f, 1000.f, "%.2f" ) )
+                p.preview_dirty = true;
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Spatial correlation length (same units as L_x / L_y).\n"
+                                   "Separable real-space Gaussian convolution." );
+        }
+
+        ImGui::SetNextItemWidth( 120.f );
+        if ( ImGui::InputInt( "Seed##nseed", &p.noise.seed ) ) {
+            if ( p.noise.seed < 0 ) p.noise.seed = 0;
+            p.noise.last_used_seed = 0;  // force new seed on next rebuild
+            p.preview_dirty = true;
+        }
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "0 = new random seed each preview rebuild.\n"
+                               "Non-zero = reproducible; same seed used when applying." );
+        ImGui::SameLine();
+        if ( ImGui::Button( "Re-roll##nreroll" ) ) {
+            p.noise.last_used_seed = 0;
+            p.preview_dirty = true;
+        }
+        if ( p.noise.enabled && p.noise.last_used_seed != 0 )
+            ImGui::TextDisabled( "active seed: %u", p.noise.last_used_seed );
+
+        if ( !p.noise.enabled ) ImGui::EndDisabled();
     }
 
     // -- Temporal section --
