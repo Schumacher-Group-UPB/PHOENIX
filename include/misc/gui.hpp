@@ -19,6 +19,8 @@
     #include "imgui.h"
     #include "imgui-SFML.h"
     #include "implot3d.h"
+    #include <chrono>
+    #include <thread>
 #endif
 
 #include "misc/colormap.hpp"
@@ -165,6 +167,15 @@ private:
     void addPanel( int initial_selected = 0 );
     void updatePanel( MatrixPanel& p );
     void updateEnvelopeHistories();
+
+    // ---- Solver pause/resume for safe parameter/matrix updates ----
+    // pauseSolverForUpdate: if the solver thread is running, request a pause and spin until
+    // it confirms it is idle (solver_actually_paused). Returns true when it auto-paused so
+    // the caller can pass the result straight into resumeSolverAfterUpdate().
+    // No-op (returns false) when already paused or no solver thread is attached.
+    [[nodiscard]] bool pauseSolverForUpdate();
+    // resumeSolverAfterUpdate: iff auto_paused is true, clears paused_ and wakes the solver.
+    void resumeSolverAfterUpdate( bool auto_paused );
 
     void renderMenuBar();
     void renderMatrixPanel( MatrixPanel& p );

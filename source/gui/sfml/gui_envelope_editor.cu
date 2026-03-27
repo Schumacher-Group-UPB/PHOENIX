@@ -395,11 +395,19 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
 // ============================================================
 
 void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revision ) {
-    if ( p.selected_target < 0 || p.selected_target >= (int)envelope_registry_.size() ) return;
+    // Pause the solver while writing host matrices and uploading to GPU so that
+    // syncDisplayMatrices() (device→host) cannot race with hostToDeviceSync() (host→device).
+    const bool auto_paused = pauseSolverForUpdate();
+
+    if ( p.selected_target < 0 || p.selected_target >= (int)envelope_registry_.size() ) {
+        resumeSolverAfterUpdate( auto_paused );
+        return;
+    }
     auto& desc = envelope_registry_[p.selected_target];
 
     if ( !desc.available ) {
         p.last_apply_status = "Error: matrix not allocated (run with -dense)";
+        resumeSolverAfterUpdate( auto_paused );
         return;
     }
 
@@ -455,13 +463,13 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
             desc.cmplx_target->setTo( *desc.host_target ).hostToDeviceSync();
     } else if ( desc.real_target ) {
         auto* ptr = desc.real_target->getHostPtr( 0 );
-        if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; return; }
+        if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; resumeSolverAfterUpdate( auto_paused ); return; }
         tmp.calculate( ptr, Envelope::AllGroups, desc.polarization, dim );
         applyNoiseReal( ptr );
         desc.real_target->hostToDeviceSync( 0 );
     } else if ( desc.cmplx_target ) {
         auto* ptr = desc.cmplx_target->getHostPtr( 0 );
-        if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; return; }
+        if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; resumeSolverAfterUpdate( auto_paused ); return; }
         tmp.calculate( ptr, Envelope::AllGroups, desc.polarization, dim );
         applyNoise( ptr );
         desc.cmplx_target->hostToDeviceSync( 0 );
@@ -488,6 +496,7 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
     solver_.parameters_are_dirty = true;
 
     p.last_apply_status = "Applied at t=" + toScientific( sys.p.t ) + " ps";
+    resumeSolverAfterUpdate( auto_paused );
 }
 
 // ============================================================

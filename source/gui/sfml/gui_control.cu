@@ -247,7 +247,11 @@ void PhoenixGUI::renderParametersPanel() {
         { double d = sys.dt_min;       if ( ImGui::InputDouble( "dt_min",    &d, 0, 0, "%.8f" ) ) sys.dt_min       = d; }
         { double d = sys.dt_max;       if ( ImGui::InputDouble( "dt_max",    &d, 0, 0, "%.6f" ) ) sys.dt_max       = d; }
         { double d = sys.tolerance;    if ( ImGui::InputDouble( "tolerance", &d, 0, 0, "%.2e" ) ) sys.tolerance    = d; }
-        if ( dirty ) solver_.parameters_are_dirty = true;
+        if ( dirty ) {
+            const bool ap = pauseSolverForUpdate();
+            solver_.parameters_are_dirty = true;
+            resumeSolverAfterUpdate( ap );
+        }
     }
 
     if ( ImGui::CollapsingHeader( "Physics" ) ) {
@@ -259,12 +263,20 @@ void PhoenixGUI::renderParametersPanel() {
         dirty |= inputReal( "R",        p.R );
         dirty |= inputReal( "g_pm",     p.g_pm );
         dirty |= inputReal( "delta_LT", p.delta_LT );
-        if ( dirty ) solver_.parameters_are_dirty = true;
+        if ( dirty ) {
+            const bool ap = pauseSolverForUpdate();
+            solver_.parameters_are_dirty = true;
+            resumeSolverAfterUpdate( ap );
+        }
     }
 
     if ( ImGui::CollapsingHeader( "Effective Mass" ) ) {
         bool dirty = inputReal( "m_eff", p.m_eff );
-        if ( dirty ) solver_.parameters_are_dirty = true;
+        if ( dirty ) {
+            const bool ap = pauseSolverForUpdate();
+            solver_.parameters_are_dirty = true;
+            resumeSolverAfterUpdate( ap );
+        }
     }
 
     if ( ImGui::CollapsingHeader( "Stochastic" ) ) {
@@ -272,7 +284,11 @@ void PhoenixGUI::renderParametersPanel() {
         if ( disabled ) ImGui::BeginDisabled();
         bool dirty = inputReal( "stochastic_amplitude", p.stochastic_amplitude );
         if ( disabled ) ImGui::EndDisabled();
-        if ( dirty ) solver_.parameters_are_dirty = true;
+        if ( dirty ) {
+            const bool ap = pauseSolverForUpdate();
+            solver_.parameters_are_dirty = true;
+            resumeSolverAfterUpdate( ap );
+        }
     }
 
     ImGui::Separator();
@@ -280,8 +296,10 @@ void PhoenixGUI::renderParametersPanel() {
         params_saved_ = sys.kernel_parameters;
     ImGui::SameLine();
     if ( ImGui::Button( "Revert to Default" ) ) {
+        const bool ap = pauseSolverForUpdate();
         sys.kernel_parameters = params_saved_;
         solver_.parameters_are_dirty = true;
+        resumeSolverAfterUpdate( ap );
     }
 
     ImGui::End();

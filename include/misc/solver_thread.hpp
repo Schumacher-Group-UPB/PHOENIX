@@ -11,6 +11,10 @@ struct SolverThreadState {
     std::atomic<bool>   paused  { false };
     std::atomic<bool>   stop    { false };
 
+    // Set by the solver thread when it is actually blocked in pause_cv.wait().
+    // GUI can spin-wait on this before writing host matrices.
+    std::atomic<bool>   solver_actually_paused { false };
+
     // Pause notification - solver blocks here when paused
     std::mutex              pause_mutex;
     std::condition_variable pause_cv;

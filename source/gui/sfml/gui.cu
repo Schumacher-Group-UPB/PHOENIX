@@ -21,6 +21,27 @@ PhoenixGUI::PhoenixGUI( Solver& solver )
 #ifdef SFML_RENDER
 
 // ============================================================
+// Solver pause/resume helpers
+// ============================================================
+
+bool PhoenixGUI::pauseSolverForUpdate() {
+    if ( !st_ || paused_ ) return false;
+    paused_ = true;
+    st_->paused.store( true );
+    constexpr int kMaxWaitMs = 500;
+    for ( int i = 0; i < kMaxWaitMs && !st_->solver_actually_paused.load(); ++i )
+        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+    return true;
+}
+
+void PhoenixGUI::resumeSolverAfterUpdate( bool auto_paused ) {
+    if ( !auto_paused ) return;
+    paused_ = false;
+    st_->paused.store( false );
+    st_->pause_cv.notify_all();
+}
+
+// ============================================================
 // init / destroy
 // ============================================================
 

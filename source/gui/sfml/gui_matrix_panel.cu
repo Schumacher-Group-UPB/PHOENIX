@@ -329,18 +329,28 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
     }
 
     ImGui::SameLine();
-    if ( ImGui::Button( "Save##ss" ) && p.tex ) {
-        sf::Image img = p.tex->getTexture().copyToImage();
+    if ( ImGui::Button( "Save##ss" ) ) {
         std::string fname = "phoenix_";
         {
             auto sep = p.title.find( "##" );
             fname += ( sep != std::string::npos ) ? p.title.substr( 0, sep ) : p.title;
         }
-        fname += "_t" + std::to_string( (int)sys.p.t ) + ".png";
-        img.saveToFile( fname );
+        fname += "_t" + std::to_string( (int)sys.p.t );
+        if ( p.view_mode == MatrixPanel::ViewMode::Image2D && p.tex ) {
+            sf::Image img = p.tex->getTexture().copyToImage();
+            img.saveToFile( fname + "_image.png" );
+        } else {
+            // For line-cut and 3D views, capture the full window
+            auto winSize = window_.window.getSize();
+            sf::Texture capTex;
+            capTex.create( winSize.x, winSize.y );
+            capTex.update( window_.window );
+            sf::Image img = capTex.copyToImage();
+            img.saveToFile( fname + ( p.view_mode == MatrixPanel::ViewMode::LineCut ? "_lines.png" : "_volume.png" ) );
+        }
     }
     if ( ImGui::IsItemHovered() )
-        ImGui::SetTooltip( "Save panel image to PNG" );
+        ImGui::SetTooltip( "Save current view to PNG (_image / _lines / _volume)" );
 
     // ---- Line-cut component visibility / legend (only in 1D mode, complex matrices) ----
     if ( p.view_mode == MatrixPanel::ViewMode::LineCut

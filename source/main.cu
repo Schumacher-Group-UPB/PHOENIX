@@ -57,8 +57,10 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
     while ( system.p.t < system.t_max && !st.stop.load() ) {
         // Block while paused
         {
+            st.solver_actually_paused.store( true );  // signal: idle, safe for GUI to write matrices
             std::unique_lock<std::mutex> lk( st.pause_mutex );
             st.pause_cv.wait( lk, [&] { return !st.paused.load() || st.stop.load(); } );
+            st.solver_actually_paused.store( false ); // signal: resuming
         }
         if ( st.stop.load() ) break;
 
