@@ -180,6 +180,10 @@ void PhoenixGUI::buildRegistry() {
     add( "pump+",           nullptr,                 &mat.pump_plus,       false, sys.use_pumps      );
     add( "potential+",      nullptr,                 &mat.potential_plus,  false, sys.use_potentials );
     add( "pulse+",          &mat.pulse_plus,         nullptr,              false, sys.use_pulses     );
+    if ( sys.use_fft_mask ) {
+        add( "FFT+",      &mat.fft_display_plus,      nullptr,                    false );
+        add( "FFT mask+", nullptr,                     &mat.fft_mask_display_plus, false );
+    }
 
     // --- Minus components (twin mode only) ---
     if ( sys.use_twin_mode ) {
@@ -188,6 +192,10 @@ void PhoenixGUI::buildRegistry() {
         add( "pump-",           nullptr,                 &mat.pump_minus,      false, sys.use_pumps      );
         add( "potential-",      nullptr,                 &mat.potential_minus, false, sys.use_potentials );
         add( "pulse-",          &mat.pulse_minus,        nullptr,              false, sys.use_pulses     );
+        if ( sys.use_fft_mask ) {
+            add( "FFT-",      &mat.fft_display_minus,      nullptr,                     false );
+            add( "FFT mask-", nullptr,                      &mat.fft_mask_display_minus, false );
+        }
     }
 
     // --- Debug / diagnostic ---

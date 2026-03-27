@@ -179,7 +179,7 @@ void DormandPrince85::step( bool variable_time_step ) {
 
             CALCULATE_K( 12, Type::real( 1.0 ), buffer_wavefunction, buffer_reservoir );
 
-            if ( variable_time_step ) {
+            if ( !variable_time_step ) {
 
                 FINAL_SUM_K( 12, Type::real( 5.4293734116568762e-2 ), Type::real( 0.0 ), Type::real( 0.0 ), Type::real( 0.0 ), Type::real( 0.0 ), Type::real( 4.4503128927524089e+0 ), Type::real( 1.8915178993145004e+0 ), Type::real( -5.8012039600105848e+0 ), Type::real( 3.1116436695781989e-1 ), Type::real( -1.5216094966251608e-1 ), Type::real( 2.0136540080403035e-1 ), Type::real( 4.4710615727772591e-2 ) );
             } else {

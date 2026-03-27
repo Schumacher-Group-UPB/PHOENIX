@@ -83,6 +83,16 @@ void PhoenixGUI::blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorP
     const int cols_s  = ( W + stride - 1 ) / stride;
     const int rows_s  = ( H + stride - 1 ) / stride;
 
+    // FFT-shift index remapping: shifts DC from corners to centre.
+    // Maps display pixel (r,c) back to the source layout ((r+H/2)%H, (c+W/2)%W).
+    auto shiftIdx = [&]( int r, int c ) -> int {
+        if ( p.fft_shift ) {
+            r = ( r + H / 2 ) % H;
+            c = ( c + W / 2 ) % W;
+        }
+        return r * W + c;
+    };
+
     // Raw display value based on per-panel display mode
     const bool is_phase_mode = ( p.display_mode == MatrixPanel::DisplayMode::Phase );
     auto rawVal = [&]( int i ) -> double {
@@ -124,7 +134,7 @@ void PhoenixGUI::blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorP
         vmax = -std::numeric_limits<double>::max();
         for ( int ri = 0; ri < rows_s; ri++ ) {
             for ( int ci = 0; ci < cols_s; ci++ ) {
-                int idx = std::min( ri * stride, H - 1 ) * W + std::min( ci * stride, W - 1 );
+                int idx = shiftIdx( std::min( ri * stride, H - 1 ), std::min( ci * stride, W - 1 ) );
                 double v = displayVal( idx );
                 if ( v < vmin ) vmin = v;
                 if ( v > vmax ) vmax = v;
@@ -139,7 +149,7 @@ void PhoenixGUI::blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorP
         double hmin =  std::numeric_limits<double>::max();
         for ( int ri = 0; ri < rows_s; ri++ ) {
             for ( int ci = 0; ci < cols_s; ci++ ) {
-                int idx = std::min( ri * stride, H - 1 ) * W + std::min( ci * stride, W - 1 );
+                int idx = shiftIdx( std::min( ri * stride, H - 1 ), std::min( ci * stride, W - 1 ) );
                 double v = rawVal( idx );
                 if ( v > hmax ) hmax = v;
                 if ( v < hmin ) hmin = v;
@@ -159,7 +169,7 @@ void PhoenixGUI::blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorP
         for ( int ci = 0; ci < cols_s; ci++ ) {
             const int col0  = ci * stride;
             const int col1  = std::min( col0 + stride, W );
-            const int src   = src_r * W + std::min( col0, W - 1 );
+            const int src   = shiftIdx( src_r, std::min( col0, W - 1 ) );
             double v = displayVal( src );
             double t = ( v - vmin ) / ( vmax - vmin );
             t = std::max( 0.0, std::min( 1.0, t ) );
@@ -396,6 +406,11 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
     if ( ImGui::IsItemHovered() )
         ImGui::SetTooltip( "Force square pixels (letterbox to N_c:N_r aspect ratio)" );
 
+    ImGui::SameLine();
+    ImGui::Checkbox( "FFT shift##fftsh", &p.fft_shift );
+    if ( ImGui::IsItemHovered() )
+        ImGui::SetTooltip( "Remap indices so DC (k=0) is at the centre instead of the corners" );
+
     if ( p.view_mode != MatrixPanel::ViewMode::LineCut ) {
         ImGui::SameLine();
         ImGui::SetNextItemWidth( 80.f );
@@ -543,7 +558,9 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                     const double y_phys = ( ri + 0.5 ) * (double)sys.p.dy - 0.5 * (double)sys.p.L_y;
 
                     double val    = 0.0;
-                    const int idx_px = ri * p.tex_w + ci;
+                    const int src_r = p.fft_shift ? ( ri + p.tex_h / 2 ) % p.tex_h : ri;
+                    const int src_c = p.fft_shift ? ( ci + p.tex_w / 2 ) % p.tex_w : ci;
+                    const int idx_px = src_r * p.tex_w + src_c;
                     if ( is_complex ) {
                         const auto* cd = (const Type::complex*)raw;
                         switch ( p.display_mode ) {
@@ -612,9 +629,15 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 for ( int i = 0; i < slice_len; i++ ) {
                     // axis==0: fixed column (X), vary row  → data[row * N_c + col]
                     // axis==1: fixed row   (Y), vary col  → data[row * N_c + col]
+                    int si = i, scol = p.slice_index, srow = p.slice_index;
+                    if ( p.fft_shift ) {
+                        si   = ( i + slice_len / 2 ) % slice_len;
+                        scol = ( p.slice_index + N_c / 2 ) % N_c;
+                        srow = ( p.slice_index + N_r / 2 ) % N_r;
+                    }
                     const int didx = ( p.slice_axis == 0 )
-                        ? ( i * N_c + p.slice_index )
-                        : ( p.slice_index * N_c + i );
+                        ? ( si * N_c + scol )
+                        : ( srow * N_c + si );
                     if ( cdata ) {
                         abs_v[i] = (float)CUDA::sqrt( CUDA::abs2( cdata[didx] ) );
                         re_v[i]  = (float)CUDA::real( cdata[didx] );
@@ -743,10 +766,19 @@ void PhoenixGUI::renderMatrixPanel3D( MatrixPanel& p ) {
         }
     }
 
+    // FFT-shift helper (same remapping as in blitPanel)
+    auto shiftIdx3D = [&]( int r, int c ) -> int {
+        if ( p.fft_shift ) {
+            r = ( r + H / 2 ) % H;
+            c = ( c + W / 2 ) % W;
+        }
+        return r * W + c;
+    };
+
     // Compute display values using same logic as blitPanel
     for ( int ri = 0; ri < rows_3d; ri++ ) {
         for ( int ci = 0; ci < cols_3d; ci++ ) {
-            const int src = std::min( ri * stride, H - 1 ) * W + std::min( ci * stride, W - 1 );
+            const int src = shiftIdx3D( std::min( ri * stride, H - 1 ), std::min( ci * stride, W - 1 ) );
             double v = 0.0;
             if ( cdata ) {
                 switch ( p.display_mode ) {

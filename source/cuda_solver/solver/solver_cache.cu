@@ -85,6 +85,18 @@ void PHOENIX::Solver::syncDisplayMatrices() {
             matrix.potential_minus.deviceToHostSync();
     }
     matrix.rk_error.deviceToHostSync();
+    if ( matrix.use_fft ) {
+        matrix.fft_display_plus.toSubgrids( matrix.fft_plus );
+        matrix.fft_display_plus.deviceToHostSync();
+        matrix.fft_mask_display_plus.toSubgrids( matrix.fft_mask_plus );
+        matrix.fft_mask_display_plus.deviceToHostSync();
+        if ( matrix.use_twin_mode ) {
+            matrix.fft_display_minus.toSubgrids( matrix.fft_minus );
+            matrix.fft_display_minus.deviceToHostSync();
+            matrix.fft_mask_display_minus.toSubgrids( matrix.fft_mask_minus );
+            matrix.fft_mask_display_minus.deviceToHostSync();
+        }
+    }
 }
 
 // TODO: Support Multiple History Outputs, and also support piping them into a single file.

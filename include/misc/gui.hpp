@@ -111,6 +111,8 @@ private:
         float pan_u      = 0.0f;   // horizontal pan in logical UV space [0, 1 - 1/zoom]
         float pan_v      = 0.0f;   // vertical   pan in logical UV space [0, 1 - 1/zoom]
         bool  square_aspect = false; // letterbox so grid pixels appear square
+        // fftshift: remap indices so DC (k=0) is at the centre instead of the corners
+        bool  fft_shift = false;
     };
     std::vector<MatrixPanel> panels_;
     int next_panel_id_ = 1;

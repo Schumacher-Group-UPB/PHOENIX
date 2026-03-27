@@ -37,6 +37,9 @@ struct MatrixContainer {
     // FFT Matrices. These are simple device vectors, not CUDAMatrices.
     PHOENIX::Type::device_vector<Type::complex> fft_plus, fft_minus;
     PHOENIX::Type::device_vector<Type::real> fft_mask_plus, fft_mask_minus;
+    // Display mirrors for FFT matrices (host+device, used only for GUI sync).
+    PHOENIX::CUDAMatrix<Type::complex> fft_display_plus, fft_display_minus;
+    PHOENIX::CUDAMatrix<Type::real> fft_mask_display_plus, fft_mask_display_minus;
 
     // Random Number generator and buffer. We only need a single random number matrix of size subgrid_x*subgrid_y
     // These can also be simple device vectors, as subgridding is not required here
@@ -105,6 +108,8 @@ struct MatrixContainer {
         if ( use_fft ) {
             fft_plus = PHOENIX::Type::device_vector<Type::complex>( N_c * N_r );
             fft_mask_plus = PHOENIX::Type::device_vector<Type::real>( N_c * N_r );
+            fft_display_plus.construct( N_r, N_c, 1, 1, 0, "fft_display_plus" );
+            fft_mask_display_plus.construct( N_r, N_c, 1, 1, 0, "fft_mask_display_plus" );
         }
 
         // MARK: Independent Components
@@ -170,6 +175,8 @@ struct MatrixContainer {
         if ( use_fft ) {
             fft_minus = PHOENIX::Type::device_vector<Type::complex>( N_c * N_r );
             fft_mask_minus = PHOENIX::Type::device_vector<Type::real>( N_c * N_r );
+            fft_display_minus.construct( N_r, N_c, 1, 1, 0, "fft_display_minus" );
+            fft_mask_display_minus.construct( N_r, N_c, 1, 1, 0, "fft_mask_display_minus" );
         }
     }
 
