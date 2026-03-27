@@ -65,10 +65,11 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
         TimeThis(
             auto start = system.p.t;
             bool force_fixed_time_step = false;
+            bool interrupted_by_pause = false;
 
             while ( ( !system.disableRender && system.p.t < start + system.output_every ) ||
                     (  system.disableRender  && system.p.t < out_every_iterations * system.output_every ) ) {
-                if ( st.paused.load() ) break; // fast exit on pause
+                if ( st.paused.load() ) { interrupted_by_pause = true; break; }
 
                 auto dt = system.p.dt;
                 if ( system.p.t + system.p.dt > out_every_iterations * system.output_every ) {
@@ -79,22 +80,27 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
                 if ( force_fixed_time_step ) { force_fixed_time_step = false; system.p.dt = dt; }
                 if ( !result ) break;
             }
-            out_every_iterations++;
 
-            // GPU→CPU sync + cache under display_mutex so GUI reads consistent data
-            {
-                std::lock_guard<std::mutex> lk( st.display_mutex );
-                solver.syncDisplayMatrices();
-                solver.cacheValues();
-                solver.cacheMatrices();
+            // Skip all post-processing when paused so the displayed time freezes
+            // immediately and out_every_iterations is not advanced.
+            if ( !interrupted_by_pause ) {
+                out_every_iterations++;
+
+                // GPU→CPU sync + cache under display_mutex so GUI reads consistent data
+                {
+                    std::lock_guard<std::mutex> lk( st.display_mutex );
+                    solver.syncDisplayMatrices();
+                    solver.cacheValues();
+                    solver.cacheMatrices();
+                }
+
+                // Publish display scalars
+                st.display_t.store( system.p.t );
+                st.display_iteration.store( system.iteration );
+                complete_duration = PHOENIX::TimeIt::totalRuntime();
+                st.display_elapsed.store( complete_duration );
+                system.printCMD( complete_duration, system.iteration );
             }
-
-            // Publish display scalars
-            st.display_t.store( system.p.t );
-            st.display_iteration.store( system.iteration );
-            complete_duration = PHOENIX::TimeIt::totalRuntime();
-            st.display_elapsed.store( complete_duration );
-            system.printCMD( complete_duration, system.iteration );
             , "Main-Loop" );
     }
 }

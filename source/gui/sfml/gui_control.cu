@@ -85,8 +85,13 @@ void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter 
             ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.80f, 0.40f, 0.15f, 0.9f ) );
             ImGui::PushStyleColor( ImGuiCol_ButtonActive,  ImVec4( 0.60f, 0.30f, 0.10f, 1.0f ) );
         }
-        if ( ImGui::Button( paused_ ? "Resume##ctrl" : "Pause##ctrl" ) )
+        if ( ImGui::Button( paused_ ? "Resume##ctrl" : "Pause##ctrl" ) ) {
             paused_ = !paused_;
+            if ( st_ ) {
+                st_->paused.store( paused_ );
+                if ( !paused_ ) st_->pause_cv.notify_all();
+            }
+        }
         ImGui::PopStyleColor( 3 );
 
         ImGui::Separator();
