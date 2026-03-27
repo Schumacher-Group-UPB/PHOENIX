@@ -17,6 +17,7 @@
     #include "misc/sfml_window.hpp"
     #include "imgui.h"
     #include "imgui-SFML.h"
+    #include "implot3d.h"
 #endif
 
 #include "misc/colormap.hpp"
@@ -83,10 +84,13 @@ private:
         double manual_min = 0.0, manual_max = 1.0;
         // logarithmic display
         bool log_scale = false;
-        // line-cut mode
-        bool show_matrix = true;  // if false → show 1D line cut instead of image
+        // view mode: 2D heatmap, 1D line cut, or 3D surface
+        enum class ViewMode { Image2D = 0, LineCut, Surface3D };
+        ViewMode view_mode   = ViewMode::Image2D;
         int  slice_axis  = 0;     // 0 = X (select column, plot along Y), 1 = Y (select row, plot along X)
         int  slice_index = 0;     // which column/row index
+        // 3D surface plot options
+        int  subsample_3d = 4;    // render every Nth point per axis (stride)
         // per-panel download cadence
         int download_every   = 1;   // blit every N updatePanel calls
         int download_counter = 0;
@@ -138,9 +142,15 @@ private:
     SystemParameters::KernelParameters params_saved_;
     bool params_show_panel_ = false;
 
+    // ---- ETA rolling-average state ----
+    struct RateSample { double sim_t; double elapsed; };
+    std::deque<RateSample> rate_history_;
+    static constexpr int kRateHistMax = 100;
+
     // ---- Layout state ----
-    bool     layout_initialized_ = false;
-    ImGuiID  default_dock_id_    = 0;    // right-side dock node; new panels auto-dock here
+    bool     layout_initialized_      = false;
+    ImGuiID  default_dock_id_         = 0;    // right-side dock node; new panels auto-dock here
+    int      implot3d_colormap_base_  = -1;   // index of first registered custom colormap in implot3d
 
     // ---- Internal helpers ----
     void buildRegistry();
@@ -150,6 +160,7 @@ private:
 
     void renderMenuBar();
     void renderMatrixPanel( MatrixPanel& p );
+    void renderMatrixPanel3D( MatrixPanel& p );
     void renderControlWindow( double sim_t, double elapsed, size_t iter );
     void renderParametersPanel();
     void renderPlotsPanel();

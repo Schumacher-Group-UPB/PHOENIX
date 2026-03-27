@@ -231,7 +231,7 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
     }
 
     // Finally, initialize the temporal envelope vector using the group size.
-    ret.temporal_envelope = std::vector<PHOENIX::Type::complex>( ret.groupSize(), 1.0 );
+    ret.temporal_envelope.resize( ret.groupSize(), 1.0 );
 
     return ret;
 }

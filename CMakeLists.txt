@@ -42,7 +42,6 @@ set_property(CACHE PRETTYCMD PROPERTY STRINGS all colors symbols none)
 option(SFML "Enable SFML+ImGui renderer" OFF)
 option(SFML_STATIC "Use static linking for sfml" OFF)
 
-# --- FetchContent: SFML 2.6.2 + Dear ImGui + imgui-sfml (only when SFML=ON) ---
 if(SFML)
     set(SFML_BUILD_EXAMPLES   OFF CACHE BOOL "" FORCE)
     set(SFML_BUILD_DOC        OFF CACHE BOOL "" FORCE)
@@ -62,7 +61,6 @@ if(SFML)
     )
     FetchContent_MakeAvailable(SFML)
 
-    # Dear ImGui – no CMakeLists, populated manually so we get imgui_SOURCE_DIR
     FetchContent_Declare(imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
         GIT_TAG        v1.89.9-docking
@@ -73,7 +71,12 @@ if(SFML)
         FetchContent_Populate(imgui)
     endif()
 
-    # imgui-sfml 2.6 – SFML 2.x compatible; needs IMGUI_DIR pointing at imgui source
+    file(READ "${imgui_SOURCE_DIR}/imconfig.h" _imconfig)
+    string(REPLACE "//#define ImDrawIdx unsigned int"
+                    "#define ImDrawIdx unsigned int"
+                   _imconfig "${_imconfig}")
+    file(WRITE "${imgui_SOURCE_DIR}/imconfig.h" "${_imconfig}")
+
     set(IMGUI_DIR          ${imgui_SOURCE_DIR} CACHE PATH "" FORCE)
     set(IMGUI_SFML_FIND_SFML OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(imgui-sfml
@@ -82,6 +85,17 @@ if(SFML)
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(imgui-sfml)
+
+    FetchContent_Declare(implot3d
+        GIT_REPOSITORY https://github.com/brenocq/implot3d
+        GIT_TAG        v0.3
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_GetProperties(implot3d)
+    if(NOT implot3d_POPULATED)
+        FetchContent_Populate(implot3d)
+    endif()
+    include_directories("${implot3d_SOURCE_DIR}")
 endif()
 
 set(RUNTIME_DIR "${PROJECT_SOURCE_DIR}/bin" CACHE PATH "Where to put built executables")
@@ -96,7 +110,21 @@ file(GLOB_RECURSE CU_SOURCES  CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/source/*.
 list(FILTER CU_SOURCES  EXCLUDE REGEX ".*/source/gui/.*")
 list(FILTER CPP_SOURCES EXCLUDE REGEX ".*/source/gui/.*")
 list(FILTER CU_SOURCES  EXCLUDE REGEX ".*/source/misc/gui\\.cu$")
-list(APPEND CU_SOURCES "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui.cu")
+list(APPEND CU_SOURCES
+    "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui.cu"
+    "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_matrix_panel.cu"
+    "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_control.cu"
+    "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_envelope_editor.cu"
+)
+
+# implot3d sources added after the glob so they are not wiped by GLOB_RECURSE
+if(SFML)
+    list(APPEND CPP_SOURCES
+        "${implot3d_SOURCE_DIR}/implot3d.cpp"
+        "${implot3d_SOURCE_DIR}/implot3d_items.cpp"
+        "${implot3d_SOURCE_DIR}/implot3d_meshes.cpp"
+    )
+endif()
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_SOURCE_DIR}/")
