@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 project(Phoenix LANGUAGES CXX)
-set(PHOENIX_VERSION "v0.3.2")
+set(PHOENIX_VERSION "v0.4.0-pre")
 
 include(FetchContent)
 

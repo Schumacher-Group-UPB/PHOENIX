@@ -151,6 +151,10 @@ private:
     std::deque<RateSample> rate_history_;
     static constexpr int kRateHistMax = 100;
 
+    // ---- dt history for the control window mini-plot ----
+    std::deque<float> dt_history_;
+    static constexpr int kDtHistMax = 256;
+
     // ---- Layout state ----
     bool     layout_initialized_      = false;
     ImGuiID  default_dock_id_         = 0;    // right-side dock node; new panels auto-dock here

@@ -28,8 +28,40 @@ void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter 
 
     // ---- Simulation stats ----
     if ( ImGui::CollapsingHeader( "Simulation", ImGuiTreeNodeFlags_DefaultOpen ) ) {
-        ImGui::Text( "t     = %.4f ps", (double)sys.p.t );
-        ImGui::Text( "t_max = %.4f ps", (double)sys.t_max );
+        // Record dt every frame
+        dt_history_.push_back( (float)sys.p.dt );
+        if ( (int)dt_history_.size() > kDtHistMax )
+            dt_history_.pop_front();
+
+        // Two-column layout: labels left, dt mini-plot right
+        if ( ImGui::BeginTable( "##sim_stats", 2, ImGuiTableFlags_None ) ) {
+            ImGui::TableSetupColumn( "labels", ImGuiTableColumnFlags_WidthStretch, 0.55f );
+            ImGui::TableSetupColumn( "plot",   ImGuiTableColumnFlags_WidthStretch, 0.45f );
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex( 0 );
+            ImGui::Text( "t     = %.4f ps", (double)sys.p.t );
+            ImGui::Text( "t_max = %.4f ps", (double)sys.t_max );
+            ImGui::Text( "dt    = %.4e ps", (double)sys.p.dt );
+
+            ImGui::TableSetColumnIndex( 1 );
+            if ( dt_history_.size() >= 2 ) {
+                std::vector<float> dtv( dt_history_.begin(), dt_history_.end() );
+                float dt_min = *std::min_element( dtv.begin(), dtv.end() );
+                float dt_max = *std::max_element( dtv.begin(), dtv.end() );
+                if ( dt_max - dt_min < 1e-30f ) dt_max = dt_min + 1e-30f;
+                char overlay[32];
+                snprintf( overlay, sizeof( overlay ), "%.2e", dtv.back() );
+                float plot_h = 3.0f * ImGui::GetTextLineHeightWithSpacing();
+                ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.537f, 0.880f, 0.706f, 0.9f ) );
+                ImGui::PlotLines( "##dt_hist", dtv.data(), (int)dtv.size(),
+                                  0, overlay, dt_min, dt_max, ImVec2( -1, plot_h ) );
+                ImGui::PopStyleColor();
+            }
+
+            ImGui::EndTable();
+        }
+
         ImGui::PushStyleColor( ImGuiCol_PlotHistogram, ImVec4( 0.537f, 0.706f, 0.980f, 0.85f ) );
         ImGui::ProgressBar( (float)( sys.p.t / sys.t_max ), ImVec2( -1, 0 ) );
         ImGui::PopStyleColor();
