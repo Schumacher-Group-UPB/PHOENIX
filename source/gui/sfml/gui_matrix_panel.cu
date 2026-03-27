@@ -1,4 +1,5 @@
 #include "misc/gui.hpp"
+#include <mutex>
 #ifdef SFML_RENDER
 #include "imgui_internal.h"
 #endif
@@ -58,15 +59,22 @@ void PhoenixGUI::blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorP
     const int W = p.tex_w, H = p.tex_h;
     if ( W == 0 || H == 0 ) return;
 
+    // Use getHostData() instead of getHostPtr() to avoid the implicit
+    // deviceToHostSync() that getHostPtr() triggers when host_is_ahead==false.
+    // We only ever read host_data here under display_mutex; the solver writes
+    // it only under the same mutex via syncDisplayMatrices(). No implicit GPU
+    // transfer is needed or safe from the GUI thread.
     const T* data = nullptr;
     if constexpr ( std::is_same_v<T, Type::complex> ) {
         if ( !desc.complex_mat ) return;
-        desc.complex_mat->deviceToHostSync();
-        data = desc.complex_mat->getHostPtr();
+        const auto& hd = desc.complex_mat->getHostData();
+        if ( hd.empty() ) return;
+        data = hd.data();
     } else {
         if ( !desc.real_mat ) return;
-        desc.real_mat->deviceToHostSync();
-        data = desc.real_mat->getHostPtr();
+        const auto& hd = desc.real_mat->getHostData();
+        if ( hd.empty() ) return;
+        data = hd.data();
     }
     if ( !data ) return;
 
@@ -190,10 +198,18 @@ void PhoenixGUI::updatePanel( MatrixPanel& p ) {
         cp = &colormaps_[idx].palette;
     }
 
-    if ( desc.complex_mat )
-        blitPanel<Type::complex>( p, desc, *cp );
-    else if ( desc.real_mat )
-        blitPanel<Type::real>( p, desc, *cp );
+    if ( st_ ) {
+        std::lock_guard<std::mutex> lk( st_->display_mutex );
+        if ( desc.complex_mat )
+            blitPanel<Type::complex>( p, desc, *cp );
+        else if ( desc.real_mat )
+            blitPanel<Type::real>( p, desc, *cp );
+    } else {
+        if ( desc.complex_mat )
+            blitPanel<Type::complex>( p, desc, *cp );
+        else if ( desc.real_mat )
+            blitPanel<Type::real>( p, desc, *cp );
+    }
 }
 
 // ============================================================

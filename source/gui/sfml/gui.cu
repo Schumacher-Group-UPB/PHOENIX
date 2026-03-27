@@ -125,7 +125,7 @@ PhoenixGUI::~PhoenixGUI() {
 }
 
 // ============================================================
-// buildColormaps — populate colormaps_ from compiled-in resources
+// buildColormaps - populate colormaps_ from compiled-in resources
 // ============================================================
 
 void PhoenixGUI::buildColormaps() {
@@ -136,8 +136,8 @@ void PhoenixGUI::buildColormaps() {
         e.palette.initColors();
         colormaps_.push_back( std::move( e ) );
     };
-    add( "vik",       Misc::Resources::cmap_vik );       // index 0 — default amplitude
-    add( "viko",      Misc::Resources::cmap_viko );      // index 1 — default phase
+    add( "vik",       Misc::Resources::cmap_vik );       // index 0 - default amplitude
+    add( "viko",      Misc::Resources::cmap_viko );      // index 1 - default phase
     add( "viridis",   Misc::Resources::cmap_viridis );
     add( "plasma",    Misc::Resources::cmap_plasma );
     add( "inferno",   Misc::Resources::cmap_inferno );
@@ -148,7 +148,7 @@ void PhoenixGUI::buildColormaps() {
 }
 
 // ============================================================
-// buildRegistry — populate matrix_registry_ from all available matrices
+// buildRegistry - populate matrix_registry_ from all available matrices
 // ============================================================
 
 void PhoenixGUI::buildRegistry() {
@@ -209,10 +209,11 @@ void PhoenixGUI::buildRegistry() {
 }
 
 // ============================================================
-// update — main per-frame entry point
+// update - main per-frame entry point
 // ============================================================
 
-bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t iterations ) {
+bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t iterations, SolverThreadState& st ) {
+    st_ = &st;
     if ( solver_.system.disableRender ) return true;
 
     auto doFrame = [&]() -> bool {
@@ -227,7 +228,11 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
             if ( event.type == sf::Event::KeyPressed
                  && !ImGui::GetIO().WantCaptureKeyboard ) {
                 switch ( event.key.code ) {
-                    case sf::Keyboard::Space: paused_        = !paused_; break;
+                    case sf::Keyboard::Space:
+                        paused_ = !paused_;
+                        st.paused.store( paused_ );
+                        if ( !paused_ ) st.pause_cv.notify_all();
+                        break;
                     case sf::Keyboard::S:     kb_snapshot    = true;     break;
                     case sf::Keyboard::T:     kb_tile        = true;     break;
                     case sf::Keyboard::N:     kb_new_panel   = true;     break;
@@ -334,11 +339,14 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
     bool alive = doFrame();
     if ( !alive ) return false;
 
-    // Keep UI responsive while paused
+    // Keep UI responsive while paused (solver is blocked on pause_cv)
     while ( paused_ && window_.window.isOpen() ) {
         doFrame();
         sf::sleep( sf::milliseconds( 16 ) );
     }
+    // Unblock solver on resume (handles resume via the pause loop's doFrame() toggling paused_)
+    st.paused.store( false );
+    st.pause_cv.notify_all();
 
     return window_.window.isOpen();
 }
@@ -356,7 +364,7 @@ void PhoenixGUI::handleSnapshots() {}
 
 void PhoenixGUI::init()                           {}
 PhoenixGUI::~PhoenixGUI()                         {}
-bool PhoenixGUI::update( double, double, size_t ) { return true; }
+bool PhoenixGUI::update( double, double, size_t, SolverThreadState& ) { return true; }
 void PhoenixGUI::setupGUI()                       {}
 void PhoenixGUI::handleGUIEvents()                {}
 void PhoenixGUI::drawGUI()                        {}

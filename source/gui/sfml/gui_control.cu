@@ -16,7 +16,7 @@ namespace PHOENIX {
 #ifdef SFML_RENDER
 
 // ============================================================
-// renderControlWindow — floating simulation control window
+// renderControlWindow - floating simulation control window
 // ============================================================
 
 void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter ) {
@@ -161,7 +161,7 @@ void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter 
 }
 
 // ============================================================
-// renderMenuBar — top application menu bar
+// renderMenuBar - top application menu bar
 // ============================================================
 
 void PhoenixGUI::renderMenuBar() {
@@ -251,7 +251,7 @@ void PhoenixGUI::renderParametersPanel() {
 }
 
 // ============================================================
-// renderPlotsPanel — max history for all open panels
+// renderPlotsPanel - max history for all open panels
 // ============================================================
 
 void PhoenixGUI::renderPlotsPanel() {
@@ -280,7 +280,7 @@ void PhoenixGUI::renderPlotsPanel() {
 }
 
 // ============================================================
-// renderEnvelopePlotWindow — temporal envelope amplitudes
+// renderEnvelopePlotWindow - temporal envelope amplitudes
 // ============================================================
 
 void PhoenixGUI::renderEnvelopePlotWindow() {

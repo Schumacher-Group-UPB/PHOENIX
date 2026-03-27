@@ -16,7 +16,7 @@ namespace PHOENIX {
 #ifdef SFML_RENDER
 
 // ============================================================
-// Envelope Editor — helper string converters (internal linkage)
+// Envelope Editor - helper string converters (internal linkage)
 // ============================================================
 
 namespace {
@@ -95,7 +95,7 @@ static void populatePanelFromEnvelope( PhoenixGUI::EnvelopeEditorPanel& p,
         p.components.push_back( c );
     }
     p.selected_component = p.components.empty() ? -1 : 0;
-    // Temporal: read first group (group 0) — t0/sigma/freq are indexed by group
+    // Temporal: read first group (group 0) - t0/sigma/freq are indexed by group
     if ( env->groupSize() > 0 ) {
         p.temporal.t0    = (float)env->t0[0];
         p.temporal.sigma = (float)env->sigma[0];
@@ -132,7 +132,7 @@ static void loadMatrixSnapshot( PhoenixGUI::EnvelopeEditorPanel& p,
 } // anonymous namespace
 
 // ============================================================
-// buildEnvelopeRegistry — populate envelope_registry_
+// buildEnvelopeRegistry - populate envelope_registry_
 // ============================================================
 
 void PhoenixGUI::buildEnvelopeRegistry() {
@@ -208,7 +208,7 @@ void PhoenixGUI::buildEnvelopeRegistry() {
 }
 
 // ============================================================
-// addEnvelopeEditorPanel — open a new Envelope Editor panel
+// addEnvelopeEditorPanel - open a new Envelope Editor panel
 // ============================================================
 
 void PhoenixGUI::addEnvelopeEditorPanel() {
@@ -247,7 +247,7 @@ void PhoenixGUI::addEnvelopeEditorPanel() {
 }
 
 // ============================================================
-// rebuildPreview — CPU-side envelope calculate → SFML texture
+// rebuildPreview - CPU-side envelope calculate → SFML texture
 // ============================================================
 
 void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
@@ -391,7 +391,7 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
 }
 
 // ============================================================
-// applyEnvelopeToMatrix — write editor state into GPU matrix
+// applyEnvelopeToMatrix - write editor state into GPU matrix
 // ============================================================
 
 void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revision ) {
@@ -491,7 +491,7 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
 }
 
 // ============================================================
-// renderEnvelopeEditorPanel — main editor window
+// renderEnvelopeEditorPanel - main editor window
 // ============================================================
 
 void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
@@ -971,7 +971,7 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         {
             ImVec2 mouse = ImGui::GetIO().MousePos;
 
-            // Drag start — only when clicking inside the image (not the letterbox)
+            // Drag start - only when clicking inside the image (not the letterbox)
             if ( canvas_hovered && in_image && ImGui::IsMouseClicked( ImGuiMouseButton_Left )
                  && p.drag_mode == EnvelopeEditorPanel::DragMode::None ) {
                 const float hit_r = 10.f;
@@ -1007,7 +1007,7 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
                 }
             }
 
-            // During drag — Y-flip: moving screen-down = physical-y decrease
+            // During drag - Y-flip: moving screen-down = physical-y decrease
             if ( p.drag_mode != EnvelopeEditorPanel::DragMode::None
                  && p.drag_component >= 0 && p.drag_component < (int)p.components.size() ) {
                 if ( ImGui::IsMouseDown( ImGuiMouseButton_Left ) ) {

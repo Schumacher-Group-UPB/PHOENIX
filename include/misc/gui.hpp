@@ -9,6 +9,7 @@
 #include <string>
 #include "solver/solver.hpp"
 #include "misc/commandline_io.hpp"
+#include "misc/solver_thread.hpp"
 #include "cuda/cuda_matrix.cuh"
 
 #ifdef SFML_RENDER
@@ -38,12 +39,13 @@ public:
     explicit PhoenixGUI( Solver& solver );
     ~PhoenixGUI();
     void init();
-    bool update( double simulation_time, double elapsed_time, size_t iterations );
+    bool update( double simulation_time, double elapsed_time, size_t iterations, SolverThreadState& st );
     bool is_paused() const { return paused_; }
 
 private:
     Solver& solver_;
     bool paused_ = false;
+    SolverThreadState* st_ = nullptr;
 
 #ifdef SFML_RENDER
     // ---- Window & colormaps ----
@@ -70,7 +72,7 @@ private:
     struct MatrixPanel {
         int      selected    = 0;                      // index into matrix_registry_
         int      panel_id   = 0;                      // stable unique ID (never changes)
-        ImGuiID  saved_dock_id = 0;                   // last known dock node — restored on title change
+        ImGuiID  saved_dock_id = 0;                   // last known dock node - restored on title change
         std::unique_ptr<sf::RenderTexture> tex;
         std::vector<sf::Vertex>  pix;
         int  tex_w = 0, tex_h = 0;
@@ -254,7 +256,7 @@ public:
 
         std::string last_apply_status;
 
-        // Live apply — every preview rebuild is immediately pushed to the GPU matrix
+        // Live apply - every preview rebuild is immediately pushed to the GPU matrix
         bool live_apply = false;
 
         // ---- Noise overlay (applied on top of envelope in preview & apply) ----
@@ -295,7 +297,7 @@ public:
 
     static std::string toScientific( Type::real in );
 
-    // Legacy stubs — defined in the #else branch of gui.cu
+    // Legacy stubs - defined in the #else branch of gui.cu
     void setupGUI();
     void handleGUIEvents();
     void drawGUI();

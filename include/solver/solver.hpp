@@ -3,6 +3,7 @@
 #include <iostream>
 #include <map>
 #include <functional>
+#include <atomic>
 #include "cuda/typedef.cuh"
 #include "cuda/cuda_matrix.cuh"
 #include "cuda/cuda_macro.cuh"
@@ -62,9 +63,9 @@ class Solver {
 
     // Set to true from the GUI (or any other code) when KernelParameters change at runtime.
     // SOLVER_SEQUENCE will tear down and recapture the CUDA graph on the next call.
-    bool parameters_are_dirty = false;
+    std::atomic<bool> parameters_are_dirty { false };
 
-    // CUDA graph state — moved from static locals in the SOLVER_SEQUENCE macro so
+    // CUDA graph state - moved from static locals in the SOLVER_SEQUENCE macro so
     // the GUI can trigger a recapture by setting parameters_are_dirty = true.
 #ifndef USE_CPU
     bool             cuda_graph_created_  = false;
@@ -128,6 +129,7 @@ class Solver {
 
     void cacheValues();
     void cacheMatrices();
+    void syncDisplayMatrices();
 
     void normalizeImaginaryTimePropagation();
 

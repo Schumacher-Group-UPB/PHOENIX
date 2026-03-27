@@ -29,11 +29,13 @@
 #include <cstdlib>
 #include <omp.h>
 #include <chrono>
+#include <thread>
 #include "cuda/typedef.cuh"
 #include "system/system_parameters.hpp"
 #include "system/filehandler.hpp"
 #include "misc/timeit.hpp"
 #include "misc/gui.hpp"
+#include "misc/solver_thread.hpp"
 #include "solver/solver.hpp"
 #include "solver/solver_factory.hpp"
 
@@ -42,6 +44,60 @@
         #include <likwid.h>
     #endif
 #endif
+
+static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters& system, PHOENIX::SolverThreadState& st, int cuda_device ) {
+    // Initialize the CUDA context on this thread. Each std::thread starts with
+    // no current CUDA context; cudaSetDevice() activates the primary context
+    // for the given device, enabling all CUDA and thrust calls from this thread.
+    cudaSetDevice( cuda_device );
+
+    double complete_duration = 0.0;
+    PHOENIX::Type::uint32 out_every_iterations = 1;
+
+    while ( system.p.t < system.t_max && !st.stop.load() ) {
+        // Block while paused
+        {
+            std::unique_lock<std::mutex> lk( st.pause_mutex );
+            st.pause_cv.wait( lk, [&] { return !st.paused.load() || st.stop.load(); } );
+        }
+        if ( st.stop.load() ) break;
+
+        TimeThis(
+            auto start = system.p.t;
+            bool force_fixed_time_step = false;
+
+            while ( ( !system.disableRender && system.p.t < start + system.output_every ) ||
+                    (  system.disableRender  && system.p.t < out_every_iterations * system.output_every ) ) {
+                if ( st.paused.load() ) break; // fast exit on pause
+
+                auto dt = system.p.dt;
+                if ( system.p.t + system.p.dt > out_every_iterations * system.output_every ) {
+                    auto next_dt = out_every_iterations * system.output_every - system.p.t;
+                    if ( next_dt > 0 ) { system.p.dt = next_dt; force_fixed_time_step = true; }
+                }
+                auto result = solver.iterate( force_fixed_time_step );
+                if ( force_fixed_time_step ) { force_fixed_time_step = false; system.p.dt = dt; }
+                if ( !result ) break;
+            }
+            out_every_iterations++;
+
+            // GPU→CPU sync + cache under display_mutex so GUI reads consistent data
+            {
+                std::lock_guard<std::mutex> lk( st.display_mutex );
+                solver.syncDisplayMatrices();
+                solver.cacheValues();
+                solver.cacheMatrices();
+            }
+
+            // Publish display scalars
+            st.display_t.store( system.p.t );
+            st.display_iteration.store( system.iteration );
+            complete_duration = PHOENIX::TimeIt::totalRuntime();
+            st.display_elapsed.store( complete_duration );
+            system.printCMD( complete_duration, system.iteration );
+            , "Main-Loop" );
+    }
+}
 
 int main( int argc, char* argv[] ) {
     // Try and read-in any config file
@@ -59,8 +115,6 @@ int main( int argc, char* argv[] ) {
 
     // Some Helper Variables
     bool running = true;
-    double complete_duration = 0.;
-    PHOENIX::Type::uint32 out_every_iterations = 1;
     // Main Loop
 #ifdef BENCH
     #ifdef LIKWID
@@ -77,44 +131,21 @@ int main( int argc, char* argv[] ) {
     { LIKWID_MARKER_STOP( "iterator" ); }
     #endif
 #else
+    // Capture the current CUDA device so the solver thread can activate the
+    // same context (cudaSetDevice is required on every new std::thread).
+    int cuda_device = 0;
+    cudaGetDevice( &cuda_device );
+
+    PHOENIX::SolverThreadState st;
+    std::thread solver_thread( solverThreadFunc, std::ref( *solver ), std::ref( system ), std::ref( st ), cuda_device );
+
     while ( system.p.t < system.t_max and running ) {
-        TimeThis(
-            // Iterate #output_every ps
-            auto start = system.p.t; 
-            bool force_fixed_time_step = false; 
-            
-            while ( ( not system.disableRender and system.p.t < start + system.output_every ) or ( system.disableRender and system.p.t < out_every_iterations * system.output_every ) ) {
-                // Check if t+dt would overshoot out_every_iterations*output_every, adjust dt accordingly
-                auto dt = system.p.dt;
-                if ( system.p.t + system.p.dt > out_every_iterations * system.output_every ) {
-                    auto next_dt = out_every_iterations * system.output_every - system.p.t;
-                    if ( next_dt > 0 ) {
-                        system.p.dt = next_dt;
-                        force_fixed_time_step = true;
-                    }
-                }
-                auto result = solver->iterate( force_fixed_time_step );
-
-                if ( force_fixed_time_step ) {
-                    force_fixed_time_step = false;
-                    system.p.dt = dt;
-                }
-                
-                if ( !result ) {
-                    break;
-                }
-
-            } out_every_iterations++;
-            // Cache the history and max values
-            solver->cacheValues();
-            // Output Matrices if enabled
-            solver->cacheMatrices();
-            // Plot
-            running = gui_window.update( system.p.t, complete_duration, system.iteration );
-            , "Main-Loop" );
-        complete_duration = PHOENIX::TimeIt::totalRuntime();
-        system.printCMD( complete_duration, system.iteration );
+        running = gui_window.update( st.display_t.load(), st.display_elapsed.load(), st.display_iteration.load(), st );
     }
+
+    st.stop.store( true );
+    st.pause_cv.notify_all();
+    solver_thread.join();
 #endif
 
     system.finishCMD();

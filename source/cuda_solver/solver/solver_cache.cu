@@ -60,6 +60,33 @@ void PHOENIX::Solver::cacheToFiles() {
     file_max.close();
 }
 
+void PHOENIX::Solver::syncDisplayMatrices() {
+    matrix.wavefunction_plus.deviceToHostSync();
+    if ( system.use_twin_mode )
+        matrix.wavefunction_minus.deviceToHostSync();
+    if ( system.use_reservoir ) {
+        matrix.reservoir_plus.deviceToHostSync();
+        if ( system.use_twin_mode )
+            matrix.reservoir_minus.deviceToHostSync();
+    }
+    if ( system.use_pumps ) {
+        matrix.pump_plus.deviceToHostSync();
+        if ( system.use_twin_mode )
+            matrix.pump_minus.deviceToHostSync();
+    }
+    if ( system.use_pulses ) {
+        matrix.pulse_plus.deviceToHostSync();
+        if ( system.use_twin_mode )
+            matrix.pulse_minus.deviceToHostSync();
+    }
+    if ( system.use_potentials ) {
+        matrix.potential_plus.deviceToHostSync();
+        if ( system.use_twin_mode )
+            matrix.potential_minus.deviceToHostSync();
+    }
+    matrix.rk_error.deviceToHostSync();
+}
+
 // TODO: Support Multiple History Outputs, and also support piping them into a single file.
 // something like "append" mode, that doesnt open a new file but instead appends to the existing one.
 PHOENIX::Type::uint32 _local_history_output_counter = 1; // output_history_matrix_every
