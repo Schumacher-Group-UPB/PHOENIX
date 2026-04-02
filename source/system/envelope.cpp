@@ -170,34 +170,112 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
             PHOENIX::Type::real amp = PHOENIX::CLIO::getNextInput( argv, argc, key + "_amp", index );
             // Behaviour
             auto sbehavior = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_behaviour", index );
-            // Width
-            PHOENIX::Type::real width_x = PHOENIX::CLIO::getNextInput( argv, argc, key + "_width_x", index );
-            PHOENIX::Type::real width_y = PHOENIX::CLIO::getNextInput( argv, argc, key + "_width_y", index );
-            // X Position
-            PHOENIX::Type::real pos_x = PHOENIX::CLIO::getNextInput( argv, argc, key + "_X", index );
-            // Y Position
-            PHOENIX::Type::real pos_y = PHOENIX::CLIO::getNextInput( argv, argc, key + "_Y", index );
 
-            // Polarization
-            auto spol = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_pol", index );
+            // Peek at next token to detect named-parameter syntax
+            auto syntax_peek = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_syntax_peek", index );
+            const bool named_mode = ( syntax_peek == "width" || syntax_peek == "pos" || syntax_peek == "pol" ||
+                                      syntax_peek == "exponent" || syntax_peek == "charge" || syntax_peek == "type" ||
+                                      syntax_peek == "momenta" || syntax_peek == "time" );
 
-            // Exponent
-            PHOENIX::Type::real exponent = PHOENIX::CLIO::getNextInput( argv, argc, key + "_exponent", index );
+            PHOENIX::Type::real width_x, width_y, pos_x, pos_y, exponent, k0_x_val, k0_y_val;
+            std::string spol, sm, stype;
 
-            // Charge
-            auto sm = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_m", index );
+            if ( named_mode ) {
+                // Defaults
+                width_x = 0; width_y = 0;
+                pos_x = 0; pos_y = 0;
+                spol = "both";
+                exponent = 1.0;
+                sm = "none";
+                stype = "gauss+noDivide";
+                k0_x_val = 0.0; k0_y_val = 0.0;
 
-            // Type
-            auto stype = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_type", index );
+                bool temporal_handled = false;
+                std::string t_type = "constant";
+                PHOENIX::Type::real t_t0 = 0, t_sigma = 0, t_freq = 0;
+                std::string t_load_path = "";
 
-            // Optional momenta keyword
-            PHOENIX::Type::real k0_x_val = 0.0, k0_y_val = 0.0;
-            auto momenta_peek = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_momenta_peek", index );
-            if ( momenta_peek == "momenta" ) {
-                k0_x_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_x", index );
-                k0_y_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_y", index );
+                auto process_keyword = [&]( const std::string& kw ) -> bool {
+                    if ( kw == "width" ) {
+                        width_x = PHOENIX::CLIO::getNextInput( argv, argc, key + "_width_x", index );
+                        width_y = PHOENIX::CLIO::getNextInput( argv, argc, key + "_width_y", index );
+                    } else if ( kw == "pos" ) {
+                        pos_x = PHOENIX::CLIO::getNextInput( argv, argc, key + "_X", index );
+                        pos_y = PHOENIX::CLIO::getNextInput( argv, argc, key + "_Y", index );
+                    } else if ( kw == "pol" ) {
+                        spol = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_pol", index );
+                    } else if ( kw == "exponent" ) {
+                        exponent = PHOENIX::CLIO::getNextInput( argv, argc, key + "_exponent", index );
+                    } else if ( kw == "charge" ) {
+                        sm = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_m", index );
+                    } else if ( kw == "type" ) {
+                        stype = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_type", index );
+                    } else if ( kw == "momenta" ) {
+                        k0_x_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_x", index );
+                        k0_y_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_y", index );
+                    } else if ( kw == "time" ) {
+                        temporal_handled = true;
+                        auto t_peek = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_time_peek", index );
+                        if ( t_peek == "load" ) {
+                            t_load_path = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_time_path", index );
+                            std::cout << PHOENIX::CLIO::prettyPrint( "Queuing temporal envelope '" + key + "' to be loaded from file: '" + t_load_path + "'", PHOENIX::CLIO::Control::Info | PHOENIX::CLIO::Control::Secondary ) << std::endl;
+                        } else {
+                            t_type = t_peek; // t_peek is the temporal type (iexp, cos, gauss, ...)
+                            t_t0 = PHOENIX::CLIO::getNextInput( argv, argc, key + "_t0", index );
+                            t_sigma = PHOENIX::CLIO::getNextInput( argv, argc, key + "_sigma", index );
+                            t_freq = PHOENIX::CLIO::getNextInput( argv, argc, key + "_freq", index );
+                        }
+                    } else {
+                        return false; // Unknown token; end of named params
+                    }
+                    return true;
+                };
+
+                process_keyword( syntax_peek );
+                while ( true ) {
+                    auto kw = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_kw", index );
+                    if ( !process_keyword( kw ) ) {
+                        index--; // Put back the non-keyword token
+                        break;
+                    }
+                }
+
+                ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm, k0_x_val, k0_y_val );
+                std::cout << PHOENIX::CLIO::prettyPrint( "Added Spacial Component to Envelope '" + key + "'", PHOENIX::CLIO::Control::Success | PHOENIX::CLIO::Control::Secondary ) << std::endl;
+
+                if ( temporal_handled ) {
+                    if ( t_load_path != "" ) {
+                        ret.addTemporal( t_load_path );
+                    } else {
+                        ret.addTemporal( t_t0, t_sigma, t_freq, t_type );
+                        std::cout << PHOENIX::CLIO::prettyPrint( "Added Temporal Component '" + t_type + "' to Envelope '" + key + "'", PHOENIX::CLIO::Control::Success | PHOENIX::CLIO::Control::Secondary ) << std::endl;
+                    }
+                } else {
+                    ret.addTemporal( 0, 0, 0, "constant" );
+                }
+                continue; // Temporal already handled; skip the outer temporal block
+
             } else {
+                // Legacy positional mode; put back the peeked token and parse in order
                 index--;
+                width_x = PHOENIX::CLIO::getNextInput( argv, argc, key + "_width_x", index );
+                width_y = PHOENIX::CLIO::getNextInput( argv, argc, key + "_width_y", index );
+                pos_x = PHOENIX::CLIO::getNextInput( argv, argc, key + "_X", index );
+                pos_y = PHOENIX::CLIO::getNextInput( argv, argc, key + "_Y", index );
+                spol = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_pol", index );
+                exponent = PHOENIX::CLIO::getNextInput( argv, argc, key + "_exponent", index );
+                sm = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_m", index );
+                stype = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_type", index );
+
+                // Optional momenta keyword
+                k0_x_val = 0.0; k0_y_val = 0.0;
+                auto momenta_peek = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_momenta_peek", index );
+                if ( momenta_peek == "momenta" ) {
+                    k0_x_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_x", index );
+                    k0_y_val = PHOENIX::CLIO::getNextInput( argv, argc, key + "_k0_y", index );
+                } else {
+                    index--;
+                }
             }
 
             ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm, k0_x_val, k0_y_val );
