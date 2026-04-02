@@ -65,6 +65,16 @@ class Solver {
     // SOLVER_SEQUENCE will tear down and recapture the CUDA graph on the next call.
     std::atomic<bool> parameters_are_dirty { false };
 
+    // The parameters are all pointers so that the cuda compute graph uses the updated values
+    struct KernelArguments {
+        TemporalEvelope::Pointers pulse_pointers;     // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
+        TemporalEvelope::Pointers pump_pointers;      // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
+        TemporalEvelope::Pointers potential_pointers; // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
+        Type::real* time;                             // Pointer to Device Memory of the time array. [0] is t, [1] is dt
+        MatrixContainer::Pointers dev_ptrs;           // All the pointers to the matrices. These are obtained by calling the .pointers() method on the matrices.
+        SystemParameters::KernelParameters p;         // The kernel parameters. These are obtained by copying the kernel_parameters object of the system.
+    };
+
     // CUDA graph state - moved from static locals in the SOLVER_SEQUENCE macro so
     // the GUI can trigger a recapture by setting parameters_are_dirty = true.
 #ifndef USE_CPU
@@ -78,16 +88,6 @@ class Solver {
     bool cuda_graph_created_ = false;
     std::vector<KernelArguments> cpu_kernel_arguments_;
 #endif
-
-    // The parameters are all pointers so that the cuda compute graph uses the updated values
-    struct KernelArguments {
-        TemporalEvelope::Pointers pulse_pointers;     // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
-        TemporalEvelope::Pointers pump_pointers;      // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
-        TemporalEvelope::Pointers potential_pointers; // The pointers to the envelopes. These are obtained by calling the .pointers() method on the envelopes.
-        Type::real* time;                             // Pointer to Device Memory of the time array. [0] is t, [1] is dt
-        MatrixContainer::Pointers dev_ptrs;           // All the pointers to the matrices. These are obtained by calling the .pointers() method on the matrices.
-        SystemParameters::KernelParameters p;         // The kernel parameters. These are obtained by copying the kernel_parameters object of the system.
-    };
 
     // Fixed Kernel Arguments. Every Compute Kernel will take one of these.
     KernelArguments generateKernelArguments( const Type::uint32 subgrid = 0 ) {
@@ -133,13 +133,12 @@ class Solver {
 
     void normalizeImaginaryTimePropagation();
 
-        /**
+    /**
     adjusts timestep for adaptive methods
     discrete time steps = use t_delta for adjustments of dt between dt_min, dt_max
     power = error scaling
-     */
-        bool
-        adaptTimeStep( const Type::real power, bool use_discrete_update_steps = true );
+    */
+    bool adaptTimeStep( const Type::real power, bool use_discrete_update_steps = true );
 
     void swapBuffers();
 

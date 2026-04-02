@@ -50,6 +50,9 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     if ( ( index = PHOENIX::CLIO::findInArgv( "--blocksize", argc, argv ) ) != -1 )
         block_size = (int)PHOENIX::CLIO::getNextInput( argv, argc, "block_size", ++index );
 
+    if ( ( index = PHOENIX::CLIO::findInArgv( "--gpu", argc, argv ) ) != -1 )
+        cuda_device = (int)PHOENIX::CLIO::getNextInput( argv, argc, "cuda_device", ++index );
+
     if ( ( index = PHOENIX::CLIO::findInArgv( { "output", "fileoutput", "FO" }, argc, argv, 0, "--" ) ) != -1 ) {
         output_keys.clear();
         auto output_string = PHOENIX::CLIO::getNextStringInput( argv, argc, "output", ++index );

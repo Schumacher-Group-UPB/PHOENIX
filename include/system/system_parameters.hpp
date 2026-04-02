@@ -75,6 +75,9 @@ class SystemParameters {
     // Kernel Block Size
     Type::uint32 block_size, omp_max_threads;
 
+    // CUDA device index (selected via --gpu N)
+    int cuda_device = 0;
+
     // Initialize the system randomly
     bool randomly_initialize_system;
 

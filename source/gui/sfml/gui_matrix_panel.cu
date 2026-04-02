@@ -5,6 +5,7 @@
 #endif
 #include <cmath>
 #include <cfloat>
+#include <cstring>
 #include <numbers>
 #include <algorithm>
 #include <limits>

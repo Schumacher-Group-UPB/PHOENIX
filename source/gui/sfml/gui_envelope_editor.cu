@@ -9,6 +9,7 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <cstring>
 #include "system/noise.hpp"
 
 namespace PHOENIX {

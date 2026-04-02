@@ -49,7 +49,11 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
     // Initialize the CUDA context on this thread. Each std::thread starts with
     // no current CUDA context; cudaSetDevice() activates the primary context
     // for the given device, enabling all CUDA and thrust calls from this thread.
+#ifndef USE_CPU
     cudaSetDevice( cuda_device );
+#else
+    (void)cuda_device;
+#endif
 
     double complete_duration = 0.0;
     PHOENIX::Type::uint32 out_every_iterations = 1;
@@ -57,8 +61,8 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
     while ( system.p.t < system.t_max && !st.stop.load() ) {
         // Block while paused
         {
-            st.solver_actually_paused.store( true );  // signal: idle, safe for GUI to write matrices
             std::unique_lock<std::mutex> lk( st.pause_mutex );
+            st.solver_actually_paused.store( true );  // signal: idle, safe for GUI to write matrices
             st.pause_cv.wait( lk, [&] { return !st.paused.load() || st.stop.load(); } );
             st.solver_actually_paused.store( false ); // signal: resuming
         }
@@ -71,7 +75,6 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
 
             while ( ( !system.disableRender && system.p.t < start + system.output_every ) ||
                     (  system.disableRender  && system.p.t < out_every_iterations * system.output_every ) ) {
-                if ( st.paused.load() ) { interrupted_by_pause = true; break; }
 
                 auto dt = system.p.dt;
                 if ( system.p.t + system.p.dt > out_every_iterations * system.output_every ) {
@@ -83,15 +86,19 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
                 if ( !result ) break;
             }
 
+            if ( st.paused.load() ) { interrupted_by_pause = true; break; }
+
             // Skip all post-processing when paused so the displayed time freezes
             // immediately and out_every_iterations is not advanced.
             if ( !interrupted_by_pause ) {
                 out_every_iterations++;
 
-                // GPU→CPU sync + cache under display_mutex so GUI reads consistent data
+                // GPU->CPU sync + cache under display_mutex so GUI reads consistent data
                 {
                     std::lock_guard<std::mutex> lk( st.display_mutex );
-                    solver.syncDisplayMatrices();
+                    if ( !system.disableRender ) {
+                        solver.syncDisplayMatrices();
+                    }
                     solver.cacheValues();
                     solver.cacheMatrices();
                 }
@@ -116,6 +123,9 @@ int main( int argc, char* argv[] ) {
 
     // Create Solver Class
     auto solver = PHOENIX::SolverFactory::create( system );
+#ifndef USE_CPU
+    cudaSetDevice( system.cuda_device );
+#endif
     solver->initialize();
 
     // Create Main Plotwindow. Needs to be compiled with -DSFML_RENDER
@@ -139,10 +149,13 @@ int main( int argc, char* argv[] ) {
     { LIKWID_MARKER_STOP( "iterator" ); }
     #endif
 #else
-    // Capture the current CUDA device so the solver thread can activate the
-    // same context (cudaSetDevice is required on every new std::thread).
+    // Pass the user-selected CUDA device to the solver thread so it can
+    // activate the same context (cudaSetDevice is required on every new std::thread).
+#ifndef USE_CPU
+    int cuda_device = system.cuda_device;
+#else
     int cuda_device = 0;
-    cudaGetDevice( &cuda_device );
+#endif
 
     PHOENIX::SolverThreadState st;
     std::thread solver_thread( solverThreadFunc, std::ref( *solver ), std::ref( system ), std::ref( st ), cuda_device );

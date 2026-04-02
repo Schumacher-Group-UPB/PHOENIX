@@ -269,7 +269,11 @@ if(BUILD_ARCH STREQUAL "cpu")
     add_executable(${EXE_NAME} ${CPP_SOURCES} ${CPU_WRAPPERS})
 
     target_compile_options(${EXE_NAME} PRIVATE
-        $<$<CXX_COMPILER_ID:GNU,Clang>:-std=c++20 -fopenmp -x c++ -funroll-loops -finline-limit=20000>)
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-fopenmp -x c++ -funroll-loops -finline-limit=20000>
+        $<$<CXX_COMPILER_ID:MSVC>:/openmp>
+    )
+    set_target_properties(${EXE_NAME} PROPERTIES CXX_STANDARD 23)
+
     if(TUNE STREQUAL "native")
         target_compile_options(${EXE_NAME} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-mtune=native -march=native>)
     endif()
