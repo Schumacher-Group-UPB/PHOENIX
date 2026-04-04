@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <cstring>
 #include "solver/solver.hpp"
 #include "misc/commandline_io.hpp"
 #include "misc/solver_thread.hpp"
@@ -161,12 +162,43 @@ private:
     bool     layout_initialized_      = false;
     ImGuiID  default_dock_id_         = 0;    // right-side dock node; new panels auto-dock here
     int      implot3d_colormap_base_  = -1;   // index of first registered custom colormap in implot3d
+    bool     first_frame_             = true;  // used to apply startup-paused logic once
+
+    // ---- Runstring viewer ----
+    bool              show_runstring_window_ = false;
+    std::string       runstring_cache_;
+    std::vector<char> runstring_buf_;   // ImGui requires a writable buffer even for read-only text
+
+    // ---- Config save/load dialogs ----
+    struct ConfigSaveState {
+        bool open             = false;
+        char filepath[512];
+        bool include_matrices = false;
+        std::string status_msg;
+        ConfigSaveState() { std::fill( std::begin( filepath ), std::end( filepath ), '\0' );
+                            std::strncpy( filepath, "config.txt", sizeof( filepath ) - 1 ); }
+    } config_save_;
+
+    struct ConfigLoadState {
+        bool open          = false;
+        char filepath[512];
+        bool load_matrices = false;
+        std::string status_msg;
+        ConfigLoadState() { std::fill( std::begin( filepath ), std::end( filepath ), '\0' );
+                            std::strncpy( filepath, "config.txt", sizeof( filepath ) - 1 ); }
+    } config_load_;
 
     // ---- Internal helpers ----
     void buildRegistry();
     void addPanel( int initial_selected = 0 );
     void updatePanel( MatrixPanel& p );
     void updateEnvelopeHistories();
+
+    // ---- Runstring / Config helpers ----
+    void renderRunstringWindow();
+    void renderConfigSaveDialog();
+    void renderConfigLoadDialog();
+    void applyUpdatableParamsFromFile( const char* filepath );
 
     // ---- Solver pause/resume for safe parameter/matrix updates ----
     // pauseSolverForUpdate: if the solver thread is running, request a pause and spin until

@@ -246,6 +246,15 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
     if ( solver_.system.disableRender ) return true;
 
     auto doFrame = [&]() -> bool {
+        // --- Start paused when no arguments were supplied ---
+        if ( first_frame_ ) {
+            first_frame_ = false;
+            if ( solver_.system.started_without_args ) {
+                paused_ = true;
+                st_->paused.store( true );
+            }
+        }
+
         // --- Event handling ---
         window_.updateMouseState();
         bool kb_snapshot = false, kb_tile = false, kb_new_panel = false, kb_env_editor = false;
@@ -359,6 +368,9 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
         renderParametersPanel();
         renderPlotsPanel();
         renderEnvelopePlotWindow();
+        renderRunstringWindow();
+        renderConfigSaveDialog();
+        renderConfigLoadDialog();
 
         ImGui::SFML::Render( window_.window );
         window_.window.display();

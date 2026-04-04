@@ -1,4 +1,6 @@
 #include <iostream>
+#include <sstream>
+#include <limits>
 #include "cuda/typedef.cuh"
 #include "misc/commandline_io.hpp"
 #include "misc/escape_sequences.hpp"
@@ -497,4 +499,49 @@ void PHOENIX::Envelope::updateTemporal( const PHOENIX::Type::real t ) {
             temporal_envelope[g] = gaussian_envelope( t, t0[g], sigma[g], freq[g] );
         }
     }
+}
+
+std::string PHOENIX::Envelope::toRunstring( const std::string& key ) const {
+    if ( size() == 0 )
+        return "";
+
+    std::ostringstream ss;
+    constexpr int prec = std::numeric_limits<PHOENIX::Type::real>::max_digits10;
+    ss << std::setprecision( prec );
+
+    for ( int i = 0; i < size(); i++ ) {
+        int g = group_identifier[i];
+
+        if ( load_path[i] != "" ) {
+            // File-loaded spatial component
+            ss << "--" << key << " load " << load_path[i]
+               << " " << amp[i] << " " << s_behavior[i] << " " << s_pol[i];
+        } else {
+            // Parametric spatial component — named-parameter syntax
+            ss << "--" << key << " " << amp[i] << " " << s_behavior[i];
+            ss << " width " << width_x[i] << " " << width_y[i];
+            ss << " pos " << x[i] << " " << y[i];
+            ss << " pol " << s_pol[i];
+            if ( exponent[i] != 1.0 )
+                ss << " exponent " << exponent[i];
+            if ( m[i] != 0 )
+                ss << " charge " << m[i];
+            ss << " type " << s_type[i];
+            if ( k0_x[i] != 0.0 || k0_y[i] != 0.0 )
+                ss << " momenta " << k0_x[i] << " " << k0_y[i];
+        }
+
+        // Temporal component for this group
+        if ( g < (int)temporal.size() ) {
+            if ( temporal[g] & PHOENIX::Envelope::Temporal::Loaded ) {
+                ss << " time load " << load_path_temporal[g];
+            } else if ( !( temporal[g] & PHOENIX::Envelope::Temporal::Constant ) ) {
+                ss << " time " << s_temp[g] << " " << t0[g] << " " << sigma[g] << " " << freq[g];
+            }
+            // Constant temporal: omit — parser adds it as default when "time" keyword absent
+        }
+
+        ss << "\n";
+    }
+    return ss.str();
 }

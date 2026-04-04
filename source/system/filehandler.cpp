@@ -6,7 +6,7 @@
 
 // MARK: Constructor and Destructor
 
-PHOENIX::FileHandler::FileHandler() : outputPath( "data" ), outputName( "" ), color_palette( "vik" ), color_palette_phase( "viko" ), stopWorker( false ) {
+PHOENIX::FileHandler::FileHandler() : outputPath( "data" ), outputName( "" ), stopWorker( false ) {
     // TODO: for cpu version, maybe reduce the number of output threads
     const auto max_threads = omp_get_max_threads();
     workerThreads.reserve( max_threads );
@@ -39,12 +39,6 @@ void PHOENIX::FileHandler::init( int argc, char** argv ) {
 
     if ( ( index = PHOENIX::CLIO::findInArgv( "--name", argc, argv ) ) != -1 )
         outputName = PHOENIX::CLIO::getNextStringInput( argv, argc, "name", ++index );
-
-    // Colormap
-    if ( ( index = PHOENIX::CLIO::findInArgv( "--cmap", argc, argv ) ) != -1 ) {
-        color_palette = PHOENIX::CLIO::getNextStringInput( argv, argc, "cmap", ++index );
-        color_palette_phase = PHOENIX::CLIO::getNextStringInput( argv, argc, "cmap", index );
-    }
 
     // Filetype
     if ( ( index = PHOENIX::CLIO::findInArgv( { "of", "outputFileType" }, argc, argv, 0, "--" ) ) != -1 ) {

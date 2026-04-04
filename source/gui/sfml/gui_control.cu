@@ -212,6 +212,22 @@ void PhoenixGUI::renderMenuBar() {
                 addEnvelopeEditorPanel();
             ImGui::EndMenu();
         }
+        if ( ImGui::BeginMenu( "Runstring" ) ) {
+            if ( ImGui::MenuItem( "View Runstring", nullptr, show_runstring_window_ ) ) {
+                show_runstring_window_ = !show_runstring_window_;
+                if ( show_runstring_window_ ) {
+                    runstring_cache_ = solver_.system.toRunstring();
+                    runstring_buf_.assign( runstring_cache_.begin(), runstring_cache_.end() );
+                    runstring_buf_.push_back( '\0' );
+                }
+            }
+            ImGui::EndMenu();
+        }
+        if ( ImGui::BeginMenu( "Config" ) ) {
+            if ( ImGui::MenuItem( "Save Config..." ) ) config_save_.open = true;
+            if ( ImGui::MenuItem( "Load Config..." ) ) config_load_.open = true;
+            ImGui::EndMenu();
+        }
         ImGui::EndMainMenuBar();
     }
 }

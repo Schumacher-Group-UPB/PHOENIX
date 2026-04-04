@@ -146,6 +146,7 @@ class Envelope {
     static Envelope fromCommandlineArguments( int argc, char** argv, const std::vector<std::string>& all_keys, const bool time );
 
     std::string toString() const;
+    std::string toRunstring( const std::string& key ) const;
 };
 
 // Overload the bitwise OR (|) operator

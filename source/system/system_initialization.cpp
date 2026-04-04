@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <ranges>
 #include <random>
+#include <sstream>
+#include <limits>
 #include "system/system_parameters.hpp"
 #include "system/filehandler.hpp"
 #include "misc/commandline_io.hpp"
@@ -13,6 +15,8 @@
 void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     // Initialize system
     int index = 0;
+
+    started_without_args = ( argc <= 1 );
 
     // Structure
     use_twin_mode = false;
@@ -272,4 +276,77 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     ///////////////////////////////////////
     // Custom Envelope Read-Ins go here! //
     ///////////////////////////////////////
+}
+
+std::string PHOENIX::SystemParameters::toRunstring() const {
+    std::ostringstream ss;
+    constexpr int prec = std::numeric_limits<Type::real>::max_digits10;
+    ss << std::setprecision( prec );
+
+    // Grid
+    ss << "--N " << p.N_c << " " << p.N_r << "\n";
+    ss << "--L " << p.L_x << " " << p.L_y << "\n";
+    if ( p.subgrids_columns > 0 )
+        ss << "--subgrids " << p.subgrids_columns << " " << p.subgrids_rows << "\n";
+
+    // Time
+    ss << "--tmax " << t_max << "\n";
+    if ( !do_overwrite_dt )
+        ss << "--tstep " << p.dt << "\n";
+    ss << "--outEvery " << output_every << "\n";
+    if ( use_fft_mask )
+        ss << "--fftEvery " << fft_every << "\n";
+    if ( use_adaptive_timestep ) {
+        ss << "-adaptive\n";
+        ss << "--rkvdt " << dt_min << " " << dt_max << "\n";
+        ss << "--tol " << tolerance << "\n";
+    }
+    if ( iterator != "RK4" )
+        ss << "--iterator " << iterator << "\n";
+
+    // Physics
+    ss << "--gammaC " << p.gamma_c << "\n";
+    ss << "--gammaR " << p.gamma_r << "\n";
+    ss << "--gc " << p.g_c << "\n";
+    ss << "--gr " << p.g_r << "\n";
+    ss << "--R " << p.R << "\n";
+    ss << "--g_pm " << p.g_pm << "\n";
+    ss << "--deltaLT " << p.delta_LT << "\n";
+
+    // Twin mode
+    if ( use_twin_mode )
+        ss << "-tetm\n";
+
+    // Physical constants
+    ss << "--meff " << p.m_eff << "\n";
+    ss << "--hbarscaled " << p.h_bar_s << "\n";
+
+    // Stochastic
+    if ( p.stochastic_amplitude > 0 )
+        ss << "--dw " << p.stochastic_amplitude << "\n";
+    if ( imag_time_amplitude != 0 )
+        ss << "--imagTime " << imag_time_amplitude << "\n";
+
+    // Boundary conditions
+    ss << "--boundary "
+       << ( p.periodic_boundary_x ? "periodic" : "zero" ) << " "
+       << ( p.periodic_boundary_y ? "periodic" : "zero" ) << "\n";
+
+    // Random initialization
+    if ( randomly_initialize_system )
+        ss << "--initRandom " << random_system_amplitude << " " << random_seed << "\n";
+
+    // Reservoir suppression
+    if ( !use_reservoir && pump.size() > 0 )
+        ss << "-noReservoir\n";
+
+    // Envelopes
+    if ( pump.size() > 0 )            ss << pump.toRunstring( "pump" );
+    if ( potential.size() > 0 )       ss << potential.toRunstring( "potential" );
+    if ( pulse.size() > 0 )           ss << pulse.toRunstring( "pulse" );
+    if ( fft_mask.size() > 0 )        ss << fft_mask.toRunstring( "fftMask" );
+    if ( initial_state.size() > 0 )   ss << initial_state.toRunstring( "initialState" );
+    if ( initial_reservoir.size() > 0 ) ss << initial_reservoir.toRunstring( "initialReservoir" );
+
+    return ss.str();
 }

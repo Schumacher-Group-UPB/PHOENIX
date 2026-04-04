@@ -103,6 +103,7 @@ class SystemParameters {
     // Flags for the different system branches. These will be set after the input is read.
     bool use_reservoir, use_pulses, use_pumps, use_potentials, use_stochastic, use_twin_mode, use_fft_mask;
     bool use_dense = false; // When true, all matrices are allocated regardless of envelope presence
+    bool started_without_args = false; // True when the program was launched with no CLI arguments
 
     // Output of Variables
     std::vector<std::string> output_keys;
@@ -127,6 +128,7 @@ class SystemParameters {
     void init( int argc, char** argv );
     void calculateAuto();
     void validateInputs();
+    std::string toRunstring() const;
 
     void printHelp( bool verbose, bool markdown );
     void printSummary( std::map<std::string, std::vector<double>> timeit_times, std::map<std::string, double> timeit_times_total );

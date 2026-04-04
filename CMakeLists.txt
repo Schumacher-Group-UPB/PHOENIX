@@ -115,6 +115,7 @@ list(APPEND CU_SOURCES
     "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_matrix_panel.cu"
     "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_control.cu"
     "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_envelope_editor.cu"
+    "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_runstring_config.cu"
 )
 
 # implot3d sources added after the glob so they are not wiped by GLOB_RECURSE
