@@ -297,6 +297,7 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
         if ( !paused_ ) {
             for ( auto& p : panels_ ) updatePanel( p );
             updateEnvelopeHistories();
+            updateTrackedPoints();
         }
 
         // --- Remove panels the user closed via the × button ---
@@ -368,6 +369,7 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
         renderParametersPanel();
         renderPlotsPanel();
         renderEnvelopePlotWindow();
+        renderTrackedPointsWindow();
         renderRunstringWindow();
         renderConfigSaveDialog();
         renderConfigLoadDialog();

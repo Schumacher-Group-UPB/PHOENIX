@@ -84,6 +84,7 @@ private:
         // min/max history for the embedded mini-plot
         std::deque<float> hist_max, hist_min;
         static constexpr int kMaxHist = 512;
+        int hist_window = kMaxHist;  // how many samples to show (slider-controlled)
         // optional fixed colormap range
         bool   use_manual_range = false;
         double manual_min = 0.0, manual_max = 1.0;
@@ -130,10 +131,35 @@ private:
         std::deque<float> values_re;  // Re(temporal_envelope) summed over groups
         std::deque<float> values_im;  // Im(temporal_envelope) summed over groups
         static constexpr int kMaxHist = 1024;
+        int hist_window = kMaxHist;   // how many samples to show (slider-controlled)
     };
     std::vector<EnvelopeHistory> env_histories_;
     bool show_env_window_  = false;
     bool show_plot_window_ = false;
+
+    // ---------------------------------------------------------------
+    // TrackedPoint: time-series of a single pixel across matrices
+    // ---------------------------------------------------------------
+    struct TrackedPoint {
+        int         matrix_idx = 0;  // index into matrix_registry_
+        int         col = 0, row = 0;  // pixel coords in original matrix (ci, ri)
+        float       x_phys = 0.f, y_phys = 0.f;  // physical coordinates at time of creation
+        std::string label;           // e.g. "Psi+ @ (100, 50)  t₀=5.2 ps"
+        bool        enabled    = true;
+        bool        is_complex = false;
+        std::deque<float> times;
+        std::deque<float> values_abs, values_re, values_im, values_arg;
+        static constexpr int kMaxHist = 8192;
+    };
+    std::vector<TrackedPoint> tracked_points_;
+    bool show_tracked_window_  = false;
+    bool tracked_overlay_mode_ = true;   // true = all in one graph, false = individual
+    int  tracked_hist_window_  = 1024;   // how many samples to show (slider-controlled)
+    bool tracked_show_fft_     = false;
+
+    // ---- History-window sizes for other graphs ----
+    int dt_hist_window_    = kDtHistMax;             // Control window dt plot
+    int plots_hist_window_ = MatrixPanel::kMaxHist;  // Plots panel
 
     // ---- Snapshot data ----
     struct Snapshot {
@@ -216,6 +242,8 @@ private:
     void renderParametersPanel();
     void renderPlotsPanel();
     void renderEnvelopePlotWindow();
+    void renderTrackedPointsWindow();
+    void updateTrackedPoints();
     void tileViews();
     void doHandleSnapshots( bool take, bool restore_snap, bool restore_initial, bool delete_snap );
 

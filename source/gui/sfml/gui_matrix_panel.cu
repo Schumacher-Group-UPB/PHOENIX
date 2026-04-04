@@ -257,6 +257,68 @@ void PhoenixGUI::updateEnvelopeHistories() {
 }
 
 // ============================================================
+// updateTrackedPoints - sample every tracked pixel each frame
+// ============================================================
+
+void PhoenixGUI::updateTrackedPoints() {
+    if ( tracked_points_.empty() ) return;
+
+    auto& sys    = solver_.system;
+    const float  t = (float)sys.p.t;
+    const int    W = (int)sys.p.N_c;
+    const int    H = (int)sys.p.N_r;
+
+    auto doSample = [&]() {
+        for ( auto& tp : tracked_points_ ) {
+            if ( !tp.enabled ) continue;
+            if ( tp.matrix_idx < 0 || tp.matrix_idx >= (int)matrix_registry_.size() ) continue;
+            const auto& desc = matrix_registry_[tp.matrix_idx];
+            if ( !desc.available ) continue;
+            if ( tp.col < 0 || tp.col >= W || tp.row < 0 || tp.row >= H ) continue;
+            const int idx = tp.row * W + tp.col;
+
+            float v_abs = 0.f, v_re = 0.f, v_im = 0.f, v_arg = 0.f;
+            if ( desc.complex_mat ) {
+                const auto& hd = desc.complex_mat->getHostData();
+                if ( idx < (int)hd.size() ) {
+                    const auto& cv = hd[idx];
+                    v_abs = (float)CUDA::sqrt( CUDA::abs2( cv ) );
+                    v_re  = (float)CUDA::real( cv );
+                    v_im  = (float)CUDA::imag( cv );
+                    v_arg = (float)CUDA::arg( cv );
+                } else { continue; }
+            } else if ( desc.real_mat ) {
+                const auto& hd = desc.real_mat->getHostData();
+                if ( idx < (int)hd.size() ) {
+                    v_abs = v_re = (float)hd[idx];
+                } else { continue; }
+            } else { continue; }
+
+            tp.times.push_back( t );
+            tp.values_abs.push_back( v_abs );
+            tp.values_re.push_back( v_re );
+            tp.values_im.push_back( v_im );
+            tp.values_arg.push_back( v_arg );
+
+            while ( (int)tp.times.size() > TrackedPoint::kMaxHist ) {
+                tp.times.pop_front();
+                tp.values_abs.pop_front();
+                tp.values_re.pop_front();
+                tp.values_im.pop_front();
+                tp.values_arg.pop_front();
+            }
+        }
+    };
+
+    if ( st_ ) {
+        std::lock_guard<std::mutex> lk( st_->display_mutex );
+        doSample();
+    } else {
+        doSample();
+    }
+}
+
+// ============================================================
 // renderMatrixPanel - one ImGui viewer window per panel
 // ============================================================
 
@@ -585,8 +647,44 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                         val = (double)( (const Type::real*)raw )[idx_px];
                     }
 
-                    ImGui::SetTooltip( "x = %.3f\ny = %.3f\nval = %.4e", x_phys, y_phys, val );
+                    ImGui::SetTooltip( "x = %.3f\ny = %.3f\nval = %.4e\nRight click to track", x_phys, y_phys, val );
                 }
+            }
+
+            // ---- Right-click: add pixel to time-evolution tracker ----
+            if ( is_hovered && in_image && ImGui::IsMouseClicked( ImGuiMouseButton_Right ) ) {
+                const ImVec2 rmouse  = ImGui::GetMousePos();
+                const float  rfrac_c = ( rmouse.x - img_cursor.x ) / img_size.x;
+                const float  rfrac_r = ( rmouse.y - img_cursor.y ) / img_size.y;
+                const float  rcur_uv = 1.0f / p.zoom_scale;
+                const float  rtex_u  = p.pan_u + rfrac_c * rcur_uv;
+                const float  rtex_v  = p.pan_v + rfrac_r * rcur_uv;
+                const int    rci = std::max( 0, std::min( p.tex_w - 1, (int)( rtex_u * p.tex_w ) ) );
+                const int    rri = std::max( 0, std::min( p.tex_h - 1, (int)( rtex_v * p.tex_h ) ) );
+                // Undo fft_shift so stored coords are always in original-matrix space
+                const int    src_ri = p.fft_shift ? ( rri + p.tex_h / 2 ) % p.tex_h : rri;
+                const int    src_ci = p.fft_shift ? ( rci + p.tex_w / 2 ) % p.tex_w : rci;
+
+                const double rx_phys = ( src_ci + 0.5 ) * (double)sys.p.dx - 0.5 * (double)sys.p.L_x;
+                const double ry_phys = ( src_ri + 0.5 ) * (double)sys.p.dy - 0.5 * (double)sys.p.L_y;
+
+                TrackedPoint tp;
+                tp.matrix_idx = p.selected;
+                tp.col        = src_ci;
+                tp.row        = src_ri;
+                tp.x_phys     = (float)rx_phys;
+                tp.y_phys     = (float)ry_phys;
+                {
+                    const std::string& mat_name = matrix_registry_[p.selected].label;
+                    char lbuf[128];
+                    snprintf( lbuf, sizeof( lbuf ),
+                              "%s @ (%d,%d)  t\xe2\x82\x80=%.1fps",
+                              mat_name.c_str(), src_ci, src_ri, (double)sys.p.t );
+                    tp.label = lbuf;
+                }
+                tp.is_complex = ( matrix_registry_[p.selected].complex_mat != nullptr );
+                tracked_points_.push_back( std::move( tp ) );
+                show_tracked_window_ = true;
             }
 
             // ---- Minimap overlay (visible only when zoomed in) ----
@@ -727,11 +825,24 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
         renderMatrixPanel3D( p );
     }
 
-    // ---- Embedded mini-plot ----
+    // ---- Embedded mini-plot with window slider ----
     if ( !p.hist_max.empty() ) {
-        std::vector<float> maxv( p.hist_max.begin(), p.hist_max.end() );
+        p.hist_window = std::max( 10, std::min( p.hist_window, MatrixPanel::kMaxHist ) );
+        const int total_h = (int)p.hist_max.size();
+        const int window_h = std::min( p.hist_window, total_h );
+        const int offset_h = total_h - window_h;
+        std::vector<float> maxv( p.hist_max.begin() + offset_h, p.hist_max.end() );
         char overlay[64];
         snprintf( overlay, sizeof( overlay ), "max=%.3e", maxv.back() );
+        ImGui::SetNextItemWidth( -1.f );
+        char win_label[32];
+        if ( p.hist_window >= MatrixPanel::kMaxHist )
+            std::snprintf( win_label, sizeof( win_label ), "Window: All" );
+        else
+            std::snprintf( win_label, sizeof( win_label ), "Window: %d", p.hist_window );
+        ImGui::SliderInt( "##hw_panel", &p.hist_window, 10, MatrixPanel::kMaxHist, win_label );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Number of history samples to display\n(drag left = fewer, right = all)" );
         ImGui::PlotLines( "##histmax",
                           maxv.data(), (int)maxv.size(),
                           0, overlay, FLT_MAX, FLT_MAX, ImVec2( -1, 55 ) );
