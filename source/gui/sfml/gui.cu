@@ -113,6 +113,7 @@ void PhoenixGUI::init() {
         style.WindowPadding  = { 8.0f, 8.0f };
     }
 
+    ImPlot::CreateContext();
     ImPlot3D::CreateContext();
 
     // Register our ColorPalette colormaps with implot3d so the per-panel
@@ -142,6 +143,7 @@ void PhoenixGUI::init() {
 
 PhoenixGUI::~PhoenixGUI() {
     ImPlot3D::DestroyContext();
+    ImPlot::DestroyContext();
     ImGui::SFML::Shutdown();
 }
 

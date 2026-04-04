@@ -19,6 +19,7 @@
     #include "misc/sfml_window.hpp"
     #include "imgui.h"
     #include "imgui-SFML.h"
+    #include "implot.h"
     #include "implot3d.h"
     #include <chrono>
     #include <thread>
@@ -150,12 +151,19 @@ private:
         std::deque<float> times;
         std::deque<float> values_abs, values_re, values_im, values_arg;
         static constexpr int kMaxHist = 8192;
+        // Which components to show in the time-evolution plot
+        bool show_abs  = true;
+        bool show_abs2 = false;
+        bool show_re   = false;
+        bool show_im   = false;
+        bool show_arg  = false;
     };
     std::vector<TrackedPoint> tracked_points_;
     bool show_tracked_window_  = false;
     bool tracked_overlay_mode_ = true;   // true = all in one graph, false = individual
     int  tracked_hist_window_  = 1024;   // how many samples to show (slider-controlled)
     bool tracked_show_fft_     = false;
+    int  tracked_max_hist_     = TrackedPoint::kMaxHist;  // FIFO depth, user-settable
 
     // ---- History-window sizes for other graphs ----
     int dt_hist_window_    = kDtHistMax;             // Control window dt plot

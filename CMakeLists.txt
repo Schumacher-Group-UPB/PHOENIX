@@ -96,6 +96,17 @@ if(SFML)
         FetchContent_Populate(implot3d)
     endif()
     include_directories("${implot3d_SOURCE_DIR}")
+
+    FetchContent_Declare(implot
+        GIT_REPOSITORY https://github.com/epezent/implot.git
+        GIT_TAG        v0.16
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_GetProperties(implot)
+    if(NOT implot_POPULATED)
+        FetchContent_Populate(implot)
+    endif()
+    include_directories("${implot_SOURCE_DIR}")
 endif()
 
 set(RUNTIME_DIR "${PROJECT_SOURCE_DIR}/bin" CACHE PATH "Where to put built executables")
@@ -118,12 +129,14 @@ list(APPEND CU_SOURCES
     "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_runstring_config.cu"
 )
 
-# implot3d sources added after the glob so they are not wiped by GLOB_RECURSE
+# implot3d and implot sources added after the glob so they are not wiped by GLOB_RECURSE
 if(SFML)
     list(APPEND CPP_SOURCES
         "${implot3d_SOURCE_DIR}/implot3d.cpp"
         "${implot3d_SOURCE_DIR}/implot3d_items.cpp"
         "${implot3d_SOURCE_DIR}/implot3d_meshes.cpp"
+        "${implot_SOURCE_DIR}/implot.cpp"
+        "${implot_SOURCE_DIR}/implot_items.cpp"
     )
 endif()
 

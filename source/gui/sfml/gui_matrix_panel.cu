@@ -300,7 +300,8 @@ void PhoenixGUI::updateTrackedPoints() {
             tp.values_im.push_back( v_im );
             tp.values_arg.push_back( v_arg );
 
-            while ( (int)tp.times.size() > TrackedPoint::kMaxHist ) {
+            const int tp_max = std::max( 10, tracked_max_hist_ );
+            while ( (int)tp.times.size() > tp_max ) {
                 tp.times.pop_front();
                 tp.values_abs.pop_front();
                 tp.values_re.pop_front();

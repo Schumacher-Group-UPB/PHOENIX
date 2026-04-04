@@ -542,27 +542,28 @@ static void computeDisplayFFT( const float* samples, int n, float mean_dt_ps,
 void PhoenixGUI::renderTrackedPointsWindow() {
     if ( !show_tracked_window_ ) return;
 
-    ImGui::SetNextWindowSize( ImVec2( 680, 520 ), ImGuiCond_FirstUseEver );
+    ImGui::SetNextWindowSize( ImVec2( 720, 580 ), ImGuiCond_FirstUseEver );
     ImGui::Begin( "Time Evolution##tev", &show_tracked_window_ );
+
+    auto& sys = solver_.system;
 
     // ---- Controls row ----
     ImGui::Checkbox( "Overlay##tev_ovl", &tracked_overlay_mode_ );
     if ( ImGui::IsItemHovered() )
-        ImGui::SetTooltip( "Show all points in one graph (on) vs individual graphs (off)" );
+        ImGui::SetTooltip( "All points in one graph (on) vs individual graphs per point (off)" );
     ImGui::SameLine();
     ImGui::Checkbox( "FFT##tev_fft", &tracked_show_fft_ );
     if ( ImGui::IsItemHovered() )
-        ImGui::SetTooltip( "Show magnitude spectrum of each point's time series\n(assumes ~uniform dt; approximate for adaptive solvers)" );
+        ImGui::SetTooltip( "Show magnitude spectrum below time series\n"
+                           "(Hann-windowed radix-2 FFT; assumes ~uniform dt)" );
     ImGui::SameLine();
     if ( ImGui::Button( "Clear All##tev_clr" ) )
         tracked_points_.clear();
     ImGui::SameLine();
-    // Export CSV
     if ( ImGui::Button( "Export CSV##tev_exp" ) && !tracked_points_.empty() ) {
-        std::string fname = "tracked_points_t" + std::to_string( (int)solver_.system.p.t ) + ".csv";
+        std::string fname = "tracked_t" + std::to_string( (int)sys.p.t ) + ".csv";
         FILE* f = std::fopen( fname.c_str(), "w" );
         if ( f ) {
-            // Header
             std::fprintf( f, "time_ps" );
             for ( auto& tp : tracked_points_ )
                 if ( tp.enabled )
@@ -570,14 +571,15 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                                   tp.label.c_str(), tp.label.c_str(),
                                   tp.label.c_str(), tp.label.c_str() );
             std::fprintf( f, "\n" );
-            // Determine min time-series length
             size_t min_len = 0;
             for ( auto& tp : tracked_points_ )
                 if ( tp.enabled && !tp.times.empty() )
                     min_len = ( min_len == 0 ) ? tp.times.size()
                                               : std::min( min_len, tp.times.size() );
+            const TrackedPoint* ref = nullptr;
+            for ( auto& tp : tracked_points_ ) if ( tp.enabled && !tp.times.empty() ) { ref = &tp; break; }
             for ( size_t i = 0; i < min_len; ++i ) {
-                std::fprintf( f, "%g", (double)tracked_points_[0].times[i] );
+                std::fprintf( f, "%g", ref ? (double)ref->times[i] : (double)i );
                 for ( auto& tp : tracked_points_ ) {
                     if ( !tp.enabled ) continue;
                     if ( i < tp.times.size() )
@@ -591,49 +593,71 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         }
     }
     if ( ImGui::IsItemHovered() )
-        ImGui::SetTooltip( "Write all enabled point time series to a CSV file" );
+        ImGui::SetTooltip( "Write all enabled point time series to CSV" );
 
-    // ---- Window slider ----
-    tracked_hist_window_ = std::max( 10, std::min( tracked_hist_window_, TrackedPoint::kMaxHist ) );
+    // ---- Window slider + max history input ----
+    tracked_hist_window_ = std::clamp( tracked_hist_window_, 10, tracked_max_hist_ );
     {
         char wlabel[32];
-        if ( tracked_hist_window_ >= TrackedPoint::kMaxHist )
+        if ( tracked_hist_window_ >= tracked_max_hist_ )
             std::snprintf( wlabel, sizeof(wlabel), "Window: All" );
         else
-            std::snprintf( wlabel, sizeof(wlabel), "Window: %d samples", tracked_hist_window_ );
-        ImGui::SetNextItemWidth( -1.f );
-        ImGui::SliderInt( "##tev_win", &tracked_hist_window_,
-                          10, TrackedPoint::kMaxHist, wlabel );
+            std::snprintf( wlabel, sizeof(wlabel), "Window: %d", tracked_hist_window_ );
+        ImGui::SetNextItemWidth( -120.f );
+        ImGui::SliderInt( "##tev_win", &tracked_hist_window_, 10, tracked_max_hist_, wlabel );
         if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Number of history samples to display (drag left = fewer, right = all)" );
+            ImGui::SetTooltip( "Number of samples to display (slide right = all)" );
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth( 110.f );
+        ImGui::InputInt( "Max##tev_mxh", &tracked_max_hist_, 256, 1024 );
+        tracked_max_hist_ = std::clamp( tracked_max_hist_, 10, TrackedPoint::kMaxHist );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Maximum number of samples stored per tracked point\n"
+                               "(reducing this value discards oldest data on the next frame)" );
     }
 
     ImGui::Separator();
 
     if ( tracked_points_.empty() ) {
-        ImGui::TextDisabled( "No points tracked yet.\nRight-click on a 2D image to start tracking." );
+        ImGui::TextDisabled( "No points tracked yet. Right-click a 2D image view to start." );
         ImGui::End();
         return;
     }
 
-    // ---- Tracked points list ----
+    // ---- Per-point list: enable toggle, label, component selectors, delete ----
     int to_delete = -1;
     for ( int i = 0; i < (int)tracked_points_.size(); ++i ) {
         auto& tp = tracked_points_[i];
         ImGui::PushID( i );
+
         ImGui::Checkbox( "##tev_en", &tp.enabled );
         ImGui::SameLine();
         ImGui::TextUnformatted( tp.label.c_str() );
-        if ( ImGui::IsItemHovered() ) {
-            // Show physical coords on hover
-            ImGui::SetTooltip( "x = %.3f  y = %.3f\ncol = %d  row = %d\n%s",
-                               (double)tp.x_phys, (double)tp.y_phys,
-                               tp.col, tp.row,
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "x=%.3f  y=%.3f  col=%d  row=%d\n%s",
+                               (double)tp.x_phys, (double)tp.y_phys, tp.col, tp.row,
                                tp.is_complex ? "complex matrix" : "real matrix" );
-        }
         ImGui::SameLine();
-        if ( ImGui::SmallButton( "x##tev_del" ) )
-            to_delete = i;
+        if ( ImGui::SmallButton( "x##tev_del" ) ) to_delete = i;
+
+        // Component selectors on an indented second line
+        ImGui::Indent( 22.f );
+        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 1.f, 1.f, 1.f, 1.f ) );
+        ImGui::Checkbox( "|z|##tc_abs",          &tp.show_abs  );  ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 0.75f, 0.75f, 0.75f, 1.f ) );
+        ImGui::Checkbox( "|z|²##tc_ab2",  &tp.show_abs2 );  ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
+        ImGui::Checkbox( "Re##tc_re",            &tp.show_re   );  ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
+        ImGui::Checkbox( "Im##tc_im",            &tp.show_im   );  ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 0.4f, 0.8f, 1.f, 1.f ) );
+        ImGui::Checkbox( "arg##tc_arg",          &tp.show_arg  );  ImGui::PopStyleColor();
+        ImGui::Unindent( 22.f );
+
         ImGui::PopID();
     }
     if ( to_delete >= 0 )
@@ -641,157 +665,175 @@ void PhoenixGUI::renderTrackedPointsWindow() {
 
     ImGui::Separator();
 
-    // Collect enabled points
+    // Collect active (enabled + has data) indices
     std::vector<int> active;
     for ( int i = 0; i < (int)tracked_points_.size(); ++i )
         if ( tracked_points_[i].enabled && !tracked_points_[i].values_abs.empty() )
             active.push_back( i );
 
     if ( active.empty() ) {
-        ImGui::TextDisabled( "All tracked points disabled or no data yet." );
+        ImGui::TextDisabled( "All tracked points are disabled or have no data yet." );
         ImGui::End();
         return;
     }
 
-    // Helper: get windowed slice from a deque
+    // Helper: windowed slice from a deque
     auto sliceDeque = []( const std::deque<float>& dq, int window ) -> std::vector<float> {
-        const int total   = (int)dq.size();
-        const int w       = std::min( window, total );
+        const int total = (int)dq.size();
+        const int w     = std::min( window, total );
         return std::vector<float>( dq.begin() + ( total - w ), dq.end() );
     };
-
-    // Palette: cycle through a few distinct colors
-    static const ImVec4 kPalette[] = {
-        { 0.537f, 0.706f, 0.980f, 1.f },  // sky blue
-        { 0.3f,   1.f,    0.3f,   1.f },  // green
-        { 1.f,    0.5f,   0.1f,   1.f },  // orange
-        { 1.f,    0.4f,   0.6f,   1.f },  // pink
-        { 0.4f,   0.9f,   0.9f,   1.f },  // cyan
-        { 1.f,    1.f,    0.4f,   1.f },  // yellow
-        { 0.8f,   0.4f,   1.f,    1.f },  // purple
-        { 1.f,    1.f,    1.f,    1.f },  // white
+    // Abs^2 computed on-the-fly
+    auto sliceAbs2 = [&]( const TrackedPoint& tp ) {
+        auto v = sliceDeque( tp.values_abs, tracked_hist_window_ );
+        for ( auto& x : v ) x *= x;
+        return v;
     };
-    static constexpr int kPaletteSize = (int)( sizeof(kPalette) / sizeof(kPalette[0]) );
+    // Short legend name
+    auto shortName = [&]( const TrackedPoint& tp ) -> std::string {
+        const std::string& mat = matrix_registry_[tp.matrix_idx].label;
+        char buf[64];
+        std::snprintf( buf, sizeof(buf), "%s(%d,%d)", mat.c_str(), tp.col, tp.row );
+        return buf;
+    };
+
+    // Component metadata
+    struct CompInfo { const char* suffix; ImVec4 col; };
+    static const CompInfo kComps[] = {
+        { "|z|",         { 1.f,   1.f,   1.f,   1.f } },
+        { "|z|²", { 0.75f, 0.75f, 0.75f, 1.f } },
+        { "Re",          { 0.3f,  1.f,   0.3f,  1.f } },
+        { "Im",          { 1.f,   0.5f,  0.1f,  1.f } },
+        { "arg",         { 0.4f,  0.8f,  1.f,   1.f } },
+    };
 
     const ImVec2 avail_tev  = ImGui::GetContentRegionAvail();
-    const float  fft_height = tracked_show_fft_ ? std::max( 10.f, avail_tev.y * 0.40f ) : 0.f;
-    const float  ts_height  = std::max( 10.f, avail_tev.y - fft_height - ( tracked_show_fft_ ? 12.f : 0.f ) );
+    const float  fft_frac   = tracked_show_fft_ ? 0.38f : 0.f;
+    const float  ts_height  = std::max( 80.f, avail_tev.y * ( 1.f - fft_frac ) - 8.f );
+    const float  fft_height = std::max( 80.f, avail_tev.y * fft_frac - 8.f );
 
+    // ================================================================
+    // Overlay mode
+    // ================================================================
     if ( tracked_overlay_mode_ ) {
-        // ---- All points in one graph ----
-        // Global y range
-        float gmin = FLT_MAX, gmax = -FLT_MAX;
-        for ( int idx : active ) {
-            const auto& tp = tracked_points_[idx];
-            auto sv = sliceDeque( tp.values_abs, tracked_hist_window_ );
-            for ( float v : sv ) { gmin = std::min( gmin, v ); gmax = std::max( gmax, v ); }
-        }
-        if ( gmax - gmin < 1e-30f ) gmax = gmin + 1e-30f;
+        if ( ImPlot::BeginPlot( "##tev_ts", ImVec2( -1.f, ts_height ) ) ) {
+            ImPlot::SetupAxis( ImAxis_X1, "Time (ps)" );
+            ImPlot::SetupAxis( ImAxis_Y1, "Value" );
+            ImPlot::SetupAxisFormat( ImAxis_Y1, "%.3e" );
 
-        ImVec2 saved_pos = ImGui::GetCursorPos();
-        bool first = true;
-        for ( int pi = 0; pi < (int)active.size(); ++pi ) {
-            const int idx    = active[pi];
-            const auto& tp   = tracked_points_[idx];
-            auto sv          = sliceDeque( tp.values_abs, tracked_hist_window_ );
-            const ImVec4& col = kPalette[pi % kPaletteSize];
-            char pid[32]; std::snprintf( pid, sizeof(pid), "##tev_ovl_%d", idx );
+            for ( int idx : active ) {
+                const auto& tp = tracked_points_[idx];
+                const std::string sn = shortName( tp );
+                auto tv = sliceDeque( tp.times, tracked_hist_window_ );
+                const int n = (int)tv.size();
+                if ( n < 1 ) continue;
 
-            if ( !first ) {
-                ImGui::SetCursorPos( saved_pos );
-                ImGui::PushStyleColor( ImGuiCol_FrameBg, ImVec4( 0.f, 0.f, 0.f, 0.f ) );
+                auto plotComp = [&]( const std::vector<float>& yv, const CompInfo& ci ) {
+                    if ( (int)yv.size() < n ) return;
+                    ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
+                    std::string lbl = sn + " " + ci.suffix;
+                    ImPlot::PlotLine( lbl.c_str(), tv.data(), yv.data(), n );
+                };
+
+                if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); plotComp( v, kComps[0] ); }
+                if ( tp.show_abs2 ) { auto v = sliceAbs2( tp );                                   plotComp( v, kComps[1] ); }
+                if ( tp.show_re   ) { auto v = sliceDeque( tp.values_re,  tracked_hist_window_ ); plotComp( v, kComps[2] ); }
+                if ( tp.show_im   ) { auto v = sliceDeque( tp.values_im,  tracked_hist_window_ ); plotComp( v, kComps[3] ); }
+                if ( tp.show_arg  ) { auto v = sliceDeque( tp.values_arg, tracked_hist_window_ ); plotComp( v, kComps[4] ); }
             }
-            ImGui::PushStyleColor( ImGuiCol_PlotLines, col );
-            char ov[64]; std::snprintf( ov, sizeof(ov), first ? "%.3e" : "", sv.empty() ? 0.f : sv.back() );
-            ImGui::PlotLines( pid, sv.data(), (int)sv.size(), 0,
-                              first ? ov : nullptr, gmin, gmax, ImVec2( -1.f, ts_height ) );
-            ImGui::PopStyleColor( first ? 1 : 2 );
-            first = false;
+            ImPlot::EndPlot();
         }
 
-        // FFT overlay section
         if ( tracked_show_fft_ ) {
-            ImGui::Spacing();
-            ImGui::TextDisabled( "Magnitude spectrum (|abs| series):" );
-            float fmin = FLT_MAX, fmax = -FLT_MAX;
-            // Pre-compute to find range
-            std::vector<std::vector<float>> fft_mags( active.size() );
-            std::vector<std::vector<float>> fft_freqs( active.size() );
-            for ( int pi = 0; pi < (int)active.size(); ++pi ) {
-                const auto& tp = tracked_points_[active[pi]];
-                auto sv = sliceDeque( tp.values_abs, tracked_hist_window_ );
-                float mean_dt = 0.f;
-                if ( tp.times.size() >= 2 ) {
-                    auto tv = sliceDeque( tp.times, tracked_hist_window_ );
-                    mean_dt = ( tv.back() - tv.front() ) / std::max( 1, (int)tv.size() - 1 );
+            if ( ImPlot::BeginPlot( "##tev_fft_ovl", ImVec2( -1.f, fft_height ) ) ) {
+                ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)" );
+                ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|" );
+                ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
+                for ( int idx : active ) {
+                    const auto& tp = tracked_points_[idx];
+                    auto tv  = sliceDeque( tp.times,      tracked_hist_window_ );
+                    auto sv  = sliceDeque( tp.values_abs, tracked_hist_window_ );
+                    const int n = (int)sv.size();
+                    if ( n < 2 ) continue;
+                    float mean_dt = ( (int)tv.size() >= 2 )
+                        ? ( tv.back() - tv.front() ) / (float)std::max( 1, (int)tv.size() - 1 )
+                        : 0.f;
+                    std::vector<float> ffreq, fmag;
+                    computeDisplayFFT( sv.data(), n, mean_dt, ffreq, fmag );
+                    if ( fmag.empty() ) continue;
+                    ImPlot::PlotLine( shortName( tp ).c_str(),
+                                      ffreq.data(), fmag.data(), (int)fmag.size() );
                 }
-                computeDisplayFFT( sv.data(), (int)sv.size(), mean_dt,
-                                   fft_freqs[pi], fft_mags[pi] );
-                for ( float v : fft_mags[pi] ) { fmin = std::min( fmin, v ); fmax = std::max( fmax, v ); }
-            }
-            if ( fmax - fmin < 1e-30f ) fmax = fmin + 1e-30f;
-
-            ImVec2 fft_saved = ImGui::GetCursorPos();
-            bool ffirst = true;
-            for ( int pi = 0; pi < (int)active.size(); ++pi ) {
-                if ( fft_mags[pi].empty() ) continue;
-                const ImVec4& col = kPalette[pi % kPaletteSize];
-                char pid[32]; std::snprintf( pid, sizeof(pid), "##tev_fft_%d", active[pi] );
-                if ( !ffirst ) {
-                    ImGui::SetCursorPos( fft_saved );
-                    ImGui::PushStyleColor( ImGuiCol_FrameBg, ImVec4( 0.f, 0.f, 0.f, 0.f ) );
-                }
-                ImGui::PushStyleColor( ImGuiCol_PlotLines, col );
-                char fov[64]; std::snprintf( fov, sizeof(fov), ffirst ? "freq (1/ps)" : "" );
-                ImGui::PlotLines( pid, fft_mags[pi].data(), (int)fft_mags[pi].size(),
-                                  0, ffirst ? fov : nullptr, fmin, fmax, ImVec2( -1.f, fft_height ) );
-                ImGui::PopStyleColor( ffirst ? 1 : 2 );
-                ffirst = false;
+                ImPlot::EndPlot();
             }
         }
+
+    // ================================================================
+    // Individual mode
+    // ================================================================
     } else {
-        // ---- Individual graph per point ----
-        const float each_h = std::max( 60.f, ( ts_height - (float)active.size() * ImGui::GetFrameHeightWithSpacing() ) / (float)active.size() );
-        for ( int pi = 0; pi < (int)active.size(); ++pi ) {
-            const int idx    = active[pi];
-            auto& tp         = tracked_points_[idx];
-            const ImVec4& col = kPalette[pi % kPaletteSize];
+        const int   n_active = (int)active.size();
+        const float each_ts  = std::max( 60.f, ts_height  / (float)n_active - 4.f );
+        const float each_fft = tracked_show_fft_
+                               ? std::max( 40.f, fft_height / (float)n_active - 4.f )
+                               : 0.f;
 
-            auto sv = sliceDeque( tp.values_abs, tracked_hist_window_ );
-            float pmin = sv.empty() ? 0.f : *std::min_element( sv.begin(), sv.end() );
-            float pmax = sv.empty() ? 1.f : *std::max_element( sv.begin(), sv.end() );
-            if ( pmax - pmin < 1e-30f ) pmax = pmin + 1e-30f;
+        for ( int pi = 0; pi < n_active; ++pi ) {
+            const int idx = active[pi];
+            auto& tp      = tracked_points_[idx];
 
-            // Point label as small header
-            ImGui::PushStyleColor( ImGuiCol_Text, col );
-            ImGui::TextUnformatted( tp.label.c_str() );
-            ImGui::PopStyleColor();
+            ImGui::PushID( idx );
 
-            char pid[32]; std::snprintf( pid, sizeof(pid), "##tev_ind_%d", idx );
-            ImGui::PushStyleColor( ImGuiCol_PlotLines, col );
-            char ov[48]; std::snprintf( ov, sizeof(ov), "%.3e", sv.empty() ? 0.f : sv.back() );
-            ImGui::PlotLines( pid, sv.data(), (int)sv.size(), 0, ov, pmin, pmax, ImVec2( -1.f, each_h ) );
-            ImGui::PopStyleColor();
+            {
+                char plt_id[32]; std::snprintf( plt_id, sizeof(plt_id), "##tev_ind_%d", idx );
+                if ( ImPlot::BeginPlot( plt_id, ImVec2( -1.f, each_ts ) ) ) {
+                    ImPlot::SetupAxis( ImAxis_X1, "Time (ps)" );
+                    ImPlot::SetupAxis( ImAxis_Y1, tp.label.c_str() );
+                    ImPlot::SetupAxisFormat( ImAxis_Y1, "%.3e" );
+
+                    auto tv = sliceDeque( tp.times, tracked_hist_window_ );
+                    const int n = (int)tv.size();
+
+                    auto plotComp = [&]( const std::vector<float>& yv, const CompInfo& ci ) {
+                        if ( n < 1 || (int)yv.size() < n ) return;
+                        ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
+                        ImPlot::PlotLine( ci.suffix, tv.data(), yv.data(), n );
+                    };
+
+                    if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); plotComp( v, kComps[0] ); }
+                    if ( tp.show_abs2 ) { auto v = sliceAbs2( tp );                                   plotComp( v, kComps[1] ); }
+                    if ( tp.show_re   ) { auto v = sliceDeque( tp.values_re,  tracked_hist_window_ ); plotComp( v, kComps[2] ); }
+                    if ( tp.show_im   ) { auto v = sliceDeque( tp.values_im,  tracked_hist_window_ ); plotComp( v, kComps[3] ); }
+                    if ( tp.show_arg  ) { auto v = sliceDeque( tp.values_arg, tracked_hist_window_ ); plotComp( v, kComps[4] ); }
+
+                    ImPlot::EndPlot();
+                }
+            }
 
             if ( tracked_show_fft_ ) {
-                std::vector<float> fmag, ffreq;
-                float mean_dt = 0.f;
-                if ( tp.times.size() >= 2 ) {
-                    auto tv = sliceDeque( tp.times, tracked_hist_window_ );
-                    mean_dt = ( tv.back() - tv.front() ) / std::max( 1, (int)tv.size() - 1 );
-                }
-                computeDisplayFFT( sv.data(), (int)sv.size(), mean_dt, ffreq, fmag );
-                if ( !fmag.empty() ) {
-                    float fmin2 = *std::min_element( fmag.begin(), fmag.end() );
-                    float fmax2 = *std::max_element( fmag.begin(), fmag.end() );
-                    if ( fmax2 - fmin2 < 1e-30f ) fmax2 = fmin2 + 1e-30f;
-                    char fpid[32]; std::snprintf( fpid, sizeof(fpid), "##tev_ifft_%d", idx );
-                    ImGui::PushStyleColor( ImGuiCol_PlotLines, col );
-                    ImGui::PlotLines( fpid, fmag.data(), (int)fmag.size(), 0,
-                                      "freq (1/ps)", fmin2, fmax2, ImVec2( -1.f, each_h * 0.6f ) );
-                    ImGui::PopStyleColor();
+                char fft_id[32]; std::snprintf( fft_id, sizeof(fft_id), "##tev_ifft_%d", idx );
+                if ( ImPlot::BeginPlot( fft_id, ImVec2( -1.f, each_fft ) ) ) {
+                    ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)" );
+                    ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|" );
+                    ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
+
+                    auto tv = sliceDeque( tp.times,      tracked_hist_window_ );
+                    auto sv = sliceDeque( tp.values_abs, tracked_hist_window_ );
+                    const int n = (int)sv.size();
+                    if ( n >= 2 ) {
+                        float mean_dt = ( (int)tv.size() >= 2 )
+                            ? ( tv.back() - tv.front() ) / (float)std::max( 1, (int)tv.size() - 1 )
+                            : 0.f;
+                        std::vector<float> ffreq, fmag;
+                        computeDisplayFFT( sv.data(), n, mean_dt, ffreq, fmag );
+                        if ( !fmag.empty() )
+                            ImPlot::PlotLine( "|z| FFT", ffreq.data(), fmag.data(), (int)fmag.size() );
+                    }
+                    ImPlot::EndPlot();
                 }
             }
+
+            ImGui::PopID();
         }
     }
 
