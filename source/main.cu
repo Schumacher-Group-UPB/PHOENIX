@@ -86,7 +86,7 @@ static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters
                 if ( !result ) break;
             }
 
-            if ( st.paused.load() ) { interrupted_by_pause = true; break; }
+            if ( st.paused.load() ) { interrupted_by_pause = true; }
 
             // Skip all post-processing when paused so the displayed time freezes
             // immediately and out_every_iterations is not advanced.

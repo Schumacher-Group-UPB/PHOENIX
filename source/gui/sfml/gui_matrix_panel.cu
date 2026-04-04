@@ -551,9 +551,9 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 const bool  is_complex = ( desc.complex_mat != nullptr );
 
                 if ( is_complex && desc.complex_mat )
-                    raw = (const void*)desc.complex_mat->getHostPtr();
+                    raw = (const void*)desc.complex_mat->getHostData().data();
                 else if ( desc.real_mat )
-                    raw = (const void*)desc.real_mat->getHostPtr();
+                    raw = (const void*)desc.real_mat->getHostData().data();
 
                 if ( raw ) {
                     const ImVec2 mouse  = ImGui::GetMousePos();
@@ -630,8 +630,8 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
         if ( p.selected >= 0 && p.selected < (int)matrix_registry_.size() ) {
             const auto& desc    = matrix_registry_[p.selected];
             const bool is_cmplx = ( desc.complex_mat != nullptr );
-            const Type::complex* cdata = is_cmplx ? desc.complex_mat->getHostPtr() : nullptr;
-            const Type::real*    rdata = ( !is_cmplx && desc.real_mat ) ? desc.real_mat->getHostPtr() : nullptr;
+            const Type::complex* cdata = is_cmplx ? desc.complex_mat->getHostData().data() : nullptr;
+            const Type::real*    rdata = ( !is_cmplx && desc.real_mat ) ? desc.real_mat->getHostData().data() : nullptr;
 
             if ( cdata || rdata ) {
                 const int slice_len = ( p.slice_axis == 0 ) ? N_r : N_c;
@@ -755,8 +755,8 @@ void PhoenixGUI::renderMatrixPanel3D( MatrixPanel& p ) {
 
     // Reuse the already-downloaded host pointer (blitPanel synced it this frame)
     const bool is_complex = ( desc.complex_mat != nullptr );
-    const Type::complex* cdata = is_complex ? desc.complex_mat->getHostPtr() : nullptr;
-    const Type::real*    rdata = ( !is_complex && desc.real_mat ) ? desc.real_mat->getHostPtr() : nullptr;
+    const Type::complex* cdata = is_complex ? desc.complex_mat->getHostData().data() : nullptr;
+    const Type::real*    rdata = ( !is_complex && desc.real_mat ) ? desc.real_mat->getHostData().data() : nullptr;
     if ( !cdata && !rdata ) return;
 
     int stride  = std::max( 1, p.subsample_3d );
