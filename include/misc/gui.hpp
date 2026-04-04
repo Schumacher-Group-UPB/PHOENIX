@@ -164,6 +164,8 @@ private:
     int  tracked_hist_window_  = 1024;   // how many samples to show (slider-controlled)
     bool tracked_show_fft_     = false;
     int  tracked_max_hist_     = TrackedPoint::kMaxHist;  // FIFO depth, user-settable
+    bool tracked_autoscale_    = true;   // autoscale axes by default
+    bool tracked_plot_hovered_ = false;  // hover state carried across frames for interaction detection
 
     // ---- History-window sizes for other graphs ----
     int dt_hist_window_    = kDtHistMax;             // Control window dt plot

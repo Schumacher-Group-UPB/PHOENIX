@@ -560,6 +560,16 @@ void PhoenixGUI::renderTrackedPointsWindow() {
     if ( ImGui::Button( "Clear All##tev_clr" ) )
         tracked_points_.clear();
     ImGui::SameLine();
+    // Autoscale button — highlighted green when active
+    if ( tracked_autoscale_ )
+        ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.2f, 0.6f, 0.2f, 0.9f ) );
+    if ( ImGui::Button( "Autoscale##tev_as" ) )
+        tracked_autoscale_ = !tracked_autoscale_;
+    if ( tracked_autoscale_ )
+        ImGui::PopStyleColor();
+    if ( ImGui::IsItemHovered() )
+        ImGui::SetTooltip( "Autoscale axes (re-enable after manual zoom/pan)" );
+    ImGui::SameLine();
     if ( ImGui::Button( "Export CSV##tev_exp" ) && !tracked_points_.empty() ) {
         std::string fname = "tracked_t" + std::to_string( (int)sys.p.t ) + ".csv";
         FILE* f = std::fopen( fname.c_str(), "w" );
@@ -608,7 +618,7 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         if ( ImGui::IsItemHovered() )
             ImGui::SetTooltip( "Number of samples to display (slide right = all)" );
         ImGui::SameLine();
-        ImGui::SetNextItemWidth( 110.f );
+        ImGui::SetNextItemWidth( 160.f );
         ImGui::InputInt( "Max##tev_mxh", &tracked_max_hist_, 256, 1024 );
         tracked_max_hist_ = std::clamp( tracked_max_hist_, 10, TrackedPoint::kMaxHist );
         if ( ImGui::IsItemHovered() )
@@ -713,13 +723,29 @@ void PhoenixGUI::renderTrackedPointsWindow() {
     const float  fft_height = std::max( 80.f, avail_tev.y * fft_frac - 8.f );
 
     // ================================================================
+    // Autoscale interaction detection — disable if user drags or scrolls
+    // ================================================================
+    if ( tracked_autoscale_ && tracked_plot_hovered_ ) {
+        const auto& io = ImGui::GetIO();
+        if ( io.MouseWheel != 0.f ||
+             ImGui::IsMouseDragging( ImGuiMouseButton_Left ) ||
+             ImGui::IsMouseDragging( ImGuiMouseButton_Right ) )
+            tracked_autoscale_ = false;
+    }
+    tracked_plot_hovered_ = false;  // reset; set inside each BeginPlot block
+
+    const ImPlotAxisFlags kAxisFlags = tracked_autoscale_
+        ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;
+
+    // ================================================================
     // Overlay mode
     // ================================================================
     if ( tracked_overlay_mode_ ) {
         if ( ImPlot::BeginPlot( "##tev_ts", ImVec2( -1.f, ts_height ) ) ) {
-            ImPlot::SetupAxis( ImAxis_X1, "Time (ps)" );
-            ImPlot::SetupAxis( ImAxis_Y1, "Value" );
+            ImPlot::SetupAxis( ImAxis_X1, "Time (ps)", kAxisFlags );
+            ImPlot::SetupAxis( ImAxis_Y1, "Value",     kAxisFlags );
             ImPlot::SetupAxisFormat( ImAxis_Y1, "%.3e" );
+            if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
 
             for ( int idx : active ) {
                 const auto& tp = tracked_points_[idx];
@@ -746,23 +772,41 @@ void PhoenixGUI::renderTrackedPointsWindow() {
 
         if ( tracked_show_fft_ ) {
             if ( ImPlot::BeginPlot( "##tev_fft_ovl", ImVec2( -1.f, fft_height ) ) ) {
-                ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)" );
-                ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|" );
+                ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)", kAxisFlags );
+                ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlags );
                 ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
+                if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
                 for ( int idx : active ) {
                     const auto& tp = tracked_points_[idx];
-                    auto tv  = sliceDeque( tp.times,      tracked_hist_window_ );
-                    auto sv  = sliceDeque( tp.values_abs, tracked_hist_window_ );
-                    const int n = (int)sv.size();
+                    const std::string sn = shortName( tp );
+                    auto tv = sliceDeque( tp.times, tracked_hist_window_ );
+                    const int n = (int)tv.size();
                     if ( n < 2 ) continue;
-                    float mean_dt = ( (int)tv.size() >= 2 )
-                        ? ( tv.back() - tv.front() ) / (float)std::max( 1, (int)tv.size() - 1 )
+                    float mean_dt = ( n >= 2 )
+                        ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 )
                         : 0.f;
-                    std::vector<float> ffreq, fmag;
-                    computeDisplayFFT( sv.data(), n, mean_dt, ffreq, fmag );
-                    if ( fmag.empty() ) continue;
-                    ImPlot::PlotLine( shortName( tp ).c_str(),
-                                      ffreq.data(), fmag.data(), (int)fmag.size() );
+
+                    struct FftComp { bool enabled; const float* src_begin; int deque_offset; const CompInfo* ci; };
+                    auto abs2src  = sliceAbs2( tp );  // pre-computed
+                    auto absv     = sliceDeque( tp.values_abs, tracked_hist_window_ );
+                    auto rev      = sliceDeque( tp.values_re,  tracked_hist_window_ );
+                    auto imv      = sliceDeque( tp.values_im,  tracked_hist_window_ );
+                    auto argv     = sliceDeque( tp.values_arg, tracked_hist_window_ );
+
+                    auto doFftLine = [&]( bool show, const std::vector<float>& dat, const CompInfo& ci ) {
+                        if ( !show || (int)dat.size() < 2 ) return;
+                        std::vector<float> ffreq, fmag;
+                        computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag );
+                        if ( fmag.empty() ) return;
+                        ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
+                        std::string lbl = sn + " " + ci.suffix;
+                        ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size() );
+                    };
+                    doFftLine( tp.show_abs,  absv,    kComps[0] );
+                    doFftLine( tp.show_abs2, abs2src, kComps[1] );
+                    doFftLine( tp.show_re,   rev,     kComps[2] );
+                    doFftLine( tp.show_im,   imv,     kComps[3] );
+                    doFftLine( tp.show_arg,  argv,    kComps[4] );
                 }
                 ImPlot::EndPlot();
             }
@@ -787,9 +831,10 @@ void PhoenixGUI::renderTrackedPointsWindow() {
             {
                 char plt_id[32]; std::snprintf( plt_id, sizeof(plt_id), "##tev_ind_%d", idx );
                 if ( ImPlot::BeginPlot( plt_id, ImVec2( -1.f, each_ts ) ) ) {
-                    ImPlot::SetupAxis( ImAxis_X1, "Time (ps)" );
-                    ImPlot::SetupAxis( ImAxis_Y1, tp.label.c_str() );
+                    ImPlot::SetupAxis( ImAxis_X1, "Time (ps)",     kAxisFlags );
+                    ImPlot::SetupAxis( ImAxis_Y1, tp.label.c_str(), kAxisFlags );
                     ImPlot::SetupAxisFormat( ImAxis_Y1, "%.3e" );
+                    if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
 
                     auto tv = sliceDeque( tp.times, tracked_hist_window_ );
                     const int n = (int)tv.size();
@@ -813,22 +858,35 @@ void PhoenixGUI::renderTrackedPointsWindow() {
             if ( tracked_show_fft_ ) {
                 char fft_id[32]; std::snprintf( fft_id, sizeof(fft_id), "##tev_ifft_%d", idx );
                 if ( ImPlot::BeginPlot( fft_id, ImVec2( -1.f, each_fft ) ) ) {
-                    ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)" );
-                    ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|" );
+                    ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)", kAxisFlags );
+                    ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlags );
                     ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
+                    if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
 
-                    auto tv = sliceDeque( tp.times,      tracked_hist_window_ );
-                    auto sv = sliceDeque( tp.values_abs, tracked_hist_window_ );
-                    const int n = (int)sv.size();
-                    if ( n >= 2 ) {
-                        float mean_dt = ( (int)tv.size() >= 2 )
-                            ? ( tv.back() - tv.front() ) / (float)std::max( 1, (int)tv.size() - 1 )
-                            : 0.f;
+                    auto tv      = sliceDeque( tp.times,          tracked_hist_window_ );
+                    auto absv    = sliceDeque( tp.values_abs,      tracked_hist_window_ );
+                    auto abs2src = sliceAbs2( tp );
+                    auto rev     = sliceDeque( tp.values_re,       tracked_hist_window_ );
+                    auto imv     = sliceDeque( tp.values_im,       tracked_hist_window_ );
+                    auto argv    = sliceDeque( tp.values_arg,      tracked_hist_window_ );
+                    const int n  = (int)tv.size();
+                    float mean_dt = ( n >= 2 )
+                        ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 )
+                        : 0.f;
+
+                    auto doFftLine = [&]( bool show, const std::vector<float>& dat, const CompInfo& ci ) {
+                        if ( !show || (int)dat.size() < 2 ) return;
                         std::vector<float> ffreq, fmag;
-                        computeDisplayFFT( sv.data(), n, mean_dt, ffreq, fmag );
-                        if ( !fmag.empty() )
-                            ImPlot::PlotLine( "|z| FFT", ffreq.data(), fmag.data(), (int)fmag.size() );
-                    }
+                        computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag );
+                        if ( fmag.empty() ) return;
+                        ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
+                        ImPlot::PlotLine( ci.suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
+                    };
+                    doFftLine( tp.show_abs,  absv,    kComps[0] );
+                    doFftLine( tp.show_abs2, abs2src, kComps[1] );
+                    doFftLine( tp.show_re,   rev,     kComps[2] );
+                    doFftLine( tp.show_im,   imv,     kComps[3] );
+                    doFftLine( tp.show_arg,  argv,    kComps[4] );
                     ImPlot::EndPlot();
                 }
             }
