@@ -137,6 +137,26 @@ void PhoenixGUI::init() {
         }
     }
 
+    // Register same colormaps with ImPlot (2D) for PlotHeatmap in kymograph window
+    {
+        implot_colormap_base_ = ImPlot::GetColormapCount();
+        std::vector<ImVec4> cols2;
+        constexpr int kSamples2 = 256;
+        cols2.reserve( kSamples2 );
+        for ( const auto& e : colormaps_ ) {
+            cols2.clear();
+            const int n = (int)e.palette.output_colors.size();
+            for ( int k = 0; k < kSamples2; k++ ) {
+                const int idx = std::clamp(
+                    (int)std::round( (double)k / (kSamples2 - 1) * (n - 1) ),
+                    0, n - 1 );
+                const auto& c = e.palette.output_colors[idx];
+                cols2.push_back( { c.r / 255.f, c.g / 255.f, c.b / 255.f, 1.f } );
+            }
+            ImPlot::AddColormap( e.name.c_str(), cols2.data(), kSamples2, false );
+        }
+    }
+
     buildRegistry();
     params_saved_ = solver_.system.kernel_parameters;
 }
@@ -300,6 +320,7 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
             for ( auto& p : panels_ ) updatePanel( p );
             updateEnvelopeHistories();
             updateTrackedPoints();
+            updateTrackedCuts();
         }
 
         // --- Remove panels the user closed via the × button ---
@@ -372,6 +393,7 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
         renderPlotsPanel();
         renderEnvelopePlotWindow();
         renderTrackedPointsWindow();
+        renderTrackedCutsWindow();
         renderBenchmarkWindow();
         renderRunstringWindow();
         renderConfigSaveDialog();

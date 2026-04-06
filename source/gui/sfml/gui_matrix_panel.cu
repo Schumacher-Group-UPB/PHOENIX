@@ -319,6 +319,76 @@ void PhoenixGUI::updateTrackedPoints() {
     }
 }
 
+void PhoenixGUI::updateTrackedCuts() {
+    if ( tracked_cuts_.empty() ) return;
+
+    auto& sys    = solver_.system;
+    const float  t   = (float)sys.p.t;
+    const int    N_c = (int)sys.p.N_c;
+    const int    N_r = (int)sys.p.N_r;
+
+    auto doSample = [&]() {
+        for ( auto& tc : tracked_cuts_ ) {
+            if ( !tc.enabled ) continue;
+            if ( tc.matrix_idx < 0 || tc.matrix_idx >= (int)matrix_registry_.size() ) continue;
+            const auto& desc = matrix_registry_[tc.matrix_idx];
+            if ( !desc.available ) continue;
+
+            const int slice_len = ( tc.slice_axis == 0 ) ? N_r : N_c;
+            if ( slice_len != tc.slice_len ) continue;  // grid size changed – skip
+
+            const Type::complex* cdata = ( tc.is_complex && desc.complex_mat )
+                ? desc.complex_mat->getHostData().data() : nullptr;
+            const Type::real* rdata = ( !tc.is_complex && desc.real_mat )
+                ? desc.real_mat->getHostData().data() : nullptr;
+            if ( !cdata && !rdata ) continue;
+
+            std::vector<float> abs_f( slice_len ), re_f( slice_len ),
+                               im_f( slice_len ),  arg_f( slice_len );
+
+            for ( int i = 0; i < slice_len; i++ ) {
+                // axis==0: fixed column (slice_index), vary row i  → data[i * N_c + slice_index]
+                // axis==1: fixed row (slice_index),   vary col i  → data[slice_index * N_c + i]
+                const int didx = ( tc.slice_axis == 0 )
+                    ? ( i * N_c + tc.slice_index )
+                    : ( tc.slice_index * N_c + i );
+                if ( cdata ) {
+                    abs_f[i] = (float)CUDA::sqrt( CUDA::abs2( cdata[didx] ) );
+                    re_f[i]  = (float)CUDA::real( cdata[didx] );
+                    im_f[i]  = (float)CUDA::imag( cdata[didx] );
+                    arg_f[i] = (float)CUDA::arg( cdata[didx] );
+                } else {
+                    abs_f[i] = re_f[i] = (float)rdata[didx];
+                    im_f[i]  = 0.f;
+                    arg_f[i] = 0.f;
+                }
+            }
+
+            tc.times.push_back( t );
+            tc.frames_abs.push_back( std::move( abs_f ) );
+            tc.frames_re.push_back( std::move( re_f ) );
+            tc.frames_im.push_back( std::move( im_f ) );
+            tc.frames_arg.push_back( std::move( arg_f ) );
+
+            const int max_h = std::max( 10, cut_max_hist_ );
+            while ( (int)tc.times.size() > max_h ) {
+                tc.times.pop_front();
+                tc.frames_abs.pop_front();
+                tc.frames_re.pop_front();
+                tc.frames_im.pop_front();
+                tc.frames_arg.pop_front();
+            }
+        }
+    };
+
+    if ( st_ ) {
+        std::lock_guard<std::mutex> lk( st_->display_mutex );
+        doSample();
+    } else {
+        doSample();
+    }
+}
+
 // ============================================================
 // renderMatrixPanel - one ImGui viewer window per panel
 // ============================================================
@@ -722,8 +792,30 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
         const int max_idx = ( p.slice_axis == 0 ) ? std::max( 0, N_c - 1 )
                                                    : std::max( 0, N_r - 1 );
         p.slice_index = std::clamp( p.slice_index, 0, max_idx );
-        ImGui::SetNextItemWidth( -1.f );
+        ImGui::SetNextItemWidth( -70.f );
         ImGui::SliderInt( "##sliceidx", &p.slice_index, 0, max_idx );
+        ImGui::SameLine();
+        if ( ImGui::Button( "Track##tc" ) ) {
+            if ( p.selected >= 0 && p.selected < (int)matrix_registry_.size() ) {
+                const auto& tdesc = matrix_registry_[p.selected];
+                TrackedCut tc;
+                tc.matrix_idx  = p.selected;
+                tc.slice_axis  = p.slice_axis;
+                tc.slice_index = p.slice_index;
+                tc.slice_len   = ( p.slice_axis == 0 ) ? N_r : N_c;
+                tc.is_complex  = ( tdesc.complex_mat != nullptr );
+                char lbuf[160];
+                const char axis_ch = ( p.slice_axis == 0 ) ? 'X' : 'Y';
+                std::snprintf( lbuf, sizeof( lbuf ), "%s | %c-cut @ %d  t\xe2\x82\x80=%.1fps",
+                               tdesc.label.c_str(), axis_ch, p.slice_index,
+                               (double)sys.p.t );
+                tc.label = lbuf;
+                tracked_cuts_.push_back( std::move( tc ) );
+                show_tracked_cuts_window_ = true;
+            }
+        }
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Record this line cut over time\n(opens the Kymograph window)" );
 
         // Build slice arrays from already-synced host data
         if ( p.selected >= 0 && p.selected < (int)matrix_registry_.size() ) {
@@ -795,6 +887,30 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 1.f, 1.f, 1.f, abs_a ) );
                 ImGui::PlotLines( "##sl_abs", abs_v.data(), slice_len, 0, overlay, gmin, gmax, plot_sz );
                 ImGui::PopStyleColor();
+
+                // Right-click context menu on the line cut plot
+                if ( ImGui::BeginPopupContextItem( "##lcctx" ) ) {
+                    if ( ImGui::MenuItem( "Track This Cut" ) ) {
+                        if ( p.selected >= 0 && p.selected < (int)matrix_registry_.size() ) {
+                            const auto& tdesc = matrix_registry_[p.selected];
+                            TrackedCut tc;
+                            tc.matrix_idx  = p.selected;
+                            tc.slice_axis  = p.slice_axis;
+                            tc.slice_index = p.slice_index;
+                            tc.slice_len   = ( p.slice_axis == 0 ) ? N_r : N_c;
+                            tc.is_complex  = ( tdesc.complex_mat != nullptr );
+                            char lbuf[160];
+                            const char axis_ch = ( p.slice_axis == 0 ) ? 'X' : 'Y';
+                            std::snprintf( lbuf, sizeof( lbuf ), "%s | %c-cut @ %d  t\xe2\x82\x80=%.1fps",
+                                           tdesc.label.c_str(), axis_ch, p.slice_index,
+                                           (double)sys.p.t );
+                            tc.label = lbuf;
+                            tracked_cuts_.push_back( std::move( tc ) );
+                            show_tracked_cuts_window_ = true;
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
 
                 if ( is_cmplx ) {
                     const float re_a  = p.show_re_curve  ? 1.f : 0.f;

@@ -171,6 +171,41 @@ private:
     bool tracked_autoscale_    = true;   // autoscale axes by default
     bool tracked_plot_hovered_ = false;  // hover state carried across frames for interaction detection
 
+    // ---------------------------------------------------------------
+    // TrackedCut: kymograph (space-time) accumulation of a line cut
+    // ---------------------------------------------------------------
+    struct TrackedCut {
+        int         matrix_idx  = 0;
+        int         slice_axis  = 0;   // 0 = fixed col (vary Y), 1 = fixed row (vary X)
+        int         slice_index = 0;   // column or row index in original matrix
+        int         slice_len   = 0;   // spatial width of the cut (N_r or N_c)
+        std::string label;
+        bool        enabled    = true;
+        bool        is_complex = false;
+
+        std::deque<float>              times;
+        std::deque<std::vector<float>> frames_abs;
+        std::deque<std::vector<float>> frames_re;
+        std::deque<std::vector<float>> frames_im;
+        std::deque<std::vector<float>> frames_arg;
+
+        static constexpr int kMaxHist = 1024;
+
+        enum class DisplayComp { Abs = 0, Abs2, Re, Im, Arg } display_comp = DisplayComp::Abs;
+
+        bool   use_manual_range = false;
+        double manual_min = 0.0, manual_max = 1.0;
+        int    colormap_idx = -1;   // -1 = auto
+
+        bool show_spatial_fft  = false;
+        bool show_temporal_fft = false;
+    };
+    std::vector<TrackedCut> tracked_cuts_;
+    bool show_tracked_cuts_window_ = false;
+    int  cut_hist_window_          = 256;
+    int  cut_max_hist_             = TrackedCut::kMaxHist;
+    int  implot_colormap_base_     = -1;  // index of first custom colormap in ImPlot (2D)
+
     // ---- History-window sizes for other graphs ----
     int dt_hist_window_    = kDtHistMax;             // Control window dt plot
     int plots_hist_window_ = MatrixPanel::kMaxHist;  // Plots panel
@@ -259,6 +294,8 @@ private:
     void renderEnvelopePlotWindow();
     void renderTrackedPointsWindow();
     void updateTrackedPoints();
+    void renderTrackedCutsWindow();
+    void updateTrackedCuts();
     void tileViews();
     void doHandleSnapshots( bool take, bool restore_snap, bool restore_initial, bool delete_snap );
 

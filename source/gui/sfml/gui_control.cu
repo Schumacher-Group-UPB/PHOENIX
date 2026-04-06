@@ -221,6 +221,7 @@ void PhoenixGUI::renderMenuBar() {
             ImGui::MenuItem( "Plots",          nullptr, &show_plot_window_    );
             ImGui::MenuItem( "Envelopes",      nullptr, &show_env_window_     );
             ImGui::MenuItem( "Time Evolution", nullptr, &show_tracked_window_ );
+            ImGui::MenuItem( "Kymograph",      nullptr, &show_tracked_cuts_window_ );
             ImGui::MenuItem( "Benchmarking",   nullptr, &show_benchmark_window_ );
             if ( ImGui::MenuItem( "Envelope Editor", "E" ) )
                 addEnvelopeEditorPanel();
@@ -894,6 +895,329 @@ void PhoenixGUI::renderTrackedPointsWindow() {
 
             ImGui::PopID();
         }
+    }
+
+    ImGui::End();
+}
+
+// ============================================================
+// renderTrackedCutsWindow - kymograph (space-time) heatmaps
+// ============================================================
+
+void PhoenixGUI::renderTrackedCutsWindow() {
+    if ( !show_tracked_cuts_window_ ) return;
+
+    auto& sys = solver_.system;
+
+    ImGui::SetNextWindowSize( ImVec2( 780, 640 ), ImGuiCond_FirstUseEver );
+    ImGui::Begin( "Kymograph##kymo", &show_tracked_cuts_window_ );
+
+    // ---- Top controls ----
+    if ( ImGui::Button( "Clear All##kymo_clr" ) )
+        tracked_cuts_.clear();
+    ImGui::SameLine();
+    {
+        cut_hist_window_ = std::clamp( cut_hist_window_, 10, cut_max_hist_ );
+        char wlabel[32];
+        if ( cut_hist_window_ >= cut_max_hist_ )
+            std::snprintf( wlabel, sizeof( wlabel ), "Window: All" );
+        else
+            std::snprintf( wlabel, sizeof( wlabel ), "Window: %d", cut_hist_window_ );
+        ImGui::SetNextItemWidth( -220.f );
+        ImGui::SliderInt( "##kymo_win", &cut_hist_window_, 10, cut_max_hist_, wlabel );
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth( 120.f );
+        ImGui::InputInt( "Max##kymo_mxh", &cut_max_hist_, 64, 256 );
+        cut_max_hist_ = std::clamp( cut_max_hist_, 10, TrackedCut::kMaxHist );
+    }
+    ImGui::SameLine();
+    if ( ImGui::Button( "Export CSV##kymo_exp" ) ) {
+        for ( auto& tc : tracked_cuts_ ) {
+            if ( !tc.enabled || tc.times.empty() ) continue;
+            char fname[256];
+            std::string safe = tc.label.substr( 0, 30 );
+            for ( auto& ch : safe ) if ( ch == ' ' || ch == '|' || ch == '/' || ch == ':' ) ch = '_';
+            std::snprintf( fname, sizeof( fname ), "kymo_%s_t%d.csv", safe.c_str(), (int)sys.p.t );
+            FILE* f = std::fopen( fname, "w" );
+            if ( !f ) continue;
+            const double dx   = (double)( tc.slice_axis == 0 ? sys.p.L_y : sys.p.L_x ) / (double)tc.slice_len;
+            const double x0   = -0.5 * (double)( tc.slice_axis == 0 ? sys.p.L_y : sys.p.L_x );
+            std::fprintf( f, "time_ps" );
+            for ( int c = 0; c < tc.slice_len; ++c )
+                std::fprintf( f, ",%.6g", x0 + ( c + 0.5 ) * dx );
+            std::fprintf( f, "\n" );
+            const int n = (int)tc.times.size();
+            for ( int r = 0; r < n; ++r ) {
+                std::fprintf( f, "%g", (double)tc.times[r] );
+                for ( int c = 0; c < tc.slice_len; ++c ) {
+                    double v = ( r < (int)tc.frames_abs.size() && c < (int)tc.frames_abs[r].size() )
+                               ? (double)tc.frames_abs[r][c] : 0.0;
+                    std::fprintf( f, ",%g", v );
+                }
+                std::fprintf( f, "\n" );
+            }
+            std::fclose( f );
+        }
+    }
+    if ( ImGui::IsItemHovered() )
+        ImGui::SetTooltip( "Export each tracked cut to a CSV file (abs values, rows=time, cols=position)" );
+
+    ImGui::Separator();
+
+    if ( tracked_cuts_.empty() ) {
+        ImGui::TextDisabled( "No cuts tracked yet. In Line Cut mode, click 'Track' or right-click the plot." );
+        ImGui::End();
+        return;
+    }
+
+    // ---- Per-cut list ----
+    int to_delete = -1;
+    for ( int i = 0; i < (int)tracked_cuts_.size(); ++i ) {
+        auto& tc = tracked_cuts_[i];
+        ImGui::PushID( i );
+        ImGui::Checkbox( "##kymo_en", &tc.enabled );
+        ImGui::SameLine();
+        ImGui::TextUnformatted( tc.label.c_str() );
+        ImGui::SameLine();
+        if ( ImGui::SmallButton( "x##kymo_del" ) ) to_delete = i;
+
+        ImGui::Indent( 22.f );
+        static const char* comp_names[] = { "|z|", "|z|^2", "Re", "Im", "arg" };
+        int comp_int = (int)tc.display_comp;
+        ImGui::SetNextItemWidth( 72.f );
+        if ( ImGui::BeginCombo( "##comp", comp_names[comp_int] ) ) {
+            for ( int m = 0; m < 5; ++m ) {
+                bool sel = ( comp_int == m );
+                if ( ImGui::Selectable( comp_names[m], sel ) )
+                    tc.display_comp = (TrackedCut::DisplayComp)m;
+                if ( sel ) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        const char* cmap_preview = ( tc.colormap_idx < 0 || tc.colormap_idx >= (int)colormaps_.size() )
+            ? "auto" : colormaps_[tc.colormap_idx].name.c_str();
+        ImGui::SetNextItemWidth( 80.f );
+        if ( ImGui::BeginCombo( "##cmap", cmap_preview ) ) {
+            bool sel_auto = ( tc.colormap_idx < 0 );
+            if ( ImGui::Selectable( "auto", sel_auto ) ) tc.colormap_idx = -1;
+            if ( sel_auto ) ImGui::SetItemDefaultFocus();
+            for ( int k = 0; k < (int)colormaps_.size(); ++k ) {
+                bool sel = ( tc.colormap_idx == k );
+                if ( ImGui::Selectable( colormaps_[k].name.c_str(), sel ) ) tc.colormap_idx = k;
+                if ( sel ) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        ImGui::Checkbox( "Fix range##fr", &tc.use_manual_range );
+        if ( tc.use_manual_range ) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 90.f );
+            ImGui::InputDouble( "##kymin", &tc.manual_min, 0.0, 0.0, "%.3e" );
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 90.f );
+            ImGui::InputDouble( "##kymax", &tc.manual_max, 0.0, 0.0, "%.3e" );
+        }
+        ImGui::SameLine();
+        ImGui::Checkbox( "k-FFT##sfft", &tc.show_spatial_fft );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Show k-space kymograph (FFT along the spatial axis)" );
+        ImGui::SameLine();
+        ImGui::Checkbox( "f-FFT##tfft", &tc.show_temporal_fft );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Show spectrogram (per-column FFT across the time axis)" );
+        ImGui::Unindent( 22.f );
+        ImGui::PopID();
+    }
+    if ( to_delete >= 0 )
+        tracked_cuts_.erase( tracked_cuts_.begin() + to_delete );
+
+    ImGui::Separator();
+
+    // Count active cuts so we can distribute available height
+    int n_active = 0;
+    for ( const auto& tc : tracked_cuts_ )
+        if ( tc.enabled && !tc.times.empty() ) ++n_active;
+    if ( n_active == 0 ) { ImGui::End(); return; }
+
+    const float avail_h = ImGui::GetContentRegionAvail().y;
+    const float plot_h  = std::max( 100.f, avail_h / (float)n_active - 6.f );
+    const float bar_w   = 55.f;
+
+    // ---- Heatmap plots ----
+    for ( int i = 0; i < (int)tracked_cuts_.size(); ++i ) {
+        auto& tc = tracked_cuts_[i];
+        if ( !tc.enabled || tc.times.empty() ) continue;
+        ImGui::PushID( 0x1000 + i );
+
+        const int total_frames = (int)tc.times.size();
+        const int n_frames     = std::min( cut_hist_window_, total_frames );
+        const int frame_offset = total_frames - n_frames;
+        const int n_cols       = tc.slice_len;
+
+        // Select source data based on display component
+        const std::deque<std::vector<float>>* src = &tc.frames_abs;
+        switch ( tc.display_comp ) {
+            case TrackedCut::DisplayComp::Re:  src = &tc.frames_re;  break;
+            case TrackedCut::DisplayComp::Im:  src = &tc.frames_im;  break;
+            case TrackedCut::DisplayComp::Arg: src = &tc.frames_arg; break;
+            default: break;
+        }
+        const bool do_abs2 = ( tc.display_comp == TrackedCut::DisplayComp::Abs2 );
+
+        // Flatten to contiguous row-major [n_frames × n_cols]  (row=time, col=space)
+        std::vector<float> flat( (size_t)n_frames * (size_t)n_cols, 0.f );
+        for ( int r = 0; r < n_frames; ++r ) {
+            const auto& row = (*src)[frame_offset + r];
+            const int actual = std::min( n_cols, (int)row.size() );
+            for ( int c = 0; c < actual; ++c ) {
+                float v = row[c];
+                flat[(size_t)r * (size_t)n_cols + c] = do_abs2 ? v * v : v;
+            }
+        }
+
+        double vmin = tc.use_manual_range ? tc.manual_min
+            : (double)*std::min_element( flat.begin(), flat.end() );
+        double vmax = tc.use_manual_range ? tc.manual_max
+            : (double)*std::max_element( flat.begin(), flat.end() );
+        if ( vmax - vmin < 1e-30 ) vmax = vmin + 1e-30;
+
+        const double phys_len = (double)( tc.slice_axis == 0 ? sys.p.L_y : sys.p.L_x );
+        const double x_min    = -0.5 * phys_len;
+        const double x_max    =  0.5 * phys_len;
+        const double t_lo     = (double)tc.times[frame_offset];
+        const double t_hi     = (double)tc.times[frame_offset + n_frames - 1];
+
+        // Resolve colormap (default to vik = first registered)
+        ImPlotColormap cmap = ImPlotColormap_Viridis;
+        if ( implot_colormap_base_ >= 0 ) {
+            int cm = ( tc.colormap_idx < 0 ) ? 0
+                     : std::clamp( tc.colormap_idx, 0, (int)colormaps_.size() - 1 );
+            cmap = (ImPlotColormap)( implot_colormap_base_ + cm );
+        }
+
+        // --- Main kymograph heatmap ---
+        ImPlot::PushColormap( cmap );
+        ImPlot::ColormapScale( "##ks", vmin, vmax, ImVec2( bar_w, plot_h ) );
+        ImGui::SameLine();
+        char plot_id[64];
+        std::snprintf( plot_id, sizeof( plot_id ), "##kymo_%d", i );
+        if ( ImPlot::BeginPlot( plot_id, ImVec2( -1.f, plot_h ) ) ) {
+            const char* xlab = ( tc.slice_axis == 0 ) ? "y (um)" : "x (um)";
+            ImPlot::SetupAxes( xlab, "Time (ps)" );
+            ImPlot::SetupAxisLimits( ImAxis_X1, x_min, x_max, ImPlotCond_Always );
+            ImPlot::SetupAxisLimits( ImAxis_Y1, t_lo,  t_hi,  ImPlotCond_Always );
+            ImPlot::PlotHeatmap( tc.label.c_str(),
+                                 flat.data(), n_frames, n_cols,
+                                 vmin, vmax, nullptr,
+                                 ImPlotPoint( x_min, t_lo ),
+                                 ImPlotPoint( x_max, t_hi ) );
+            ImPlot::EndPlot();
+        }
+        ImPlot::PopColormap();
+
+        // --- Optional: k-space kymograph (spatial FFT per frame) ---
+        if ( tc.show_spatial_fft && n_cols >= 4 ) {
+            int N_sfft = 1;
+            while ( N_sfft < n_cols ) N_sfft <<= 1;
+            const int half_s = N_sfft / 2 + 1;
+
+            std::vector<float> sfft_flat( (size_t)n_frames * (size_t)half_s, 0.f );
+            for ( int r = 0; r < n_frames; ++r ) {
+                const auto& row = (*src)[frame_offset + r];
+                std::vector<std::complex<float>> buf( N_sfft, { 0.f, 0.f } );
+                const int actual = std::min( n_cols, (int)row.size() );
+                for ( int c = 0; c < actual; ++c ) {
+                    float w = 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * (float)c / (float)( n_cols - 1 ) ) );
+                    float v = row[c];
+                    buf[c] = { ( do_abs2 ? v * v : v ) * w, 0.f };
+                }
+                _fft_inplace( buf );
+                for ( int k = 0; k < half_s; ++k )
+                    sfft_flat[(size_t)r * (size_t)half_s + k] = std::abs( buf[k] ) / (float)n_cols;
+            }
+
+            double sv_min = (double)*std::min_element( sfft_flat.begin(), sfft_flat.end() );
+            double sv_max = (double)*std::max_element( sfft_flat.begin(), sfft_flat.end() );
+            if ( sv_max - sv_min < 1e-30 ) sv_max = sv_min + 1e-30;
+
+            const double dk    = 2.0 * 3.14159265358979 / phys_len;
+            const double k_max = dk * (double)( half_s - 1 );
+
+            ImPlot::PushColormap( cmap );
+            ImPlot::ColormapScale( "##ks2", sv_min, sv_max, ImVec2( bar_w, plot_h ) );
+            ImGui::SameLine();
+            char sfft_id[64];
+            std::snprintf( sfft_id, sizeof( sfft_id ), "##sfft_%d", i );
+            if ( ImPlot::BeginPlot( sfft_id, ImVec2( -1.f, plot_h ) ) ) {
+                ImPlot::SetupAxes( "k (1/um)", "Time (ps)" );
+                ImPlot::SetupAxisLimits( ImAxis_X1, 0.0,  k_max, ImPlotCond_Always );
+                ImPlot::SetupAxisLimits( ImAxis_Y1, t_lo, t_hi,  ImPlotCond_Always );
+                ImPlot::PlotHeatmap( "##sfft_hm",
+                                     sfft_flat.data(), n_frames, half_s,
+                                     sv_min, sv_max, nullptr,
+                                     ImPlotPoint( 0.0, t_lo ),
+                                     ImPlotPoint( k_max, t_hi ) );
+                ImPlot::EndPlot();
+            }
+            ImPlot::PopColormap();
+        }
+
+        // --- Optional: temporal spectrogram (per-column FFT across time) ---
+        if ( tc.show_temporal_fft && n_frames >= 4 ) {
+            const float mean_dt = ( n_frames >= 2 )
+                ? ( tc.times[frame_offset + n_frames - 1] - tc.times[frame_offset] ) / (float)( n_frames - 1 )
+                : 1.f;
+
+            int N_tfft = 1;
+            while ( N_tfft < n_frames ) N_tfft <<= 1;
+            const int half_t = N_tfft / 2 + 1;
+
+            std::vector<float> tfft_flat( (size_t)half_t * (size_t)n_cols, 0.f );
+            for ( int c = 0; c < n_cols; ++c ) {
+                std::vector<float> col_data( n_frames );
+                for ( int r = 0; r < n_frames; ++r ) {
+                    const auto& row = (*src)[frame_offset + r];
+                    float v = ( c < (int)row.size() ) ? row[c] : 0.f;
+                    col_data[r] = do_abs2 ? v * v : v;
+                }
+                std::vector<float> ffreq, fmag;
+                computeDisplayFFT( col_data.data(), n_frames, mean_dt, ffreq, fmag );
+                const int n_freq = (int)fmag.size();
+                for ( int k = 0; k < n_freq && k < half_t; ++k )
+                    tfft_flat[(size_t)k * (size_t)n_cols + c] = fmag[k];
+            }
+
+            double tv_min = (double)*std::min_element( tfft_flat.begin(), tfft_flat.end() );
+            double tv_max = (double)*std::max_element( tfft_flat.begin(), tfft_flat.end() );
+            if ( tv_max - tv_min < 1e-30 ) tv_max = tv_min + 1e-30;
+
+            const double f_max = ( mean_dt > 0.f )
+                ? (double)( half_t - 1 ) / ( (double)N_tfft * (double)mean_dt )
+                : 1.0;
+
+            ImPlot::PushColormap( cmap );
+            ImPlot::ColormapScale( "##ks3", tv_min, tv_max, ImVec2( bar_w, plot_h ) );
+            ImGui::SameLine();
+            char tfft_id[64];
+            std::snprintf( tfft_id, sizeof( tfft_id ), "##tfft_%d", i );
+            if ( ImPlot::BeginPlot( tfft_id, ImVec2( -1.f, plot_h ) ) ) {
+                const char* xlab2 = ( tc.slice_axis == 0 ) ? "y (um)" : "x (um)";
+                ImPlot::SetupAxes( xlab2, "Freq (1/ps)" );
+                ImPlot::SetupAxisLimits( ImAxis_X1, x_min, x_max, ImPlotCond_Always );
+                ImPlot::SetupAxisLimits( ImAxis_Y1, 0.0,   f_max, ImPlotCond_Always );
+                ImPlot::PlotHeatmap( "##tfft_hm",
+                                     tfft_flat.data(), half_t, n_cols,
+                                     tv_min, tv_max, nullptr,
+                                     ImPlotPoint( x_min, 0.0 ),
+                                     ImPlotPoint( x_max, f_max ) );
+                ImPlot::EndPlot();
+            }
+            ImPlot::PopColormap();
+        }
+
+        ImGui::PopID();
     }
 
     ImGui::End();
