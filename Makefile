@@ -107,12 +107,6 @@ endif
 ifeq ($(AVX2),TRUE)
 	ADD_FLAGS += -DAVX2
 endif
-ifeq ($(LIKWID),TRUE)
-	ADD_FLAGS += -DBENCH -DLIKWID -llikwid -DLIKWID_PERFMON 
-endif
-ifeq ($(BENCH),TRUE)
-	ADD_FLAGS += -DBENCH -DBENCH_TIME=10
-endif
 
 ifeq ($(PRETTYCMD),FALSE)
 	CMD_COLORS = FALSE

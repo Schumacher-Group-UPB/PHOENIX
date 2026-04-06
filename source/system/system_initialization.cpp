@@ -256,6 +256,9 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
         use_reservoir = false;
     }
 
+    if ( PHOENIX::CLIO::findInArgv( "--benchmark", argc, argv ) != -1 )
+        benchmarking_enabled = true;
+
     if ( PHOENIX::CLIO::findInArgv( "-dense", argc, argv ) != -1 ) {
         use_dense      = true;
         use_reservoir  = true;

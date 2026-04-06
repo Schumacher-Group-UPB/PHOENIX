@@ -6,6 +6,9 @@
 //    #include <immintrin.h>
 //#endif
 
+#include <chrono>
+#include "misc/timeit.hpp"
+
 // Macro to copy to contents of the buffers into shared memory. The threads can then use threadIdx.x to access the shared memory.
 #ifdef USE_CPU
     #define BUFFER_TO_SHARED()
@@ -85,72 +88,37 @@
 #ifdef NO_CALCULATE_K
     #define CALCULATE_K( index, w, input_wavefunction, input_reservoir ) {};
 #else
-    #ifdef BENCH
-        #ifdef USE_CPU
-            #define CALCULATE_K( index, w, input_wavefunction, input_reservoir )                                                                                                                                                                                                                                                                                   \
-                {                                                                                                                                                                                                                                                                                                                                               \
-                    const Type::uint32 current_halo = system.p.halo_size - index;                                                                                                                                                                                                                                                                               \
-                    auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                                                                               \
-                    Solver::InputOutput io{ matrix.input_wavefunction##_plus.getDevicePtr( subgrid ), matrix.input_wavefunction##_minus.getDevicePtr( subgrid ),     matrix.input_wavefunction##_iplus.getDevicePtr( subgrid ),      matrix.input_wavefunction##_iminus.getDevicePtr( subgrid ), matrix.input_reservoir##_plus.getDevicePtr( subgrid ),         \
-                                            matrix.input_reservoir##_minus.getDevicePtr( subgrid ),   matrix.k_wavefunction_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_wavefunction_minus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_minus.getDevicePtr( subgrid, index - 1 ) }; \
-                    CALL_SUBGRID_KERNEL_MI( PHOENIX::Kernel::Compute::gp_scalar<GCC_EXPAND_VA_ARGS( false, false, false, false, false, false )>, "K" #index, current_grid, current_block, stream, w, current_halo, kernel_arguments, io );                                                                                                                         \
-                    CALL_SUBGRID_KERNEL( PHOENIX::Kernel::Compute::gp_scalar<GCC_EXPAND_VA_ARGS( false, false, false, false, false, false )>, "K" #index, current_grid, current_block, stream, w, current_halo, kernel_arguments, io );                                                                                                                            \
-                }
-        #else
-            #define CALCULATE_K( index, w, input_wavefunction, input_reservoir )                                                                                                                                                                                                                                                                                   \
-                {                                                                                                                                                                                                                                                                                                                                               \
-                    const Type::uint32 current_halo = system.p.halo_size - index;                                                                                                                                                                                                                                                                               \
-                    auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                                                                               \
-                    Solver::InputOutput io{ matrix.input_wavefunction##_plus.getDevicePtr( subgrid ), matrix.input_wavefunction##_minus.getDevicePtr( subgrid ),     matrix.input_wavefunction##_iplus.getDevicePtr( subgrid ),      matrix.input_wavefunction##_iminus.getDevicePtr( subgrid ), matrix.input_reservoir##_plus.getDevicePtr( subgrid ),         \
-                                            matrix.input_reservoir##_minus.getDevicePtr( subgrid ),   matrix.k_wavefunction_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_wavefunction_minus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_minus.getDevicePtr( subgrid, index - 1 ) }; \
-                    CALL_SUBGRID_KERNEL( PHOENIX::Kernel::Compute::gp_scalar<GCC_EXPAND_VA_ARGS( false, false, false, false, false, false )>, "K" #index, current_grid, current_block, stream, w, current_halo, kernel_arguments, io );                                                                                                                            \
-                }
-        #endif
-    #else
-        #define CALCULATE_K( index, w, input_wavefunction, input_reservoir )                                                                                                                                                                                                                         \
-            {                                                                                                                                                                                                                                                                                     \
-                const Type::uint32 current_halo = system.p.halo_size - index;                                                                                                                                                                                                                     \
-                auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                     \
-                Solver::InputOutput io{ matrix.input_wavefunction##_plus.getDevicePtr( subgrid ),      matrix.input_wavefunction##_minus.getDevicePtr( subgrid ),      matrix.input_reservoir##_plus.getDevicePtr( subgrid ),      matrix.input_reservoir##_minus.getDevicePtr( subgrid ),        \
-                                        matrix.k_wavefunction_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_wavefunction_minus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_minus.getDevicePtr( subgrid, index - 1 ) }; \
-                PHOENIX::Dispatch::dispatch( \
-                    [&]( auto tetm_t, auto res_t, auto pulse_t, \
-                         auto pump_t, auto pot_t, auto stoch_t ) { \
-                        constexpr bool use_tetm       = decltype( tetm_t )::value; \
-                        constexpr bool use_reservoir  = decltype( res_t )::value; \
-                        constexpr bool use_pulse      = decltype( pulse_t )::value; \
-                        constexpr bool use_pump       = decltype( pump_t )::value; \
-                        constexpr bool use_potential  = decltype( pot_t )::value; \
-                        constexpr bool use_stochastic = decltype( stoch_t )::value; \
-                        CALL_SUBGRID_KERNEL( PHOENIX::Kernel::Compute::gp_scalar<GCC_EXPAND_VA_ARGS( use_tetm, use_reservoir, use_pulse, use_pump, use_potential, use_stochastic )>, "K" #index, current_grid, current_block, stream, w, current_halo, kernel_arguments, io ); \
-                    }, \
-                    system.use_twin_mode, \
-                    system.use_reservoir, \
-                    system.use_pulses, \
-                    system.use_pumps, \
-                    system.use_potentials, \
-                    system.use_stochastic \
-                ); \
-            }
-
-    #endif
+    #define CALCULATE_K( index, w, input_wavefunction, input_reservoir )                                                                                                                                                                                                                         \
+        {                                                                                                                                                                                                                                                                                     \
+            const Type::uint32 current_halo = system.p.halo_size - index;                                                                                                                                                                                                                     \
+            auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                     \
+            Solver::InputOutput io{ matrix.input_wavefunction##_plus.getDevicePtr( subgrid ),      matrix.input_wavefunction##_minus.getDevicePtr( subgrid ),      matrix.input_reservoir##_plus.getDevicePtr( subgrid ),      matrix.input_reservoir##_minus.getDevicePtr( subgrid ),        \
+                                    matrix.k_wavefunction_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_wavefunction_minus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_plus.getDevicePtr( subgrid, index - 1 ), matrix.k_reservoir_minus.getDevicePtr( subgrid, index - 1 ) }; \
+            PHOENIX::Dispatch::dispatch( \
+                [&]( auto tetm_t, auto res_t, auto pulse_t, \
+                     auto pump_t, auto pot_t, auto stoch_t ) { \
+                    constexpr bool use_tetm       = decltype( tetm_t )::value; \
+                    constexpr bool use_reservoir  = decltype( res_t )::value; \
+                    constexpr bool use_pulse      = decltype( pulse_t )::value; \
+                    constexpr bool use_pump       = decltype( pump_t )::value; \
+                    constexpr bool use_potential  = decltype( pot_t )::value; \
+                    constexpr bool use_stochastic = decltype( stoch_t )::value; \
+                    CALL_SUBGRID_KERNEL( PHOENIX::Kernel::Compute::gp_scalar<GCC_EXPAND_VA_ARGS( use_tetm, use_reservoir, use_pulse, use_pump, use_potential, use_stochastic )>, "K" #index, current_grid, current_block, stream, w, current_halo, kernel_arguments, io ); \
+                }, \
+                system.use_twin_mode, \
+                system.use_reservoir, \
+                system.use_pulses, \
+                system.use_pumps, \
+                system.use_potentials, \
+                system.use_stochastic \
+            ); \
+        }
 #endif
 // Only Callable from within the solver
 #ifdef NO_INTERMEDIATE_SUM_K
     #define INTERMEDIATE_SUM_K( index, ... ) {};
 #else
-    #ifdef BENCH
-        #define INTERMEDIATE_SUM_K( index, ... )                                                                                                                                                                                                                                                                            \
-            {                                                                                                                                                                                                                                                                                                               \
-                const Type::uint32 current_halo = system.p.halo_size - index;                                                                                                                                                                                                                                               \
-                auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                                               \
-                Solver::InputOutput io{ matrix.wavefunction_plus.getDevicePtr( subgrid ), matrix.wavefunction_minus.getDevicePtr( subgrid ),       matrix.wavefunction##_iplus.getDevicePtr( subgrid ),      matrix.wavefunction##_iminus.getDevicePtr( subgrid ), matrix.reservoir_plus.getDevicePtr( subgrid ),           \
-                                        matrix.reservoir_minus.getDevicePtr( subgrid ),   matrix.buffer_wavefunction_plus.getDevicePtr( subgrid ), matrix.buffer_wavefunction_minus.getDevicePtr( subgrid ), matrix.buffer_reservoir_plus.getDevicePtr( subgrid ), matrix.buffer_reservoir_minus.getDevicePtr( subgrid ) }; \
-                Type::complex *k_vec_wf_plus = matrix.k_wavefunction_plus.getDevicePtr( subgrid );                                                                                                                                                                                                                          \
-                CALL_SUBGRID_KERNEL( Kernel::Summation::runge_sum_to_input_k<GCC_EXPAND_VA_ARGS_ORDER( Type::complex, false, false, false, index, __VA_ARGS__ )>, "Sum for K" #index, current_grid, current_block, stream, current_halo, kernel_arguments, io.in_wf_plus, io.out_wf_plus, k_vec_wf_plus );                  \
-            };
-    #else
-        #define INTERMEDIATE_SUM_K( index, ... )                                                                                                                                                                                                                                                                                                                                                                                                                              \
+    #define INTERMEDIATE_SUM_K( index, ... )                                                                                                                                                                                                                                                                                                                                                                                                                              \
             {                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
                 const Type::uint32 current_halo = system.p.halo_size - index;                                                                                                                                                                                                                                                                                                                                                                                                 \
                 auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                                                                                                                                                                                                 \
@@ -180,24 +148,12 @@
                     system.use_reservoir \
                 ); \
             };
-    #endif
 #endif
 // Only Callable from within the solver
 #ifdef NO_FINAL_SUM_K
     #define FINAL_SUM_K( index, ... ) {};
 #else
-    #ifdef BENCH
-        #define FINAL_SUM_K( index, ... )                                                                                                                                                                                                                                                                 \
-            {                                                                                                                                                                                                                                                                                             \
-                Type::uint32 current_halo = system.p.halo_size;                                                                                                                                                                                                                                           \
-                auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                             \
-                Solver::InputOutput io{ matrix.wavefunction_plus.getDevicePtr( subgrid ), matrix.wavefunction_minus.getDevicePtr( subgrid ), matrix.wavefunction##_iplus.getDevicePtr( subgrid ), matrix.wavefunction##_iminus.getDevicePtr( subgrid ), matrix.reservoir_plus.getDevicePtr( subgrid ),    \
-                                        matrix.reservoir_minus.getDevicePtr( subgrid ),   matrix.wavefunction_plus.getDevicePtr( subgrid ),  matrix.wavefunction_minus.getDevicePtr( subgrid ),   matrix.reservoir_plus.getDevicePtr( subgrid ),        matrix.reservoir_minus.getDevicePtr( subgrid ) }; \
-                Type::complex *k_vec_wf_plus = matrix.k_wavefunction_plus.getDevicePtr( subgrid );                                                                                                                                                                                                        \
-                CALL_SUBGRID_KERNEL( Kernel::Summation::runge_add_to_input_k<GCC_EXPAND_VA_ARGS_ORDER( Type::complex, false, false, false, index, __VA_ARGS__ )>, "Sum for K" #index, current_grid, current_block, stream, current_halo, kernel_arguments, io.in_wf_plus, k_vec_wf_plus );                \
-            };
-    #else
-        #define FINAL_SUM_K( index, ... )                                                                                                                                                                                                                                                                                                                                                                                                         \
+    #define FINAL_SUM_K( index, ... )                                                                                                                                                                                                                                                                                                                                                                                                         \
             {                                                                                                                                                                                                                                                                                                                                                                                                                                     \
                 Type::uint32 current_halo = system.p.halo_size;                                                                                                                                                                                                                                                                                                                                                                                   \
                 auto [current_block, current_grid] = getLaunchParameters( system.p.subgrid_N_c + 2 * current_halo, system.p.subgrid_N_r + 2 * current_halo );                                                                                                                                                                                                                                                                                     \
@@ -227,8 +183,6 @@
                     system.use_reservoir \
                 ); \
             };
-
-    #endif
 #endif
 
 #define ERROR_K( order, ... )                                                                                                                                                                                                                             \
@@ -297,10 +251,55 @@
     // are used as launch parameters and for debugging.
     // Don't use shared_mem_size for now, as it is not used and will result in large grids crashing the kernel launch.
     //size_t shared_mem_size = sizeof( Type::complex ) * ( 2 * system.p.subgrid_row_offset + system.block_size + 1 );
-    #define CALL_SUBGRID_KERNEL( func, name, grid, block, stream, ... ) \
-        { func<<<grid, block, 0, stream>>>( 0, __VA_ARGS__ ); }
+// Disable the CUDA graph at runtime when benchmarking is active so kernels run directly
+// and CUDA events can be timed. Graph stays enabled otherwise.
+#define PHOENIX_EFFECTIVE_WITH_GRAPH(x) ( (x) && !this->system.benchmarking_enabled )
+
+    // bench_events, bench_active, _bench_idx are injected into scope by SOLVER_SEQUENCE
+    // via PHOENIX_BENCH_DECLARE_EVENTS. When bench_active=false the else-branch compiles
+    // to the same single kernel launch as the non-benchmarking build.
+    #define CALL_SUBGRID_KERNEL( func, name, grid, block, stream, ... )                  \
+        {                                                                                 \
+            if ( bench_active ) {                                                         \
+                while ( (int)bench_events.size() <= _bench_idx ) {                        \
+                    Solver::BenchEvent _be;                                               \
+                    cudaEventCreateWithFlags( &_be.start, cudaEventDefault );             \
+                    cudaEventCreateWithFlags( &_be.stop,  cudaEventDefault );             \
+                    bench_events.push_back( _be );                                        \
+                }                                                                         \
+                bench_events[_bench_idx].label = (name);                                  \
+                cudaEventRecord( bench_events[_bench_idx].start, stream );                \
+                func<<<grid, block, 0, stream>>>( 0, __VA_ARGS__ );                       \
+                cudaEventRecord( bench_events[_bench_idx].stop,  stream );                \
+                _bench_idx++;                                                             \
+            } else {                                                                      \
+                func<<<grid, block, 0, stream>>>( 0, __VA_ARGS__ );                       \
+            }                                                                             \
+        }
     #define CALL_FULL_KERNEL( func, name, grid, block, stream, ... ) \
         { func<<<grid, block, 0, stream>>>( 0, __VA_ARGS__ ); }
+
+    // PHOENIX_BENCH_DECLARE_EVENTS injects bench_events (pool ref), bench_active (runtime flag),
+    // and _bench_idx (call counter) into SOLVER_SEQUENCE scope so CALL_SUBGRID_KERNEL can use them.
+    // PHOENIX_BENCH_FLUSH: one cudaDeviceSynchronize per step (only when bench_active), then drains
+    // all (start,stop) event pairs into TimeIt.
+    #define PHOENIX_BENCH_DECLARE_EVENTS( pool, active, idx )                              \
+        auto& bench_events = (pool); const bool bench_active = (active); int idx = 0;
+    #define PHOENIX_BENCH_FLUSH( pool )                                                \
+        {                                                                              \
+            if ( bench_active ) {                                                      \
+                cudaDeviceSynchronize();                                               \
+                std::map<std::string, double> _bench_sums;                             \
+                for ( auto& _be : (pool) ) {                                           \
+                    float _ms = 0.f;                                                   \
+                    cudaEventElapsedTime( &_ms, _be.start, _be.stop );                 \
+                    _bench_sums[_be.label] += _ms / 1000.0;                            \
+                }                                                                      \
+                for ( auto& [_n, _d] : _bench_sums )                                   \
+                    PHOENIX::TimeIt::addTime( _n, _d );                                 \
+            }                                                                          \
+        }
+
     // Wraps the successive calls to the CUDA Kernels into a single CUDA Graph.
     // Edit: Oh God what a mess.
     #define SOLVER_SEQUENCE( with_graph, content )                                                                                                                                                                 \
@@ -312,8 +311,11 @@
             auto &stream    = this->cuda_graph_stream_;                                                                                                                                                            \
             auto &nodes     = this->cuda_graph_nodes_;                                                                                                                                                             \
             auto &num_nodes = this->cuda_graph_num_nodes_;                                                                                                                                                         \
+            const bool _eff_with_graph = PHOENIX_EFFECTIVE_WITH_GRAPH( with_graph );                                                                                                                               \
+            /* Benchmark event pool: injected into scope so CALL_SUBGRID_KERNEL can see them. */              \
+            PHOENIX_BENCH_DECLARE_EVENTS( this->bench_events_, this->system.benchmarking_enabled, _bench_idx ) \
             /* Recapture if: first time, graphs disabled, or parameters changed at runtime. */                                                                                                                     \
-            if ( not cuda_graph_created or not with_graph or this->parameters_are_dirty ) {                                                                                                                        \
+            if ( not cuda_graph_created or not _eff_with_graph or this->parameters_are_dirty ) {                                                                                                                   \
                 /* Destroy stale resources before recapturing. */                                                                                                                                                   \
                 if ( cuda_graph_created and this->parameters_are_dirty ) {                                                                                                                                         \
                     cudaGraphExecDestroy( instance );  instance = nullptr;                                                                                                                                          \
@@ -326,7 +328,7 @@
                 for ( Type::uint32 subgrid = 0; subgrid < system.p.subgrids_columns * system.p.subgrids_rows; subgrid++ ) {                                                                                        \
                     v_kernel_arguments.push_back( generateKernelArguments( subgrid ) );                                                                                                                            \
                 }                                                                                                                                                                                                  \
-                if ( with_graph ) {                                                                                                                                                                                \
+                if ( _eff_with_graph ) {                                                                                                                                                                           \
                     cudaStreamCreate( &stream );                                                                                                                                                                   \
                     cudaStreamBeginCapture( stream, cudaStreamCaptureModeGlobal );                                                                                                                                 \
                     std::cout << PHOENIX::CLIO::prettyPrint( "Capturing CUDA Graph", PHOENIX::CLIO::Control::Secondary | PHOENIX::CLIO::Control::Info ) << std::endl;                                              \
@@ -348,7 +350,7 @@
                     auto &kernel_arguments = v_kernel_arguments[subgrid];                                                                                                                                          \
                     content;                                                                                                                                                                                       \
                 }                                                                                                                                                                                                  \
-                if ( with_graph ) {                                                                                                                                                                                \
+                if ( _eff_with_graph ) {                                                                                                                                                                           \
                     cudaStreamEndCapture( stream, &graph );                                                                                                                                                        \
                     cudaGraphInstantiate( &instance, graph, NULL, NULL, 0 );                                                                                                                                       \
                     cuda_graph_created = true;                                                                                                                                                                     \
@@ -358,8 +360,10 @@
                     cudaGraphGetNodes( graph, nodes, &num_nodes );                                                                                                                                                 \
                     std::cout << PHOENIX::CLIO::prettyPrint( "CUDA Graph created with " + std::to_string( num_nodes ) + " nodes", PHOENIX::CLIO::Control::Secondary | PHOENIX::CLIO::Control::Info ) << std::endl; \
                 }                                                                                                                                                                                                  \
+                /* When benchmarking (_eff_with_graph=false): sync once and read all event pairs. */               \
+                PHOENIX_BENCH_FLUSH( bench_events )                                                                 \
             } else {                                                                                                                                                                                               \
-                cudaGraphLaunch( instance, stream );                                                                                                                                                               \
+                cudaGraphLaunch( instance, stream );                                                                \
             }                                                                                                                                                                                                      \
         }
 
@@ -371,45 +375,25 @@
 
     // CALL_SUBGRID_KERNEL will call the kernel row-wise, making sure that memory accesses are coalesced and the innermost loop is vectorizable
     // CALL_FULL_KERNEL will also handle the indexing, making sure that the function is called with the correct, modified row-col index depending on the current halo.
-    #define CALL_SUBGRID_KERNEL( func, name, grid, block, stream, ... )                             \
-        {                                                                                           \
-            const int halo_rem = system.p.halo_size - current_halo;                                 \
-            const int nc = system.p.subgrid_N_c;                                                    \
-            const int bx = block.x;                                                                 \
-            for ( int row = 0; row < bx; row++ ) {                                                  \
-                int index_start = ( row + halo_rem ) * system.p.subgrid_row_offset + halo_rem;      \
-                _Pragma( "omp simd" ) for ( int col = 0; col < nc + 2 * ( current_halo ); col++ ) { \
-                    func( index_start + col, __VA_ARGS__ );                                         \
-                }                                                                                   \
-            }                                                                                       \
+    #define CALL_SUBGRID_KERNEL( func, name, grid, block, stream, ... )                              \
+        {                                                                                            \
+            auto _bench_t0 = std::chrono::high_resolution_clock::now();                              \
+            const int halo_rem = system.p.halo_size - current_halo;                                  \
+            const int nc = system.p.subgrid_N_c;                                                     \
+            const int bx = block.x;                                                                  \
+            for ( int row = 0; row < bx; row++ ) {                                                   \
+                int index_start = ( row + halo_rem ) * system.p.subgrid_row_offset + halo_rem;       \
+                _Pragma( "omp simd" ) for ( int col = 0; col < nc + 2 * ( current_halo ); col++ ) {  \
+                    func( index_start + col, __VA_ARGS__ );                                          \
+                }                                                                                    \
+            }                                                                                        \
+            if ( system.benchmarking_enabled ) {                                                     \
+                auto _bench_t1 = std::chrono::high_resolution_clock::now();                          \
+                PHOENIX::TimeIt::addTime( name,                                                       \
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(                             \
+                        _bench_t1 - _bench_t0 ).count() / 1E9 );                                     \
+            }                                                                                        \
         }
-    #ifdef BENCH
-        #ifdef AVX2
-            #define CALL_SUBGRID_KERNEL_MI( func, name, grid, block, stream, ... )                                \
-                {                                                                                                 \
-                    const int n = system.p.subgrid_N2_with_halo;                                                  \
-                    static const float m[8] = { 1, -1, 1, -1, 1, -1, 1, -1 };                                     \
-                    const __m256 c = _mm256_loadu_ps( m );                                                        \
-                    for ( int i = 0; i < n - n % 4; i += 4 ) {                                                    \
-                        __m256 a = _mm256_loadu_ps( reinterpret_cast<const float *>( io.in_wf_plus + i ) );       \
-                        __m256 b = _mm256_permute_ps( a, 0b10110001 );                                            \
-                        a = _mm256_mul_ps( b, c );                                                                \
-                        _mm256_storeu_ps( reinterpret_cast<float *>( io.in_wf_plus_i + i ), a );                  \
-                    }                                                                                             \
-                    for ( int i = n - n % 4; i < n; i++ ) {                                                       \
-                        io.in_wf_plus_i[i] = std::complex( imag( io.in_wf_plus[i] ), -real( io.in_wf_plus[i] ) ); \
-                    }                                                                                             \
-                }
-        #else
-            #define CALL_SUBGRID_KERNEL_MI( func, name, grid, block, stream, ... )                                \
-                {                                                                                                 \
-                    const int n = system.p.subgrid_N2_with_halo;                                                  \
-                    for ( int i = 0; i < n; i++ ) {                                                               \
-                        io.in_wf_plus_i[i] = std::complex( imag( io.in_wf_plus[i] ), -real( io.in_wf_plus[i] ) ); \
-                    }                                                                                             \
-                }
-        #endif
-    #endif
     #define CALL_FULL_KERNEL( func, name, grid, block, stream, ... )                                              \
         {                                                                                                         \
             const Type::uint32 execution_range = block.x * grid.x;                                                \

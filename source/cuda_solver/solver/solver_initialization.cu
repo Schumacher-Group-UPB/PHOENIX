@@ -28,9 +28,7 @@ void Solver::initialize() {
     // Initialize all matrices
     initializeMatricesFromSystem();
     // Then output all matrices to file. If --output was not passed in argv, this method outputs everything.
-#ifndef BENCH
     outputInitialMatrices();
-#endif
 }
 
 void Solver::initializeMatricesFromSystem() {

@@ -47,10 +47,6 @@ class Solver {
     struct InputOutput {
         Type::complex* PHOENIX_RESTRICT in_wf_plus = nullptr;
         Type::complex* PHOENIX_RESTRICT in_wf_minus = nullptr;
-#ifdef BENCH
-        Type::complex* PHOENIX_RESTRICT in_wf_plus_i = nullptr;
-        Type::complex* PHOENIX_RESTRICT in_wf_minus_i = nullptr;
-#endif
         Type::complex* PHOENIX_RESTRICT in_rv_plus = nullptr;
         Type::complex* PHOENIX_RESTRICT in_rv_minus = nullptr;
         Type::complex* PHOENIX_RESTRICT out_wf_plus = nullptr;
@@ -84,6 +80,12 @@ class Solver {
     cudaStream_t     cuda_graph_stream_   = nullptr;
     cudaGraphNode_t* cuda_graph_nodes_    = nullptr;
     size_t           cuda_graph_num_nodes_= 0;
+    struct BenchEvent {
+        cudaEvent_t start = nullptr;
+        cudaEvent_t stop  = nullptr;
+        std::string label; // named 'label' to avoid conflict with the 'name' macro parameter in CALL_SUBGRID_KERNEL
+    };
+    std::vector<BenchEvent> bench_events_;
 #else
     bool cuda_graph_created_ = false;
     std::vector<KernelArguments> cpu_kernel_arguments_;

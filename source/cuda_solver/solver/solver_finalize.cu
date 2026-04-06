@@ -3,6 +3,13 @@
 #include "misc/commandline_io.hpp"
 
 void PHOENIX::Solver::finalize() {
+#ifndef USE_CPU
+    for ( auto& be : bench_events_ ) {
+        if ( be.start ) cudaEventDestroy( be.start );
+        if ( be.stop  ) cudaEventDestroy( be.stop );
+    }
+    bench_events_.clear();
+#endif
     // Wait for any asynchronous I/O to complete
     std::cout << PHOENIX::CLIO::prettyPrint( "Outputting asynchronously... ", PHOENIX::CLIO::Control::Info ) << std::endl;
     filehandler.waitForCompletion();

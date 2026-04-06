@@ -39,12 +39,6 @@
 #include "solver/solver.hpp"
 #include "solver/solver_factory.hpp"
 
-#ifdef BENCH
-    #ifdef LIKWID
-        #include <likwid.h>
-    #endif
-#endif
-
 static void solverThreadFunc( PHOENIX::Solver& solver, PHOENIX::SystemParameters& system, PHOENIX::SolverThreadState& st, int cuda_device ) {
     // Initialize the CUDA context on this thread. Each std::thread starts with
     // no current CUDA context; cudaSetDevice() activates the primary context
@@ -134,21 +128,6 @@ int main( int argc, char* argv[] ) {
     // Some Helper Variables
     bool running = true;
     // Main Loop
-#ifdef BENCH
-    #ifdef LIKWID
-    LIKWID_MARKER_INIT;
-        #pragma omp parallel
-    { LIKWID_MARKER_START( "iterator" ); }
-    #endif
-    double tstart = omp_get_wtime();
-    TimeThis( while ( omp_get_wtime() - tstart <= BENCH_TIME ) { solver->iterate(); }, "Main-Loop" );
-    complete_duration = PHOENIX::TimeIt::totalRuntime();
-    system.printCMD( complete_duration, system.iteration );
-    #ifdef LIKWID
-        #pragma omp parallel
-    { LIKWID_MARKER_STOP( "iterator" ); }
-    #endif
-#else
     // Pass the user-selected CUDA device to the solver thread so it can
     // activate the same context (cudaSetDevice is required on every new std::thread).
 #ifndef USE_CPU
@@ -167,7 +146,6 @@ int main( int argc, char* argv[] ) {
     st.stop.store( true );
     st.pause_cv.notify_all();
     solver_thread.join();
-#endif
 
     system.finishCMD();
 
@@ -177,11 +155,6 @@ int main( int argc, char* argv[] ) {
     // Print Time statistics and output to file
     system.printSummary( PHOENIX::TimeIt::getTimes(), PHOENIX::TimeIt::getTimesTotal() );
     PHOENIX::TimeIt::toFile( system.filehandler.getFile( "times", "txt" ) );
-#ifdef BENCH
-    #ifdef LIKWID
-    LIKWID_MARKER_CLOSE;
-    #endif
-#endif
 
     return 0;
 }

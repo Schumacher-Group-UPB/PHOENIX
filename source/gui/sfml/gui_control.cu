@@ -221,6 +221,7 @@ void PhoenixGUI::renderMenuBar() {
             ImGui::MenuItem( "Plots",          nullptr, &show_plot_window_    );
             ImGui::MenuItem( "Envelopes",      nullptr, &show_env_window_     );
             ImGui::MenuItem( "Time Evolution", nullptr, &show_tracked_window_ );
+            ImGui::MenuItem( "Benchmarking",   nullptr, &show_benchmark_window_ );
             if ( ImGui::MenuItem( "Envelope Editor", "E" ) )
                 addEnvelopeEditorPanel();
             ImGui::EndMenu();

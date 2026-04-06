@@ -127,6 +127,7 @@ list(APPEND CU_SOURCES
     "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_control.cu"
     "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_envelope_editor.cu"
     "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_runstring_config.cu"
+    "${PROJECT_SOURCE_DIR}/source/gui/sfml/gui_benchmark.cu"
 )
 
 # implot3d and implot sources added after the glob so they are not wiped by GLOB_RECURSE
@@ -204,6 +205,7 @@ macro(add_numa tgt)
         target_link_libraries(${tgt} PRIVATE numa)
     endif()
 endmacro()
+
 
 macro(enable_sfml tgt)
     if(SFML)

@@ -26,10 +26,8 @@ bool Solver::iterate( bool force_fixed_time_step ) {
     }
 
     // Check if the maximum time has been reached
-#ifndef BENCH
     if ( system.p.t >= system.t_max )
         return false;
-#endif
 
     // If required, calculate new set of random numbers.
     // TODO: move this back into subgrids, because for large number of subgrids this will look very correlated!

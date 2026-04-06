@@ -135,8 +135,12 @@ private:
         int hist_window = kMaxHist;   // how many samples to show (slider-controlled)
     };
     std::vector<EnvelopeHistory> env_histories_;
-    bool show_env_window_  = false;
-    bool show_plot_window_ = false;
+    bool show_env_window_       = false;
+    bool show_plot_window_      = false;
+    bool show_benchmark_window_ = false;
+    int  bench_hist_window_     = 256;
+    int  bench_selected_key_    = 0;
+    bool bench_overlay_all_     = false;
 
     // ---------------------------------------------------------------
     // TrackedPoint: time-series of a single pixel across matrices
@@ -234,6 +238,7 @@ private:
     void renderRunstringWindow();
     void renderConfigSaveDialog();
     void renderConfigLoadDialog();
+    void renderBenchmarkWindow();
     void applyUpdatableParamsFromFile( const char* filepath );
 
     // ---- Solver pause/resume for safe parameter/matrix updates ----

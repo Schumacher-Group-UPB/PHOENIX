@@ -372,6 +372,7 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
         renderPlotsPanel();
         renderEnvelopePlotWindow();
         renderTrackedPointsWindow();
+        renderBenchmarkWindow();
         renderRunstringWindow();
         renderConfigSaveDialog();
         renderConfigLoadDialog();
