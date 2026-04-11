@@ -814,6 +814,69 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 const ImVec2 vp_p1( mini_p0.x + ( p.pan_u + cur_uv ) * mini_dim,
                                     mini_p0.y + ( p.pan_v + cur_uv ) * mini_dim );
                 dl->AddRect( vp_p0, vp_p1, IM_COL32(255, 255, 255, 220), 0.f, 0, 1.5f );
+
+                // Tracked-point dots in minimap
+                for ( int tp_idx = 0; tp_idx < (int)tracked_points_.size(); ++tp_idx ) {
+                    const auto& mtp = tracked_points_[tp_idx];
+                    if ( !mtp.enabled || mtp.matrix_idx != p.selected ) continue;
+                    const int   mdc = p.fft_shift ? ( mtp.col + p.tex_w / 2 ) % p.tex_w : mtp.col;
+                    const int   mdr = p.fft_shift ? ( mtp.row + p.tex_h / 2 ) % p.tex_h : mtp.row;
+                    const float mu  = ( mdc + 0.5f ) / (float)p.tex_w;
+                    const float mv  = ( mdr + 0.5f ) / (float)p.tex_h;
+                    const float mx  = mini_p0.x + mu * mini_dim;
+                    const float my  = mini_p0.y + mv * mini_dim;
+                    if ( mx < mini_p0.x || mx > mini_p1.x || my < mini_p0.y || my > mini_p1.y ) continue;
+                    float mr, mg, mb;
+                    ImGui::ColorConvertHSVtoRGB( (float)( tp_idx % 8 ) / 8.0f, 0.85f, 1.0f, mr, mg, mb );
+                    dl->AddCircleFilled( ImVec2( mx, my ), 2.5f,
+                                        IM_COL32( (int)(mr*255), (int)(mg*255), (int)(mb*255), 220 ) );
+                }
+            }
+
+            // ---- Tracked-point markers overlay ----
+            {
+                const bool highlight = tracked_ts_hovered_;
+                for ( int tp_idx = 0; tp_idx < (int)tracked_points_.size(); ++tp_idx ) {
+                    const auto& tp = tracked_points_[tp_idx];
+                    if ( !tp.enabled || tp.matrix_idx != p.selected ) continue;
+
+                    // Convert stored (original-matrix) coords to display UV,
+                    // applying fft_shift if the view has it enabled.
+                    const int   dc = p.fft_shift ? ( tp.col + p.tex_w / 2 ) % p.tex_w : tp.col;
+                    const int   dr = p.fft_shift ? ( tp.row + p.tex_h / 2 ) % p.tex_h : tp.row;
+                    const float u  = ( dc + 0.5f ) / (float)p.tex_w;
+                    const float v  = ( dr + 0.5f ) / (float)p.tex_h;
+
+                    // UV → screen using the zoom/pan already in scope
+                    const float frac_c = ( u - p.pan_u ) / uv_size;
+                    const float frac_r = ( v - p.pan_v ) / uv_size;
+                    const float sx = img_cursor.x + frac_c * img_size.x;
+                    const float sy = img_cursor.y + frac_r * img_size.y;
+                    if ( sx < img_cursor.x || sx > img_p1.x ||
+                         sy < img_cursor.y || sy > img_p1.y ) continue;
+
+                    float mr, mg, mb;
+                    ImGui::ColorConvertHSVtoRGB( (float)( tp_idx % 8 ) / 8.0f, 0.85f, 1.0f, mr, mg, mb );
+                    const int   alpha = highlight ? 230 : 180;
+                    const ImU32 col   = IM_COL32( (int)(mr*255), (int)(mg*255), (int)(mb*255), alpha );
+                    const float arm   = highlight ? 10.f : 7.f;
+                    const float rad   = highlight ? 7.f  : 5.f;
+                    const float lw    = highlight ? 2.0f : 1.5f;
+
+                    dl->AddLine( ImVec2( sx - arm, sy ), ImVec2( sx + arm, sy ), col, lw );
+                    dl->AddLine( ImVec2( sx, sy - arm ), ImVec2( sx, sy + arm ), col, lw );
+                    dl->AddCircle( ImVec2( sx, sy ), rad, col, 0, lw );
+
+                    if ( highlight ) {
+                        const ImVec2 tpos( sx + rad + 3.f, sy - 7.f );
+                        const char*  lbl = tp.label.c_str();
+                        const ImVec2 tsz = ImGui::CalcTextSize( lbl );
+                        dl->AddRectFilled( ImVec2( tpos.x - 2.f, tpos.y - 1.f ),
+                                           ImVec2( tpos.x + tsz.x + 2.f, tpos.y + tsz.y + 1.f ),
+                                           IM_COL32( 0, 0, 0, 160 ) );
+                        dl->AddText( tpos, col, lbl );
+                    }
+                }
             }
         }
     } else if ( p.view_mode == MatrixPanel::ViewMode::LineCut ) {
