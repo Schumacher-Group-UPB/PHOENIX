@@ -168,8 +168,10 @@ private:
     int  tracked_hist_window_  = 1024;   // how many samples to show (slider-controlled)
     bool tracked_show_fft_     = false;
     int  tracked_max_hist_     = TrackedPoint::kMaxHist;  // FIFO depth, user-settable
-    bool tracked_autoscale_    = true;   // autoscale axes by default
-    bool tracked_plot_hovered_ = false;  // hover state carried across frames for interaction detection
+    bool tracked_autoscale_ts_  = true;   // autoscale time-series plots
+    bool tracked_autoscale_fft_ = true;   // autoscale FFT plots
+    bool tracked_ts_hovered_    = false;  // TS hover state carried across frames
+    bool tracked_fft_hovered_   = false;  // FFT hover state carried across frames
 
     // ---------------------------------------------------------------
     // TrackedCut: kymograph (space-time) accumulation of a line cut
@@ -199,15 +201,32 @@ private:
 
         bool show_spatial_fft  = false;
         bool show_temporal_fft = false;
+
+        // ---- FFT cache (rebuilt at most once per cut_fft_interval_s_) ----
+        std::chrono::steady_clock::time_point last_fft_time {};  // default = epoch (triggers first compute)
+        // Spatial FFT cache
+        std::vector<float> sfft_flat;
+        int                sfft_half_s   = 0;
+        double             sfft_vmin = 0.0, sfft_vmax = 1.0;
+        double             sfft_k_max = 1.0;
+        // Temporal FFT cache
+        std::vector<float> tfft_flat;
+        int                tfft_half_t   = 0;
+        int                tfft_n_cols   = 0;
+        double             tfft_vmin = 0.0, tfft_vmax = 1.0;
+        double             tfft_f_max = 1.0;
+        // Remember which data window the caches were built from (to detect stale caches)
+        int  fft_cache_frame_offset = -1;
+        int  fft_cache_n_frames     = -1;
     };
     std::vector<TrackedCut> tracked_cuts_;
-    bool show_tracked_cuts_window_ = false;
-    int  cut_hist_window_          = 256;
-    int  cut_max_hist_             = TrackedCut::kMaxHist;
-    int  implot_colormap_base_     = -1;  // index of first custom colormap in ImPlot (2D)
+    bool  show_tracked_cuts_window_ = false;
+    int   cut_hist_window_          = 256;
+    int   cut_max_hist_             = TrackedCut::kMaxHist;
+    float cut_fft_interval_s_       = 1.0f;  // wall-clock seconds between FFT recomputes
+    int   implot_colormap_base_     = -1;  // index of first custom colormap in ImPlot (2D)
 
     // ---- History-window sizes for other graphs ----
-    int dt_hist_window_    = kDtHistMax;             // Control window dt plot
     int plots_hist_window_ = MatrixPanel::kMaxHist;  // Plots panel
 
     // ---- Snapshot data ----

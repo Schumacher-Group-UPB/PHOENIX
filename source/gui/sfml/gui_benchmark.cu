@@ -179,10 +179,16 @@ void PhoenixGUI::renderBenchmarkWindow() {
 
                 char overlay[32];
                 std::snprintf( overlay, sizeof( overlay ), "%.3f ms", (double)samples.back() );
-                ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.980f, 0.706f, 0.537f, 0.9f ) );
-                ImGui::PlotLines( "##bench_hist_plot", samples.data(), n,
-                                  0, overlay, s_min * 0.9f, s_max * 1.1f, ImVec2( -1.f, 120.f ) );
-                ImGui::PopStyleColor();
+                ImGui::TextUnformatted( overlay );
+                if ( ImPlot::BeginPlot( "##bench_hist_plot", ImVec2( -1.f, 120.f ),
+                                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                                        ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
+                    ImPlot::SetupAxes( "sample", "ms" );
+                    ImPlot::SetupAxisLimits( ImAxis_Y1, s_min * 0.9, s_max * 1.1, ImPlotCond_Always );
+                    ImPlot::SetNextLineStyle( ImVec4( 0.980f, 0.706f, 0.537f, 0.9f ) );
+                    ImPlot::PlotLine( "##bench_line", samples.data(), n );
+                    ImPlot::EndPlot();
+                }
             }
         }
     }

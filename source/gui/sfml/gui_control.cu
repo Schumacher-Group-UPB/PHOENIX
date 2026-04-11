@@ -47,28 +47,37 @@ void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter 
             ImGui::Text( "dt    = %.4e ps", (double)sys.p.dt );
 
             ImGui::TableSetColumnIndex( 1 );
-            if ( dt_history_.size() >= 2 ) {
-                dt_hist_window_ = std::max( 10, std::min( dt_hist_window_, kDtHistMax ) );
-                const int dt_total  = (int)dt_history_.size();
-                const int dt_window = std::min( dt_hist_window_, dt_total );
-                const int dt_offset = dt_total - dt_window;
-                std::vector<float> dtv( dt_history_.begin() + dt_offset, dt_history_.end() );
-                float dt_min = *std::min_element( dtv.begin(), dtv.end() );
-                float dt_max = *std::max_element( dtv.begin(), dtv.end() );
-                if ( dt_max - dt_min < 1e-30f ) dt_max = dt_min + 1e-30f;
+            if ( (int)dt_history_.size() >= 2 ) {
+                const std::vector<float> dtv( dt_history_.begin(), dt_history_.end() );
+                const int   n     = (int)dtv.size();
+                float vmin = *std::min_element( dtv.begin(), dtv.end() );
+                float vmax = *std::max_element( dtv.begin(), dtv.end() );
+                if ( vmax - vmin < 1e-30f ) vmax = vmin + 1.f;
+
+                ImDrawList*  dl    = ImGui::GetWindowDrawList();
+                const ImVec2 p0    = ImGui::GetCursorScreenPos();
+                const float  col_w = ImGui::GetContentRegionAvail().x;
+                const float  col_h = 3.f * ImGui::GetTextLineHeightWithSpacing();
+                const ImVec2 p1( p0.x + col_w, p0.y + col_h );
+                const float  text_h = ImGui::GetTextLineHeightWithSpacing();
+
+                dl->AddRectFilled( p0, p1, IM_COL32( 0, 0, 0, 80 ) );
+
+                const float pw = p1.x - p0.x;
+                const float ph = p1.y - p0.y - text_h;
+                std::vector<ImVec2> pts( n );
+                for ( int i = 0; i < n; ++i )
+                    pts[i] = ImVec2(
+                        p0.x + (float)i / (float)( n - 1 ) * pw,
+                        p1.y - text_h - ( dtv[i] - vmin ) / ( vmax - vmin ) * ph );
+                dl->AddPolyline( pts.data(), n, IM_COL32( 137, 224, 180, 220 ), 0, 1.5f );
+
                 char overlay[32];
-                snprintf( overlay, sizeof( overlay ), "%.2e", dtv.back() );
-                float plot_h = 3.0f * ImGui::GetTextLineHeightWithSpacing() - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.y;
-                plot_h = std::max( 10.f, plot_h );
-                char wlabel[24];
-                if ( dt_hist_window_ >= kDtHistMax ) std::snprintf( wlabel, sizeof(wlabel), "All" );
-                else                                  std::snprintf( wlabel, sizeof(wlabel), "%d", dt_hist_window_ );
-                ImGui::SetNextItemWidth( -1.f );
-                ImGui::SliderInt( "##hw_dt", &dt_hist_window_, 10, kDtHistMax, wlabel );
-                ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.537f, 0.880f, 0.706f, 0.9f ) );
-                ImGui::PlotLines( "##dt_hist", dtv.data(), (int)dtv.size(),
-                                  0, overlay, dt_min, dt_max, ImVec2( -1, plot_h ) );
-                ImGui::PopStyleColor();
+                snprintf( overlay, sizeof( overlay ), "dt=%.2e", dtv.back() );
+                dl->AddText( ImVec2( p0.x + 3.f, p0.y + 2.f ),
+                             IM_COL32( 200, 200, 200, 220 ), overlay );
+
+                ImGui::Dummy( ImVec2( col_w, col_h ) );
             }
 
             ImGui::EndTable();
@@ -371,10 +380,15 @@ void PhoenixGUI::renderPlotsPanel() {
         std::vector<float> maxv( p.hist_max.begin() + offset_p, p.hist_max.end() );
         char overlay[64];
         snprintf( overlay, sizeof( overlay ), "max=%.3e", maxv.back() );
-        ImGui::Text( "%s", displayTitle( p.title ).c_str() );
-        ImGui::PlotLines( ( "##plt_" + p.title ).c_str(),
-                          maxv.data(), (int)maxv.size(),
-                          0, overlay, FLT_MAX, FLT_MAX, ImVec2( -1, 55 ) );
+        ImGui::Text( "%s  %s", displayTitle( p.title ).c_str(), overlay );
+        const std::string plt_id = "##plt_" + p.title;
+        if ( ImPlot::BeginPlot( plt_id.c_str(), ImVec2( -1, 55 ),
+                                ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                                ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
+            ImPlot::SetupAxes( nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations | ImPlotAxisFlags_AutoFit );
+            ImPlot::PlotLine( ( "##plt_line_" + p.title ).c_str(), maxv.data(), (int)maxv.size() );
+            ImPlot::EndPlot();
+        }
         ImGui::Separator();
     }
 
@@ -444,34 +458,25 @@ void PhoenixGUI::renderEnvelopePlotWindow() {
         ImGui::Text( "im" );
         ImGui::PopStyleColor();
 
-        // Overlay three PlotLines in the same rect using cursor save/restore
-        const ImVec2 plot_size( -1, 80 );
         char overlay[64];
         snprintf( overlay, sizeof( overlay ), "abs=%.3e", abs_v.back() );
-
-        ImVec2 saved_pos = ImGui::GetCursorPos();
-
-        ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 1.f, 1.f, 1.f, 1.f ) );
-        ImGui::PlotLines( ( "##env_abs_" + h.label ).c_str(),
-                          abs_v.data(), n, 0, overlay, gmin, gmax, plot_size );
-        ImGui::PopStyleColor();
-
-        if ( !re_v.empty() ) {
-            ImGui::SetCursorPos( saved_pos );
-            ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
-            ImGui::PushStyleColor( ImGuiCol_FrameBg,   ImVec4( 0.f, 0.f, 0.f, 0.f ) );
-            ImGui::PlotLines( ( "##env_re_" + h.label ).c_str(),
-                              re_v.data(), n, 0, nullptr, gmin, gmax, plot_size );
-            ImGui::PopStyleColor( 2 );
-        }
-
-        if ( !im_v.empty() ) {
-            ImGui::SetCursorPos( saved_pos );
-            ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
-            ImGui::PushStyleColor( ImGuiCol_FrameBg,   ImVec4( 0.f, 0.f, 0.f, 0.f ) );
-            ImGui::PlotLines( ( "##env_im_" + h.label ).c_str(),
-                              im_v.data(), n, 0, nullptr, gmin, gmax, plot_size );
-            ImGui::PopStyleColor( 2 );
+        ImGui::TextUnformatted( overlay );
+        const std::string plot_id = "##env_plot_" + h.label;
+        if ( ImPlot::BeginPlot( plot_id.c_str(), ImVec2( -1, 80 ),
+                                ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
+            ImPlot::SetupAxes( nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations );
+            ImPlot::SetupAxisLimits( ImAxis_Y1, gmin, gmax, ImPlotCond_Always );
+            ImPlot::SetNextLineStyle( ImVec4( 1.f, 1.f, 1.f, 1.f ) );
+            ImPlot::PlotLine( ( "abs##" + h.label ).c_str(), abs_v.data(), n );
+            if ( !re_v.empty() ) {
+                ImPlot::SetNextLineStyle( ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
+                ImPlot::PlotLine( ( "re##" + h.label ).c_str(), re_v.data(), n );
+            }
+            if ( !im_v.empty() ) {
+                ImPlot::SetNextLineStyle( ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
+                ImPlot::PlotLine( ( "im##" + h.label ).c_str(), im_v.data(), n );
+            }
+            ImPlot::EndPlot();
         }
 
         ImGui::Separator();
@@ -562,15 +567,22 @@ void PhoenixGUI::renderTrackedPointsWindow() {
     if ( ImGui::Button( "Clear All##tev_clr" ) )
         tracked_points_.clear();
     ImGui::SameLine();
-    // Autoscale button — highlighted green when active
-    if ( tracked_autoscale_ )
-        ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.2f, 0.6f, 0.2f, 0.9f ) );
-    if ( ImGui::Button( "Autoscale##tev_as" ) )
-        tracked_autoscale_ = !tracked_autoscale_;
-    if ( tracked_autoscale_ )
-        ImGui::PopStyleColor();
-    if ( ImGui::IsItemHovered() )
-        ImGui::SetTooltip( "Autoscale axes (re-enable after manual zoom/pan)" );
+    // Autoscale buttons — highlighted green when active
+    {
+        const bool was = tracked_autoscale_ts_;
+        if ( was ) ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.2f, 0.6f, 0.2f, 0.9f ) );
+        if ( ImGui::Button( "Autoscale TS##tev_as_ts" ) ) tracked_autoscale_ts_ = !tracked_autoscale_ts_;
+        if ( was ) ImGui::PopStyleColor();
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Autoscale time-series axes (re-enable after manual zoom/pan)" );
+    }
+    ImGui::SameLine();
+    {
+        const bool was = tracked_autoscale_fft_;
+        if ( was ) ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.2f, 0.6f, 0.2f, 0.9f ) );
+        if ( ImGui::Button( "Autoscale FFT##tev_as_fft" ) ) tracked_autoscale_fft_ = !tracked_autoscale_fft_;
+        if ( was ) ImGui::PopStyleColor();
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Autoscale FFT axes (re-enable after manual zoom/pan)" );
+    }
     ImGui::SameLine();
     if ( ImGui::Button( "Export CSV##tev_exp" ) && !tracked_points_.empty() ) {
         std::string fname = "tracked_t" + std::to_string( (int)sys.p.t ) + ".csv";
@@ -616,7 +628,12 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         else
             std::snprintf( wlabel, sizeof(wlabel), "Window: %d", tracked_hist_window_ );
         ImGui::SetNextItemWidth( -120.f );
+        const int prev_win = tracked_hist_window_;
         ImGui::SliderInt( "##tev_win", &tracked_hist_window_, 10, tracked_max_hist_, wlabel );
+        if ( tracked_hist_window_ != prev_win ) {
+            tracked_autoscale_ts_  = true;
+            tracked_autoscale_fft_ = true;
+        }
         if ( ImGui::IsItemHovered() )
             ImGui::SetTooltip( "Number of samples to display (slide right = all)" );
         ImGui::SameLine();
@@ -727,27 +744,29 @@ void PhoenixGUI::renderTrackedPointsWindow() {
     // ================================================================
     // Autoscale interaction detection — disable if user drags or scrolls
     // ================================================================
-    if ( tracked_autoscale_ && tracked_plot_hovered_ ) {
+    {
         const auto& io = ImGui::GetIO();
-        if ( io.MouseWheel != 0.f ||
-             ImGui::IsMouseDragging( ImGuiMouseButton_Left ) ||
-             ImGui::IsMouseDragging( ImGuiMouseButton_Right ) )
-            tracked_autoscale_ = false;
+        const bool interacting = io.MouseWheel != 0.f ||
+                                 ImGui::IsMouseDragging( ImGuiMouseButton_Left ) ||
+                                 ImGui::IsMouseDragging( ImGuiMouseButton_Right );
+        if ( tracked_autoscale_ts_  && tracked_ts_hovered_  && interacting ) tracked_autoscale_ts_  = false;
+        if ( tracked_autoscale_fft_ && tracked_fft_hovered_ && interacting ) tracked_autoscale_fft_ = false;
     }
-    tracked_plot_hovered_ = false;  // reset; set inside each BeginPlot block
+    tracked_ts_hovered_  = false;  // reset; set inside each TS BeginPlot block
+    tracked_fft_hovered_ = false;  // reset; set inside each FFT BeginPlot block
 
-    const ImPlotAxisFlags kAxisFlags = tracked_autoscale_
-        ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;
+    const ImPlotAxisFlags kAxisFlagsTs  = tracked_autoscale_ts_  ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;
+    const ImPlotAxisFlags kAxisFlagsFft = tracked_autoscale_fft_ ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;
 
     // ================================================================
     // Overlay mode
     // ================================================================
     if ( tracked_overlay_mode_ ) {
         if ( ImPlot::BeginPlot( "##tev_ts", ImVec2( -1.f, ts_height ) ) ) {
-            ImPlot::SetupAxis( ImAxis_X1, "Time (ps)", kAxisFlags );
-            ImPlot::SetupAxis( ImAxis_Y1, "Value",     kAxisFlags );
+            ImPlot::SetupAxis( ImAxis_X1, "Time (ps)", kAxisFlagsTs );
+            ImPlot::SetupAxis( ImAxis_Y1, "Value",     kAxisFlagsTs );
             ImPlot::SetupAxisFormat( ImAxis_Y1, "%.3e" );
-            if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
+            if ( ImPlot::IsPlotHovered() ) tracked_ts_hovered_ = true;
 
             for ( int idx : active ) {
                 const auto& tp = tracked_points_[idx];
@@ -774,10 +793,10 @@ void PhoenixGUI::renderTrackedPointsWindow() {
 
         if ( tracked_show_fft_ ) {
             if ( ImPlot::BeginPlot( "##tev_fft_ovl", ImVec2( -1.f, fft_height ) ) ) {
-                ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)", kAxisFlags );
-                ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlags );
+                ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)", kAxisFlagsFft );
+                ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlagsFft );
                 ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
-                if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
+                if ( ImPlot::IsPlotHovered() ) tracked_fft_hovered_ = true;
                 for ( int idx : active ) {
                     const auto& tp = tracked_points_[idx];
                     const std::string sn = shortName( tp );
@@ -833,10 +852,10 @@ void PhoenixGUI::renderTrackedPointsWindow() {
             {
                 char plt_id[32]; std::snprintf( plt_id, sizeof(plt_id), "##tev_ind_%d", idx );
                 if ( ImPlot::BeginPlot( plt_id, ImVec2( -1.f, each_ts ) ) ) {
-                    ImPlot::SetupAxis( ImAxis_X1, "Time (ps)",     kAxisFlags );
-                    ImPlot::SetupAxis( ImAxis_Y1, tp.label.c_str(), kAxisFlags );
+                    ImPlot::SetupAxis( ImAxis_X1, "Time (ps)",      kAxisFlagsTs );
+                    ImPlot::SetupAxis( ImAxis_Y1, tp.label.c_str(), kAxisFlagsTs );
                     ImPlot::SetupAxisFormat( ImAxis_Y1, "%.3e" );
-                    if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
+                    if ( ImPlot::IsPlotHovered() ) tracked_ts_hovered_ = true;
 
                     auto tv = sliceDeque( tp.times, tracked_hist_window_ );
                     const int n = (int)tv.size();
@@ -860,10 +879,10 @@ void PhoenixGUI::renderTrackedPointsWindow() {
             if ( tracked_show_fft_ ) {
                 char fft_id[32]; std::snprintf( fft_id, sizeof(fft_id), "##tev_ifft_%d", idx );
                 if ( ImPlot::BeginPlot( fft_id, ImVec2( -1.f, each_fft ) ) ) {
-                    ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)", kAxisFlags );
-                    ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlags );
+                    ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)", kAxisFlagsFft );
+                    ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlagsFft );
                     ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
-                    if ( ImPlot::IsPlotHovered() ) tracked_plot_hovered_ = true;
+                    if ( ImPlot::IsPlotHovered() ) tracked_fft_hovered_ = true;
 
                     auto tv      = sliceDeque( tp.times,          tracked_hist_window_ );
                     auto absv    = sliceDeque( tp.values_abs,      tracked_hist_window_ );
@@ -929,6 +948,16 @@ void PhoenixGUI::renderTrackedCutsWindow() {
         ImGui::SetNextItemWidth( 120.f );
         ImGui::InputInt( "Max##kymo_mxh", &cut_max_hist_, 64, 256 );
         cut_max_hist_ = std::clamp( cut_max_hist_, 10, TrackedCut::kMaxHist );
+    }
+    ImGui::SameLine();
+    {
+        char fft_lbl[32];
+        std::snprintf( fft_lbl, sizeof( fft_lbl ), "FFT: %.1fs", (double)cut_fft_interval_s_ );
+        ImGui::SetNextItemWidth( 130.f );
+        ImGui::SliderFloat( "##kymo_fftiv", &cut_fft_interval_s_, 0.1f, 10.0f, fft_lbl );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Minimum wall-clock interval between FFT recomputes\n"
+                               "(FFT is CPU-only and can be expensive for large cuts)" );
     }
     ImGui::SameLine();
     if ( ImGui::Button( "Export CSV##kymo_exp" ) ) {
@@ -1117,104 +1146,128 @@ void PhoenixGUI::renderTrackedCutsWindow() {
         }
         ImPlot::PopColormap();
 
+        // Shared trigger for both FFT panels: compute once per cut so they stay in sync.
+        const bool fft_any_active = ( tc.show_spatial_fft && n_cols >= 4 ) ||
+                                    ( tc.show_temporal_fft && n_frames >= 4 );
+        bool fft_should_recompute = false;
+        std::chrono::steady_clock::time_point fft_now;
+        if ( fft_any_active ) {
+            fft_now = std::chrono::steady_clock::now();
+            const float elapsed_s = std::chrono::duration<float>( fft_now - tc.last_fft_time ).count();
+            const bool data_changed = ( tc.fft_cache_frame_offset != frame_offset ||
+                                        tc.fft_cache_n_frames     != n_frames );
+            fft_should_recompute = elapsed_s >= cut_fft_interval_s_ || data_changed;
+        }
+
         // --- Optional: k-space kymograph (spatial FFT per frame) ---
         if ( tc.show_spatial_fft && n_cols >= 4 ) {
-            int N_sfft = 1;
-            while ( N_sfft < n_cols ) N_sfft <<= 1;
-            const int half_s = N_sfft / 2 + 1;
-
-            std::vector<float> sfft_flat( (size_t)n_frames * (size_t)half_s, 0.f );
-            for ( int r = 0; r < n_frames; ++r ) {
-                const auto& row = (*src)[frame_offset + r];
-                std::vector<std::complex<float>> buf( N_sfft, { 0.f, 0.f } );
-                const int actual = std::min( n_cols, (int)row.size() );
-                for ( int c = 0; c < actual; ++c ) {
-                    float w = 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * (float)c / (float)( n_cols - 1 ) ) );
-                    float v = row[c];
-                    buf[c] = { ( do_abs2 ? v * v : v ) * w, 0.f };
+            if ( tc.sfft_flat.empty() || fft_should_recompute ) {
+                int N_sfft = 1;
+                while ( N_sfft < n_cols ) N_sfft <<= 1;
+                const int half_s = N_sfft / 2 + 1;
+                tc.sfft_half_s = half_s;
+                tc.sfft_flat.assign( (size_t)n_frames * (size_t)half_s, 0.f );
+                for ( int r = 0; r < n_frames; ++r ) {
+                    const auto& row = (*src)[frame_offset + r];
+                    std::vector<std::complex<float>> buf( N_sfft, { 0.f, 0.f } );
+                    const int actual = std::min( n_cols, (int)row.size() );
+                    for ( int c = 0; c < actual; ++c ) {
+                        float w = 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * (float)c / (float)( n_cols - 1 ) ) );
+                        float v = row[c];
+                        buf[c] = { ( do_abs2 ? v * v : v ) * w, 0.f };
+                    }
+                    _fft_inplace( buf );
+                    for ( int k = 0; k < half_s; ++k )
+                        tc.sfft_flat[(size_t)r * (size_t)half_s + k] = std::abs( buf[k] ) / (float)n_cols;
                 }
-                _fft_inplace( buf );
-                for ( int k = 0; k < half_s; ++k )
-                    sfft_flat[(size_t)r * (size_t)half_s + k] = std::abs( buf[k] ) / (float)n_cols;
+                tc.sfft_vmin = (double)*std::min_element( tc.sfft_flat.begin(), tc.sfft_flat.end() );
+                tc.sfft_vmax = (double)*std::max_element( tc.sfft_flat.begin(), tc.sfft_flat.end() );
+                if ( tc.sfft_vmax - tc.sfft_vmin < 1e-30 ) tc.sfft_vmax = tc.sfft_vmin + 1e-30;
+                tc.sfft_k_max = ( 2.0 * 3.14159265358979 / phys_len ) * (double)( half_s - 1 );
             }
 
-            double sv_min = (double)*std::min_element( sfft_flat.begin(), sfft_flat.end() );
-            double sv_max = (double)*std::max_element( sfft_flat.begin(), sfft_flat.end() );
-            if ( sv_max - sv_min < 1e-30 ) sv_max = sv_min + 1e-30;
-
-            const double dk    = 2.0 * 3.14159265358979 / phys_len;
-            const double k_max = dk * (double)( half_s - 1 );
-
-            ImPlot::PushColormap( cmap );
-            ImPlot::ColormapScale( "##ks2", sv_min, sv_max, ImVec2( bar_w, plot_h ) );
-            ImGui::SameLine();
-            char sfft_id[64];
-            std::snprintf( sfft_id, sizeof( sfft_id ), "##sfft_%d", i );
-            if ( ImPlot::BeginPlot( sfft_id, ImVec2( -1.f, plot_h ) ) ) {
-                ImPlot::SetupAxes( "k (1/um)", "Time (ps)" );
-                ImPlot::SetupAxisLimits( ImAxis_X1, 0.0,  k_max, ImPlotCond_Always );
-                ImPlot::SetupAxisLimits( ImAxis_Y1, t_lo, t_hi,  ImPlotCond_Always );
-                ImPlot::PlotHeatmap( "##sfft_hm",
-                                     sfft_flat.data(), n_frames, half_s,
-                                     sv_min, sv_max, nullptr,
-                                     ImPlotPoint( 0.0, t_lo ),
-                                     ImPlotPoint( k_max, t_hi ) );
-                ImPlot::EndPlot();
+            if ( !tc.sfft_flat.empty() ) {
+                ImPlot::PushColormap( cmap );
+                ImPlot::ColormapScale( "##ks2", tc.sfft_vmin, tc.sfft_vmax, ImVec2( bar_w, plot_h ) );
+                ImGui::SameLine();
+                char sfft_id[64];
+                std::snprintf( sfft_id, sizeof( sfft_id ), "##sfft_%d", i );
+                if ( ImPlot::BeginPlot( sfft_id, ImVec2( -1.f, plot_h ) ) ) {
+                    ImPlot::SetupAxes( "k (1/um)", "Time (ps)" );
+                    ImPlot::SetupAxisLimits( ImAxis_X1, 0.0,  tc.sfft_k_max, ImPlotCond_Always );
+                    ImPlot::SetupAxisLimits( ImAxis_Y1, t_lo, t_hi,           ImPlotCond_Always );
+                    ImPlot::PlotHeatmap( "##sfft_hm",
+                                         tc.sfft_flat.data(), n_frames, tc.sfft_half_s,
+                                         tc.sfft_vmin, tc.sfft_vmax, nullptr,
+                                         ImPlotPoint( 0.0, t_lo ),
+                                         ImPlotPoint( tc.sfft_k_max, t_hi ) );
+                    ImPlot::EndPlot();
+                }
+                ImPlot::PopColormap();
             }
-            ImPlot::PopColormap();
         }
 
         // --- Optional: temporal spectrogram (per-column FFT across time) ---
         if ( tc.show_temporal_fft && n_frames >= 4 ) {
-            const float mean_dt = ( n_frames >= 2 )
-                ? ( tc.times[frame_offset + n_frames - 1] - tc.times[frame_offset] ) / (float)( n_frames - 1 )
-                : 1.f;
+            if ( tc.tfft_flat.empty() || fft_should_recompute ) {
+                const float mean_dt = ( n_frames >= 2 )
+                    ? ( tc.times[frame_offset + n_frames - 1] - tc.times[frame_offset] ) / (float)( n_frames - 1 )
+                    : 1.f;
 
-            int N_tfft = 1;
-            while ( N_tfft < n_frames ) N_tfft <<= 1;
-            const int half_t = N_tfft / 2 + 1;
-
-            std::vector<float> tfft_flat( (size_t)half_t * (size_t)n_cols, 0.f );
-            for ( int c = 0; c < n_cols; ++c ) {
-                std::vector<float> col_data( n_frames );
-                for ( int r = 0; r < n_frames; ++r ) {
-                    const auto& row = (*src)[frame_offset + r];
-                    float v = ( c < (int)row.size() ) ? row[c] : 0.f;
-                    col_data[r] = do_abs2 ? v * v : v;
+                int N_tfft = 1;
+                while ( N_tfft < n_frames ) N_tfft <<= 1;
+                const int half_t = N_tfft / 2 + 1;
+                tc.tfft_half_t = half_t;
+                tc.tfft_n_cols = n_cols;
+                tc.tfft_flat.assign( (size_t)half_t * (size_t)n_cols, 0.f );
+                for ( int c = 0; c < n_cols; ++c ) {
+                    std::vector<float> col_data( n_frames );
+                    for ( int r = 0; r < n_frames; ++r ) {
+                        const auto& row = (*src)[frame_offset + r];
+                        float v = ( c < (int)row.size() ) ? row[c] : 0.f;
+                        col_data[r] = do_abs2 ? v * v : v;
+                    }
+                    std::vector<float> ffreq, fmag;
+                    computeDisplayFFT( col_data.data(), n_frames, mean_dt, ffreq, fmag );
+                    const int n_freq = (int)fmag.size();
+                    for ( int k = 0; k < n_freq && k < half_t; ++k )
+                        tc.tfft_flat[(size_t)k * (size_t)n_cols + c] = fmag[k];
                 }
-                std::vector<float> ffreq, fmag;
-                computeDisplayFFT( col_data.data(), n_frames, mean_dt, ffreq, fmag );
-                const int n_freq = (int)fmag.size();
-                for ( int k = 0; k < n_freq && k < half_t; ++k )
-                    tfft_flat[(size_t)k * (size_t)n_cols + c] = fmag[k];
+                tc.tfft_vmin = (double)*std::min_element( tc.tfft_flat.begin(), tc.tfft_flat.end() );
+                tc.tfft_vmax = (double)*std::max_element( tc.tfft_flat.begin(), tc.tfft_flat.end() );
+                if ( tc.tfft_vmax - tc.tfft_vmin < 1e-30 ) tc.tfft_vmax = tc.tfft_vmin + 1e-30;
+                tc.tfft_f_max = ( mean_dt > 0.f )
+                    ? (double)( half_t - 1 ) / ( (double)N_tfft * (double)mean_dt )
+                    : 1.0;
             }
 
-            double tv_min = (double)*std::min_element( tfft_flat.begin(), tfft_flat.end() );
-            double tv_max = (double)*std::max_element( tfft_flat.begin(), tfft_flat.end() );
-            if ( tv_max - tv_min < 1e-30 ) tv_max = tv_min + 1e-30;
-
-            const double f_max = ( mean_dt > 0.f )
-                ? (double)( half_t - 1 ) / ( (double)N_tfft * (double)mean_dt )
-                : 1.0;
-
-            ImPlot::PushColormap( cmap );
-            ImPlot::ColormapScale( "##ks3", tv_min, tv_max, ImVec2( bar_w, plot_h ) );
-            ImGui::SameLine();
-            char tfft_id[64];
-            std::snprintf( tfft_id, sizeof( tfft_id ), "##tfft_%d", i );
-            if ( ImPlot::BeginPlot( tfft_id, ImVec2( -1.f, plot_h ) ) ) {
-                const char* xlab2 = ( tc.slice_axis == 0 ) ? "y (um)" : "x (um)";
-                ImPlot::SetupAxes( xlab2, "Freq (1/ps)" );
-                ImPlot::SetupAxisLimits( ImAxis_X1, x_min, x_max, ImPlotCond_Always );
-                ImPlot::SetupAxisLimits( ImAxis_Y1, 0.0,   f_max, ImPlotCond_Always );
-                ImPlot::PlotHeatmap( "##tfft_hm",
-                                     tfft_flat.data(), half_t, n_cols,
-                                     tv_min, tv_max, nullptr,
-                                     ImPlotPoint( x_min, 0.0 ),
-                                     ImPlotPoint( x_max, f_max ) );
-                ImPlot::EndPlot();
+            if ( !tc.tfft_flat.empty() ) {
+                ImPlot::PushColormap( cmap );
+                ImPlot::ColormapScale( "##ks3", tc.tfft_vmin, tc.tfft_vmax, ImVec2( bar_w, plot_h ) );
+                ImGui::SameLine();
+                char tfft_id[64];
+                std::snprintf( tfft_id, sizeof( tfft_id ), "##tfft_%d", i );
+                if ( ImPlot::BeginPlot( tfft_id, ImVec2( -1.f, plot_h ) ) ) {
+                    const char* xlab2 = ( tc.slice_axis == 0 ) ? "y (um)" : "x (um)";
+                    ImPlot::SetupAxes( xlab2, "Freq (1/ps)" );
+                    ImPlot::SetupAxisLimits( ImAxis_X1, x_min, x_max,       ImPlotCond_Always );
+                    ImPlot::SetupAxisLimits( ImAxis_Y1, 0.0,   tc.tfft_f_max, ImPlotCond_Always );
+                    ImPlot::PlotHeatmap( "##tfft_hm",
+                                         tc.tfft_flat.data(), tc.tfft_half_t, tc.tfft_n_cols,
+                                         tc.tfft_vmin, tc.tfft_vmax, nullptr,
+                                         ImPlotPoint( x_min, 0.0 ),
+                                         ImPlotPoint( x_max, tc.tfft_f_max ) );
+                    ImPlot::EndPlot();
+                }
+                ImPlot::PopColormap();
             }
-            ImPlot::PopColormap();
+        }
+
+        // Update shared cache metadata once after all FFT panels for this cut
+        if ( fft_any_active && fft_should_recompute ) {
+            tc.last_fft_time          = fft_now;
+            tc.fft_cache_frame_offset = frame_offset;
+            tc.fft_cache_n_frames     = n_frames;
         }
 
         ImGui::PopID();

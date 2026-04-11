@@ -755,23 +755,21 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
                     vals_re[k] = v; vals_abs[k] = std::abs( v );
                 }
             }
-            // Draw abs magnitude first (provides the frame background)
-            ImVec2 plot_cursor = ImGui::GetCursorPos();
-            ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.9f, 0.9f, 0.9f, 0.9f ) );
-            ImGui::PlotLines( "##tabs", vals_abs.data(), N_plot, 0, nullptr, -1.1f, 1.1f, ImVec2( -1, 60 ) );
-            ImGui::PopStyleColor();
-            // For iexp: overlay Re (green) and Im (orange) with transparent backgrounds
-            if ( t.type_idx == 2 ) {
-                ImGui::SetCursorPos( plot_cursor );
-                ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.3f, 1.0f, 0.3f, 0.9f ) );
-                ImGui::PushStyleColor( ImGuiCol_FrameBg,   ImVec4( 0.0f, 0.0f, 0.0f, 0.0f ) );
-                ImGui::PlotLines( "##tre", vals_re.data(), N_plot, 0, nullptr, -1.1f, 1.1f, ImVec2( -1, 60 ) );
-                ImGui::PopStyleColor( 2 );
-                ImGui::SetCursorPos( plot_cursor );
-                ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 1.0f, 0.6f, 0.1f, 0.9f ) );
-                ImGui::PushStyleColor( ImGuiCol_FrameBg,   ImVec4( 0.0f, 0.0f, 0.0f, 0.0f ) );
-                ImGui::PlotLines( "##tim", vals_im.data(), N_plot, 0, nullptr, -1.1f, 1.1f, ImVec2( -1, 60 ) );
-                ImGui::PopStyleColor( 2 );
+            // Draw temporal envelope using ImPlot
+            if ( ImPlot::BeginPlot( "##tenv_plot", ImVec2( -1, 60 ),
+                                    ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                                    ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
+                ImPlot::SetupAxes( nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations );
+                ImPlot::SetupAxisLimits( ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always );
+                ImPlot::SetNextLineStyle( ImVec4( 0.9f, 0.9f, 0.9f, 0.9f ) );
+                ImPlot::PlotLine( "##tabs", vals_abs.data(), N_plot );
+                if ( t.type_idx == 2 ) {
+                    ImPlot::SetNextLineStyle( ImVec4( 0.3f, 1.0f, 0.3f, 0.9f ) );
+                    ImPlot::PlotLine( "##tre", vals_re.data(), N_plot );
+                    ImPlot::SetNextLineStyle( ImVec4( 1.0f, 0.6f, 0.1f, 0.9f ) );
+                    ImPlot::PlotLine( "##tim", vals_im.data(), N_plot );
+                }
+                ImPlot::EndPlot();
             }
         }
     }

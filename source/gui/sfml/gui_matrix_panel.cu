@@ -578,7 +578,7 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
 
     // ---- Matrix image OR line cut ----
     ImVec2 avail      = ImGui::GetContentRegionAvail();
-    const float plot_h = p.hist_max.empty() ? 0.f : 65.f;
+    const float plot_h = 0.f;
 
     if ( p.view_mode == MatrixPanel::ViewMode::Image2D ) {
         // --- 2D colormap image ---
@@ -758,6 +758,43 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 show_tracked_window_ = true;
             }
 
+            // ---- Max-value history overlay (top-right corner, always visible) ----
+            if ( !p.hist_max.empty() ) {
+                const int total_h  = (int)p.hist_max.size();
+                const int window_h = std::min( p.hist_window, total_h );
+                const int offset_h = total_h - window_h;
+                std::vector<float> maxv( p.hist_max.begin() + offset_h, p.hist_max.end() );
+                const int   n     = (int)maxv.size();
+                float vmin = *std::min_element( maxv.begin(), maxv.end() );
+                float vmax = *std::max_element( maxv.begin(), maxv.end() );
+                if ( vmax - vmin < 1e-30f ) vmax = vmin + 1.f;
+
+                const float mw     = 180.f;
+                const float mh     = 46.f;
+                const float margin = 8.f;
+                const ImVec2 mp0( img_p1.x - mw - margin, img_cursor.y + margin );
+                const ImVec2 mp1( img_p1.x - margin, mp0.y + mh );
+
+                dl->AddRectFilled( mp0, mp1, IM_COL32( 0, 0, 0, 160 ) );
+                dl->AddRect( mp0, mp1, IM_COL32( 180, 180, 180, 100 ) );
+
+                if ( n >= 2 ) {
+                    const float pw = mp1.x - mp0.x;
+                    const float ph = mp1.y - mp0.y - 14.f;  // leave room for text
+                    std::vector<ImVec2> pts( n );
+                    for ( int i = 0; i < n; ++i )
+                        pts[i] = ImVec2(
+                            mp0.x + (float)i / (float)( n - 1 ) * pw,
+                            mp1.y - ( maxv[i] - vmin ) / ( vmax - vmin ) * ph );
+                    dl->AddPolyline( pts.data(), n, IM_COL32( 80, 220, 170, 220 ), 0, 1.5f );
+                }
+
+                char htxt[64];
+                snprintf( htxt, sizeof( htxt ), "max=%.3e", maxv.back() );
+                dl->AddText( ImVec2( mp0.x + 3.f, mp0.y + 2.f ),
+                             IM_COL32( 200, 200, 200, 220 ), htxt );
+            }
+
             // ---- Minimap overlay (visible only when zoomed in) ----
             if ( p.zoom_scale > 1.01f ) {
                 const float cur_uv   = 1.0f / p.zoom_scale;
@@ -872,24 +909,44 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 }
                 if ( gmax - gmin < 1e-30f ) gmax = gmin + 1e-30f;
 
-                // Overlay PlotLines in the same rect (cursor save/restore pattern)
-                // abs always provides the frame; alpha=0 hides the line when unchecked
                 avail = ImGui::GetContentRegionAvail();
                 const ImVec2 plot_sz( -1.f, std::max( 10.f, avail.y - plot_h ) );
-                ImVec2 saved_pos = ImGui::GetCursorPos();
 
                 const double coord_min = -0.5 * (double)( p.slice_axis == 0 ? sys.p.L_y : sys.p.L_x );
                 const double coord_max =  0.5 * (double)( p.slice_axis == 0 ? sys.p.L_y : sys.p.L_x );
                 char overlay[128];
                 snprintf( overlay, sizeof( overlay ), "abs=%.3e  [%.2f, %.2f]",
                           abs_v.back(), coord_min, coord_max );
-                const float abs_a = p.show_abs_curve ? 1.f : 0.f;
-                ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 1.f, 1.f, 1.f, abs_a ) );
-                ImGui::PlotLines( "##sl_abs", abs_v.data(), slice_len, 0, overlay, gmin, gmax, plot_sz );
-                ImGui::PopStyleColor();
+                ImGui::TextUnformatted( overlay );
 
-                // Right-click context menu on the line cut plot
-                if ( ImGui::BeginPopupContextItem( "##lcctx" ) ) {
+                if ( ImPlot::BeginPlot( "##sl_cut", plot_sz,
+                                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                                        ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
+                    ImPlot::SetupAxes( nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations );
+                    ImPlot::SetupAxisLimits( ImAxis_Y1, gmin, gmax, ImPlotCond_Always );
+                    if ( p.show_abs_curve ) {
+                        ImPlot::SetNextLineStyle( ImVec4( 1.f, 1.f, 1.f, 1.f ) );
+                        ImPlot::PlotLine( "##sl_abs", abs_v.data(), slice_len );
+                    }
+                    if ( is_cmplx ) {
+                        if ( p.show_re_curve ) {
+                            ImPlot::SetNextLineStyle( ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
+                            ImPlot::PlotLine( "##sl_re", re_v.data(), slice_len );
+                        }
+                        if ( p.show_im_curve ) {
+                            ImPlot::SetNextLineStyle( ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
+                            ImPlot::PlotLine( "##sl_im", im_v.data(), slice_len );
+                        }
+                        if ( p.show_arg_curve ) {
+                            ImPlot::SetNextLineStyle( ImVec4( 0.4f, 0.8f, 1.f, 1.f ) );
+                            ImPlot::PlotLine( "##sl_arg", arg_v.data(), slice_len );
+                        }
+                    }
+                    if ( ImPlot::IsPlotHovered() && ImGui::IsMouseReleased( ImGuiMouseButton_Right ) )
+                        ImGui::OpenPopup( "##lcctx" );
+                    ImPlot::EndPlot();
+                }
+                if ( ImGui::BeginPopup( "##lcctx" ) ) {
                     if ( ImGui::MenuItem( "Track This Cut" ) ) {
                         if ( p.selected >= 0 && p.selected < (int)matrix_registry_.size() ) {
                             const auto& tdesc = matrix_registry_[p.selected];
@@ -911,58 +968,11 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                     }
                     ImGui::EndPopup();
                 }
-
-                if ( is_cmplx ) {
-                    const float re_a  = p.show_re_curve  ? 1.f : 0.f;
-                    const float im_a  = p.show_im_curve  ? 1.f : 0.f;
-                    const float arg_a = p.show_arg_curve ? 1.f : 0.f;
-
-                    ImGui::SetCursorPos( saved_pos );
-                    ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.3f, 1.f, 0.3f, re_a ) );
-                    ImGui::PushStyleColor( ImGuiCol_FrameBg,   ImVec4( 0.f, 0.f, 0.f, 0.f ) );
-                    ImGui::PlotLines( "##sl_re", re_v.data(), slice_len, 0, nullptr, gmin, gmax, plot_sz );
-                    ImGui::PopStyleColor( 2 );
-
-                    ImGui::SetCursorPos( saved_pos );
-                    ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 1.f, 0.5f, 0.1f, im_a ) );
-                    ImGui::PushStyleColor( ImGuiCol_FrameBg,   ImVec4( 0.f, 0.f, 0.f, 0.f ) );
-                    ImGui::PlotLines( "##sl_im", im_v.data(), slice_len, 0, nullptr, gmin, gmax, plot_sz );
-                    ImGui::PopStyleColor( 2 );
-
-                    ImGui::SetCursorPos( saved_pos );
-                    ImGui::PushStyleColor( ImGuiCol_PlotLines, ImVec4( 0.4f, 0.8f, 1.f, arg_a ) );
-                    ImGui::PushStyleColor( ImGuiCol_FrameBg,   ImVec4( 0.f, 0.f, 0.f, 0.f ) );
-                    ImGui::PlotLines( "##sl_arg", arg_v.data(), slice_len, 0, nullptr, gmin, gmax, plot_sz );
-                    ImGui::PopStyleColor( 2 );
-                }
             }
         }
     } else {
         // --- 3D surface plot ---
         renderMatrixPanel3D( p );
-    }
-
-    // ---- Embedded mini-plot with window slider ----
-    if ( !p.hist_max.empty() ) {
-        p.hist_window = std::max( 10, std::min( p.hist_window, MatrixPanel::kMaxHist ) );
-        const int total_h = (int)p.hist_max.size();
-        const int window_h = std::min( p.hist_window, total_h );
-        const int offset_h = total_h - window_h;
-        std::vector<float> maxv( p.hist_max.begin() + offset_h, p.hist_max.end() );
-        char overlay[64];
-        snprintf( overlay, sizeof( overlay ), "max=%.3e", maxv.back() );
-        ImGui::SetNextItemWidth( -1.f );
-        char win_label[32];
-        if ( p.hist_window >= MatrixPanel::kMaxHist )
-            std::snprintf( win_label, sizeof( win_label ), "Window: All" );
-        else
-            std::snprintf( win_label, sizeof( win_label ), "Window: %d", p.hist_window );
-        ImGui::SliderInt( "##hw_panel", &p.hist_window, 10, MatrixPanel::kMaxHist, win_label );
-        if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Number of history samples to display\n(drag left = fewer, right = all)" );
-        ImGui::PlotLines( "##histmax",
-                          maxv.data(), (int)maxv.size(),
-                          0, overlay, FLT_MAX, FLT_MAX, ImVec2( -1, 55 ) );
     }
 
     ImGui::End();
