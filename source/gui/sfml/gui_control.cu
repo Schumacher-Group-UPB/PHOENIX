@@ -544,6 +544,29 @@ static void computeDisplayFFT( const float* samples, int n, float mean_dt_ps,
         out_mag[k]  = std::abs( buf[k] ) / (float)n;
     }
 }
+// Complex FFT: input is (re_s[], im_s[]) → one-sided |FFT(re + i·im)|.
+// Hann-windowed, zero-padded to next power-of-2, same convention as computeDisplayFFT.
+static void computeComplexDisplayFFT( const float* re_s, const float* im_s, int n, float mean_dt_ps,
+                                      std::vector<float>& out_freq,
+                                      std::vector<float>& out_mag ) {
+    if ( n < 2 || mean_dt_ps <= 0.f ) { out_freq.clear(); out_mag.clear(); return; }
+    int N = 1;
+    while ( N < n ) N <<= 1;
+    std::vector<std::complex<float>> buf( N, { 0.f, 0.f } );
+    for ( int i = 0; i < n; ++i ) {
+        float w = 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * i / (float)( n - 1 ) ) );
+        buf[i] = { re_s[i] * w, im_s[i] * w };
+    }
+    _fft_inplace( buf );
+    const int half = N / 2 + 1;
+    out_freq.resize( half );
+    out_mag.resize( half );
+    const float df = 1.0f / ( (float)N * mean_dt_ps );
+    for ( int k = 0; k < half; ++k ) {
+        out_freq[k] = (float)k * df;
+        out_mag[k]  = std::abs( buf[k] ) / (float)n;
+    }
+}
 } // anonymous namespace
 
 void PhoenixGUI::renderTrackedPointsWindow() {
@@ -653,6 +676,17 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         return;
     }
 
+    // Component metadata (defined here so it's available in per-point list AND FFT rendering)
+    struct CompInfo { const char* suffix; ImVec4 col; };
+    static const CompInfo kComps[] = {
+        { "|z|",  { 1.f,   1.f,   1.f,   1.f } },
+        { "|z|²", { 0.75f, 0.75f, 0.75f, 1.f } },
+        { "Re",   { 0.3f,  1.f,   0.3f,  1.f } },
+        { "Im",   { 1.f,   0.5f,  0.1f,  1.f } },
+        { "arg",  { 0.4f,  0.8f,  1.f,   1.f } },
+        { "z",    { 1.f,   0.8f,  0.2f,  1.f } },  // gold — complex FFT input
+    };
+
     // ---- Per-point list: enable toggle, label, component selectors, delete ----
     int to_delete = -1;
     for ( int i = 0; i < (int)tracked_points_.size(); ++i ) {
@@ -669,23 +703,54 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         ImGui::SameLine();
         if ( ImGui::SmallButton( "x##tev_del" ) ) to_delete = i;
 
-        // Component selectors on an indented second line
+        // Time-series component selectors
         ImGui::Indent( 22.f );
-        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 1.f, 1.f, 1.f, 1.f ) );
-        ImGui::Checkbox( "|z|##tc_abs",          &tp.show_abs  );  ImGui::PopStyleColor();
+        ImGui::PushStyleColor( ImGuiCol_Text, kComps[0].col );
+        ImGui::Checkbox( "|z|##tc_abs",  &tp.show_abs  );  ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 0.75f, 0.75f, 0.75f, 1.f ) );
-        ImGui::Checkbox( "|z|²##tc_ab2",  &tp.show_abs2 );  ImGui::PopStyleColor();
+        ImGui::PushStyleColor( ImGuiCol_Text, kComps[1].col );
+        ImGui::Checkbox( "|z|²##tc_ab2", &tp.show_abs2 );  ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
-        ImGui::Checkbox( "Re##tc_re",            &tp.show_re   );  ImGui::PopStyleColor();
+        ImGui::PushStyleColor( ImGuiCol_Text, kComps[2].col );
+        ImGui::Checkbox( "Re##tc_re",    &tp.show_re   );  ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
-        ImGui::Checkbox( "Im##tc_im",            &tp.show_im   );  ImGui::PopStyleColor();
+        ImGui::PushStyleColor( ImGuiCol_Text, kComps[3].col );
+        ImGui::Checkbox( "Im##tc_im",    &tp.show_im   );  ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor( ImGuiCol_Text, ImVec4( 0.4f, 0.8f, 1.f, 1.f ) );
-        ImGui::Checkbox( "arg##tc_arg",          &tp.show_arg  );  ImGui::PopStyleColor();
+        ImGui::PushStyleColor( ImGuiCol_Text, kComps[4].col );
+        ImGui::Checkbox( "arg##tc_arg",  &tp.show_arg  );  ImGui::PopStyleColor();
         ImGui::Unindent( 22.f );
+
+        // FFT component selectors (only visible when FFT sub-plot is enabled)
+        if ( tracked_show_fft_ ) {
+            ImGui::Indent( 22.f );
+            ImGui::TextDisabled( "FFT:" );
+            ImGui::SameLine();
+            ImGui::PushStyleColor( ImGuiCol_Text, kComps[0].col );
+            ImGui::Checkbox( "|z|##fft_abs",  &tp.fft_show_abs  );  ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor( ImGuiCol_Text, kComps[1].col );
+            ImGui::Checkbox( "|z|²##fft_ab2", &tp.fft_show_abs2 );  ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor( ImGuiCol_Text, kComps[5].col );
+            if ( !tp.is_complex ) ImGui::BeginDisabled();
+            ImGui::Checkbox( "z##fft_z", &tp.fft_show_z );
+            if ( !tp.is_complex ) ImGui::EndDisabled();
+            ImGui::PopStyleColor();
+            if ( ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+                ImGui::SetTooltip( "|FFT(Re + i\xc2\xb7Im)| — complex-input FFT%s",
+                                   tp.is_complex ? "" : " (unavailable for real matrices)" );
+            ImGui::SameLine();
+            ImGui::PushStyleColor( ImGuiCol_Text, kComps[2].col );
+            ImGui::Checkbox( "Re##fft_re",    &tp.fft_show_re   );  ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor( ImGuiCol_Text, kComps[3].col );
+            ImGui::Checkbox( "Im##fft_im",    &tp.fft_show_im   );  ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor( ImGuiCol_Text, kComps[4].col );
+            ImGui::Checkbox( "arg##fft_arg",  &tp.fft_show_arg  );  ImGui::PopStyleColor();
+            ImGui::Unindent( 22.f );
+        }
 
         ImGui::PopID();
     }
@@ -724,16 +789,6 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         char buf[64];
         std::snprintf( buf, sizeof(buf), "%s(%d,%d)", mat.c_str(), tp.col, tp.row );
         return buf;
-    };
-
-    // Component metadata
-    struct CompInfo { const char* suffix; ImVec4 col; };
-    static const CompInfo kComps[] = {
-        { "|z|",         { 1.f,   1.f,   1.f,   1.f } },
-        { "|z|²", { 0.75f, 0.75f, 0.75f, 1.f } },
-        { "Re",          { 0.3f,  1.f,   0.3f,  1.f } },
-        { "Im",          { 1.f,   0.5f,  0.1f,  1.f } },
-        { "arg",         { 0.4f,  0.8f,  1.f,   1.f } },
     };
 
     const ImVec2 avail_tev  = ImGui::GetContentRegionAvail();
@@ -807,7 +862,6 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 )
                         : 0.f;
 
-                    struct FftComp { bool enabled; const float* src_begin; int deque_offset; const CompInfo* ci; };
                     auto abs2src  = sliceAbs2( tp );  // pre-computed
                     auto absv     = sliceDeque( tp.values_abs, tracked_hist_window_ );
                     auto rev      = sliceDeque( tp.values_re,  tracked_hist_window_ );
@@ -823,11 +877,20 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         std::string lbl = sn + " " + ci.suffix;
                         ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size() );
                     };
-                    doFftLine( tp.show_abs,  absv,    kComps[0] );
-                    doFftLine( tp.show_abs2, abs2src, kComps[1] );
-                    doFftLine( tp.show_re,   rev,     kComps[2] );
-                    doFftLine( tp.show_im,   imv,     kComps[3] );
-                    doFftLine( tp.show_arg,  argv,    kComps[4] );
+                    doFftLine( tp.fft_show_abs,  absv,    kComps[0] );
+                    doFftLine( tp.fft_show_abs2, abs2src, kComps[1] );
+                    doFftLine( tp.fft_show_re,   rev,     kComps[2] );
+                    doFftLine( tp.fft_show_im,   imv,     kComps[3] );
+                    doFftLine( tp.fft_show_arg,  argv,    kComps[4] );
+                    if ( tp.fft_show_z && (int)rev.size() >= 2 && (int)imv.size() >= 2 ) {
+                        std::vector<float> ffreq, fmag;
+                        computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag );
+                        if ( !fmag.empty() ) {
+                            ImPlot::SetNextLineStyle( ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f ) );
+                            std::string lbl = sn + " " + kComps[5].suffix;
+                            ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size() );
+                        }
+                    }
                 }
                 ImPlot::EndPlot();
             }
@@ -903,11 +966,19 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
                         ImPlot::PlotLine( ci.suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
                     };
-                    doFftLine( tp.show_abs,  absv,    kComps[0] );
-                    doFftLine( tp.show_abs2, abs2src, kComps[1] );
-                    doFftLine( tp.show_re,   rev,     kComps[2] );
-                    doFftLine( tp.show_im,   imv,     kComps[3] );
-                    doFftLine( tp.show_arg,  argv,    kComps[4] );
+                    doFftLine( tp.fft_show_abs,  absv,    kComps[0] );
+                    doFftLine( tp.fft_show_abs2, abs2src, kComps[1] );
+                    doFftLine( tp.fft_show_re,   rev,     kComps[2] );
+                    doFftLine( tp.fft_show_im,   imv,     kComps[3] );
+                    doFftLine( tp.fft_show_arg,  argv,    kComps[4] );
+                    if ( tp.fft_show_z && (int)rev.size() >= 2 && (int)imv.size() >= 2 ) {
+                        std::vector<float> ffreq, fmag;
+                        computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag );
+                        if ( !fmag.empty() ) {
+                            ImPlot::SetNextLineStyle( ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f ) );
+                            ImPlot::PlotLine( kComps[5].suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
+                        }
+                    }
                     ImPlot::EndPlot();
                 }
             }

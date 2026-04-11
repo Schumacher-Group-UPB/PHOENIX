@@ -161,6 +161,13 @@ private:
         bool show_re   = false;
         bool show_im   = false;
         bool show_arg  = false;
+        // Which components to show in the FFT sub-plot (independent of time series)
+        bool fft_show_abs  = true;
+        bool fft_show_abs2 = false;
+        bool fft_show_z    = false;  // complex FFT: |FFT(Re + i·Im)|
+        bool fft_show_re   = false;
+        bool fft_show_im   = false;
+        bool fft_show_arg  = false;
     };
     std::vector<TrackedPoint> tracked_points_;
     bool show_tracked_window_  = false;
