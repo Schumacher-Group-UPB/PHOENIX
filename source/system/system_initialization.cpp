@@ -100,6 +100,19 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     if ( ( index = PHOENIX::CLIO::findInArgv( "--tol", argc, argv ) ) != -1 ) {
         tolerance = PHOENIX::CLIO::getNextInput( argv, argc, "tol", ++index );
     }
+    if ( ( index = PHOENIX::CLIO::findInArgv( { "dt-adaptive", "tstep-adaptive" }, argc, argv, 0, "--" ) ) != -1 ) {
+        index++;
+        while ( index + 1 < argc && argv[index][0] != '-' ) {
+            std::string t_str  = argv[index++];
+            std::string dt_str = argv[index++];
+            // Strip optional "ps" suffix
+            auto strip_ps = []( std::string& s ) { if ( s.size() >= 2 && s.substr( s.size() - 2 ) == "ps" ) s.erase( s.size() - 2 ); };
+            strip_ps( t_str ); strip_ps( dt_str );
+            dt_schedule.emplace_back( std::stod( t_str ), std::stod( dt_str ) );
+        }
+        std::sort( dt_schedule.begin(), dt_schedule.end(), []( const auto& a, const auto& b ) { return a.first < b.first; } );
+        std::cout << PHOENIX::CLIO::prettyPrint( "Loaded dt schedule with " + std::to_string( dt_schedule.size() ) + " entries", PHOENIX::CLIO::Control::Info ) << std::endl;
+    }
     if ( ( index = PHOENIX::CLIO::findInArgv( "--rkvdt", argc, argv ) ) != -1 ) {
         dt_min = PHOENIX::CLIO::getNextInput( argv, argc, "dt_min", ++index );
         dt_max = PHOENIX::CLIO::getNextInput( argv, argc, "dt_max", index );
@@ -281,6 +294,45 @@ void PHOENIX::SystemParameters::init( int argc, char** argv ) {
     ///////////////////////////////////////
 }
 
+void PHOENIX::SystemParameters::buildDtScheduleFromEnvelopes() {
+    // Translate per-envelope ads settings into dt_schedule entries.
+    // Must be called AFTER calculateAuto() so base_dt is finalised.
+    auto process = [&]( const PHOENIX::Envelope& env ) {
+        using AdsMode = PHOENIX::Envelope::AdsMode;
+        using Temporal = PHOENIX::Envelope::Temporal;
+        for ( int i = 0; i < env.size(); i++ ) {
+            if ( env.ads_mode[i] == AdsMode::None ) continue;
+            int g = env.group_identifier[i];
+            PHOENIX::Type::real ads_dt;
+            if ( env.ads_mode[i] == AdsMode::Auto ) {
+                if ( ( env.temporal[g] & Temporal::Constant ) || env.sigma[g] <= 0 ) {
+                    std::cout << PHOENIX::CLIO::prettyPrint( "ads=auto: skipping component with Constant or zero-sigma temporal", PHOENIX::CLIO::Control::Warning ) << std::endl;
+                    continue;
+                }
+                ads_dt = env.sigma[g] / 10.0;
+            } else {
+                ads_dt = env.ads_value[i];
+            }
+            if ( env.temporal[g] & Temporal::Constant ) {
+                dt_schedule.emplace_back( 0.0, ads_dt );
+            } else {
+                PHOENIX::Type::real t_start = std::max<PHOENIX::Type::real>( 0.0, env.t0[g] - 5.0 * env.sigma[g] );
+                PHOENIX::Type::real t_end   = env.t0[g] + 5.0 * env.sigma[g];
+                dt_schedule.emplace_back( t_start, ads_dt );
+                dt_schedule.emplace_back( t_end, base_dt );
+            }
+        }
+    };
+    process( pump );
+    process( pulse );
+    process( potential );
+    // Re-sort after merging envelope-derived entries with explicit --dt-adaptive entries
+    if ( !dt_schedule.empty() ) {
+        std::sort( dt_schedule.begin(), dt_schedule.end(), []( const auto& a, const auto& b ) { return a.first < b.first; } );
+        std::cout << PHOENIX::CLIO::prettyPrint( "Final dt schedule has " + std::to_string( dt_schedule.size() ) + " entries", PHOENIX::CLIO::Control::Info ) << std::endl;
+    }
+}
+
 std::string PHOENIX::SystemParameters::toRunstring() const {
     std::ostringstream ss;
     constexpr int prec = std::numeric_limits<Type::real>::max_digits10;
@@ -303,6 +355,12 @@ std::string PHOENIX::SystemParameters::toRunstring() const {
         ss << "-adaptive\n";
         ss << "--rkvdt " << dt_min << " " << dt_max << "\n";
         ss << "--tol " << tolerance << "\n";
+    }
+    if ( !dt_schedule.empty() ) {
+        ss << "--dt-adaptive";
+        for ( const auto& [t, dt] : dt_schedule )
+            ss << " " << t << " " << dt;
+        ss << "\n";
     }
     if ( iterator != "RK4" )
         ss << "--iterator " << iterator << "\n";

@@ -195,6 +195,8 @@ class Solver {
     std::string butcher_tableau_;
     uint32_t k_max_{ 0 };     // The maximum order of the solver. This is used to determine the size of the halo map.
     uint32_t halo_size_{ 0 }; // The size of the halo map. This is used to determine the size of the halo map.
+    // Monotonically advancing cursor into system.dt_schedule; never resets within a run.
+    int dt_schedule_index_{ 0 };
 };
 
 } // namespace PHOENIX

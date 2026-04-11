@@ -20,6 +20,16 @@ PHOENIX::Type::real fft_cached_t = 0.0;
 bool first_time = true;
 
 bool Solver::iterate( bool force_fixed_time_step ) {
+    // Pseudo-adaptive dt schedule: advance through sorted (trigger_time, new_dt) pairs.
+    // The while-loop handles the case where multiple entries are passed in a single step.
+    {
+        auto& sched = system.dt_schedule;
+        while ( dt_schedule_index_ < (int)sched.size() && system.p.t >= sched[dt_schedule_index_].first ) {
+            system.p.dt = sched[dt_schedule_index_].second;
+            dt_schedule_index_++;
+        }
+    }
+
     if ( system.use_adaptive_timestep && system.use_adaptive_timestep != is_adaptive_ ) {
         std::cout << CLIO::prettyPrint( "Cannot use variable time step with this solver.", CLIO::Control::Error ) << std::endl;
         system.use_adaptive_timestep = false;

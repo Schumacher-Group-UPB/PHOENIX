@@ -97,6 +97,11 @@ class SystemParameters {
 
     bool do_overwrite_dt;
 
+    // Pseudo-adaptive dt schedule: sorted (trigger_time, new_dt) pairs.
+    // At each trigger_time, p.dt is changed to new_dt.
+    std::vector<std::pair<Type::real, Type::real>> dt_schedule;
+    Type::real base_dt = 0.0; // dt after calculateAuto(); used as restore target by envelope ads
+
     // Imag Time Amp
     Type::real imag_time_amplitude;
 
@@ -129,6 +134,7 @@ class SystemParameters {
     void init( int argc, char** argv );
     void calculateAuto();
     void validateInputs();
+    void buildDtScheduleFromEnvelopes();
     std::string toRunstring() const;
 
     void printHelp( bool verbose, bool markdown );

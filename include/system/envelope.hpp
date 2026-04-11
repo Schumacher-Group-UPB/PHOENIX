@@ -69,6 +69,13 @@ class Envelope {
     };
     std::vector<Temporal> temporal;
 
+    enum class AdsMode : Type::uint32 { None = 0, Auto = 1, Value = 2 };
+    static inline std::map<std::string, AdsMode> AdsModeFromString = {
+        { "no", AdsMode::None }, { "none", AdsMode::None }, { "auto", AdsMode::Auto },
+    };
+    std::vector<AdsMode>    ads_mode;   // per spatial component
+    std::vector<Type::real> ads_value;  // per spatial component; used when mode == Value
+
     static inline std::map<std::string, Behavior> BehaviorFromString = {
         { "add", Behavior::Add }, { "multiply", Behavior::Multiply }, { "replace", Behavior::Replace }, { "adaptive", Behavior::Adaptive }, { "complex", Behavior::Complex },
     };
@@ -86,7 +93,7 @@ class Envelope {
 
     static inline int AllGroups = -1;
 
-    void addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m, PHOENIX::Type::real k0_x = 0.0, PHOENIX::Type::real k0_y = 0.0 );
+    void addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m, PHOENIX::Type::real k0_x = 0.0, PHOENIX::Type::real k0_y = 0.0, AdsMode p_ads_mode = AdsMode::None, PHOENIX::Type::real p_ads_value = 0.0 );
     void addSpacial( const std::string& path, PHOENIX::Type::real amp, const std::string& s_behaviour, const std::string& s_pol );
     void addTemporal( PHOENIX::Type::real t0, PHOENIX::Type::real sigma, PHOENIX::Type::real freq, const std::string& s_temp );
     void addTemporal( const std::string& path );

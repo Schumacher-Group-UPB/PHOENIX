@@ -46,7 +46,9 @@ Envelope buildEnvelopeFromPanel( const PhoenixGUI::EnvelopeEditorPanel& p ) {
             s_pol_names[comp.polarization_idx],
             s_behavior_names[comp.behavior_idx],
             std::to_string( comp.m ),
-            comp.k0_x, comp.k0_y
+            comp.k0_x, comp.k0_y,
+            static_cast<Envelope::AdsMode>( comp.ads_idx ),
+            (Type::real)comp.ads_value
         );
         tmp.addTemporal( p.temporal.t0, p.temporal.sigma, p.temporal.freq, s_temp_names[p.temporal.type_idx] );
     }
@@ -93,6 +95,14 @@ static void populatePanelFromEnvelope( PhoenixGUI::EnvelopeEditorPanel& p,
         else if ( env->behavior[i] == Envelope::Behavior::Adaptive ) c.behavior_idx = 3;
         else if ( env->behavior[i] == Envelope::Behavior::Complex  ) c.behavior_idx = 4;
         else                                                           c.behavior_idx = 0; // Add
+        // Reverse-map AdsMode to GUI idx (0=none, 1=auto, 2=value)
+        if ( i < (int)env->ads_mode.size() ) {
+            switch ( env->ads_mode[i] ) {
+                case Envelope::AdsMode::Auto:  c.ads_idx = 1; c.ads_value = 0.f; break;
+                case Envelope::AdsMode::Value: c.ads_idx = 2; c.ads_value = (float)env->ads_value[i]; break;
+                default:                       c.ads_idx = 0; c.ads_value = 0.f; break;
+            }
+        }
         p.components.push_back( c );
     }
     p.selected_component = p.components.empty() ? -1 : 0;
@@ -487,7 +497,9 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
                 s_pol_names[comp.polarization_idx],
                 s_behavior_names[comp.behavior_idx],
                 std::to_string( comp.m ),
-                comp.k0_x, comp.k0_y
+                comp.k0_x, comp.k0_y,
+                static_cast<Envelope::AdsMode>( comp.ads_idx ),
+                (Type::real)comp.ads_value
             );
             desc.source_env->addTemporal( p.temporal.t0, p.temporal.sigma, p.temporal.freq, s_temp_names[p.temporal.type_idx] );
         }
@@ -653,6 +665,23 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
                 c.behavior_idx = bi; markDirty();
             }
             if ( disabled ) ImGui::EndDisabled();
+        }
+
+        // -- Adaptive timestep (ads) per component --
+        ImGui::Spacing();
+        ImGui::TextUnformatted( "Adaptive dt (ads):" );
+        static const char* s_ads_names[] = { "none", "auto", "value" };
+        ImGui::SetNextItemWidth( 90.f );
+        if ( ImGui::Combo( "##ads_mode", &c.ads_idx, s_ads_names, 3 ) ) markDirty();
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Pseudo-adaptive dt:\n"
+                               "  none  - no effect\n"
+                               "  auto  - dt = sigma/10 over the pulse window\n"
+                               "  value - use this fixed dt over the pulse window" );
+        if ( c.ads_idx == 2 ) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 100.f );
+            if ( ImGui::InputFloat( "##ads_val", &c.ads_value, 0.f, 0.f, "%.4f" ) ) markDirty();
         }
     }
 

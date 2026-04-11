@@ -342,6 +342,9 @@ public:
         int   polarization_idx = 2;
         // 0=add, 1=multiply, 2=replace, 3=adaptive, 4=complex
         int   behavior_idx     = 0;
+        // Pseudo-adaptive timestep: 0=none, 1=auto, 2=value
+        int   ads_idx   = 0;
+        float ads_value = 0.0f;
     };
 
     // Single temporal group editing state

@@ -157,6 +157,8 @@ void PHOENIX::SystemParameters::calculateAuto() {
     p.one_over_h_bar_s = 1.0 / p.h_bar_s;
     p.minus_i_over_h_bar_s = Type::complex( 0.0, -Type::real( 1.0 ) / p.h_bar_s );
     p.i_h_bar_s = Type::complex( 0.0, p.h_bar_s );
+    // Snapshot the final dt as the restore baseline for envelope ads schedule entries
+    base_dt = p.dt;
 }
 
 PHOENIX::SystemParameters::SystemParameters( int argc, char** argv ) : SystemParameters() {
@@ -174,8 +176,11 @@ PHOENIX::SystemParameters::SystemParameters( int argc, char** argv ) : SystemPar
     // Read-In commandline arguments
     init( argc, argv );
 
-    // Calculate or scale variables
+    // Calculate or scale variables (also sets base_dt)
     calculateAuto();
+
+    // Translate envelope ads settings into dt_schedule entries (needs base_dt from calculateAuto)
+    buildDtScheduleFromEnvelopes();
 
     // Validate them
     validateInputs();

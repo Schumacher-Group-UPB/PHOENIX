@@ -34,7 +34,7 @@ eval_enum _cast_string_list_to_enum( const std::string& input, std::string split
     return ret;
 }
 
-void PHOENIX::Envelope::addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m, PHOENIX::Type::real k0_x, PHOENIX::Type::real k0_y ) {
+void PHOENIX::Envelope::addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real width_x, PHOENIX::Type::real width_y, PHOENIX::Type::real x, PHOENIX::Type::real y, PHOENIX::Type::real exponent, const std::string& s_type, const std::string& s_pol, const std::string& s_behavior, const std::string& s_m, PHOENIX::Type::real k0_x, PHOENIX::Type::real k0_y, AdsMode p_ads_mode, PHOENIX::Type::real p_ads_value ) {
     this->amp.push_back( amp );
     this->width_x.push_back( width_x );
     this->width_y.push_back( width_y );
@@ -58,6 +58,8 @@ void PHOENIX::Envelope::addSpacial( PHOENIX::Type::real amp, PHOENIX::Type::real
         this->m.emplace_back( std::stoi( s_m ) );
     // Add dummy to path
     this->load_path.push_back( "" );
+    this->ads_mode.push_back( p_ads_mode );
+    this->ads_value.push_back( p_ads_value );
 }
 
 void PHOENIX::Envelope::addSpacial( const std::string& path, PHOENIX::Type::real amp, const std::string& s_behaviour, const std::string& s_pol ) {
@@ -79,6 +81,8 @@ void PHOENIX::Envelope::addSpacial( const std::string& path, PHOENIX::Type::real
     this->behavior.push_back( behavior );
     m.emplace_back( 0 );
     load_path.push_back( path );
+    this->ads_mode.push_back( AdsMode::None );
+    this->ads_value.push_back( 0.0 );
 }
 
 void PHOENIX::Envelope::addTemporal( PHOENIX::Type::real t0, PHOENIX::Type::real sigma, PHOENIX::Type::real freq, const std::string& s_temp ) {
@@ -177,10 +181,12 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
             auto syntax_peek = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_syntax_peek", index );
             const bool named_mode = ( syntax_peek == "width" || syntax_peek == "pos" || syntax_peek == "pol" ||
                                       syntax_peek == "exponent" || syntax_peek == "charge" || syntax_peek == "type" ||
-                                      syntax_peek == "momenta" || syntax_peek == "time" );
+                                      syntax_peek == "momenta" || syntax_peek == "time" || syntax_peek == "ads" );
 
             PHOENIX::Type::real width_x, width_y, pos_x, pos_y, exponent, k0_x_val, k0_y_val;
             std::string spol, sm, stype;
+            AdsMode leg_ads_mode = AdsMode::None;
+            PHOENIX::Type::real leg_ads_value = 0.0;
 
             if ( named_mode ) {
                 // Defaults
@@ -196,6 +202,8 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
                 std::string t_type = "constant";
                 PHOENIX::Type::real t_t0 = 0, t_sigma = 0, t_freq = 0;
                 std::string t_load_path = "";
+                AdsMode t_ads_mode = AdsMode::None;
+                PHOENIX::Type::real t_ads_value = 0.0;
 
                 auto process_keyword = [&]( const std::string& kw ) -> bool {
                     if ( kw == "width" ) {
@@ -227,6 +235,17 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
                             t_sigma = PHOENIX::CLIO::getNextInput( argv, argc, key + "_sigma", index );
                             t_freq = PHOENIX::CLIO::getNextInput( argv, argc, key + "_freq", index );
                         }
+                    } else if ( kw == "ads" ) {
+                        auto ads_str = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_ads", index );
+                        // Strip trailing "ps" suffix if present
+                        if ( ads_str.size() >= 2 && ads_str.substr( ads_str.size() - 2 ) == "ps" )
+                            ads_str.erase( ads_str.size() - 2 );
+                        if ( AdsModeFromString.count( ads_str ) ) {
+                            t_ads_mode = AdsModeFromString.at( ads_str );
+                        } else {
+                            t_ads_mode = AdsMode::Value;
+                            t_ads_value = std::stod( ads_str );
+                        }
                     } else {
                         return false; // Unknown token; end of named params
                     }
@@ -242,7 +261,7 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
                     }
                 }
 
-                ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm, k0_x_val, k0_y_val );
+                ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm, k0_x_val, k0_y_val, t_ads_mode, t_ads_value );
                 std::cout << PHOENIX::CLIO::prettyPrint( "Added Spacial Component to Envelope '" + key + "'", PHOENIX::CLIO::Control::Success | PHOENIX::CLIO::Control::Secondary ) << std::endl;
 
                 if ( temporal_handled ) {
@@ -278,9 +297,24 @@ PHOENIX::Envelope PHOENIX::Envelope::fromCommandlineArguments( int argc, char** 
                 } else {
                     index--;
                 }
+                // Optional ads keyword
+                auto ads_peek = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_ads_peek", index );
+                if ( ads_peek == "ads" ) {
+                    auto ads_str = PHOENIX::CLIO::getNextStringInput( argv, argc, key + "_ads", index );
+                    if ( ads_str.size() >= 2 && ads_str.substr( ads_str.size() - 2 ) == "ps" )
+                        ads_str.erase( ads_str.size() - 2 );
+                    if ( AdsModeFromString.count( ads_str ) ) {
+                        leg_ads_mode = AdsModeFromString.at( ads_str );
+                    } else {
+                        leg_ads_mode = AdsMode::Value;
+                        leg_ads_value = std::stod( ads_str );
+                    }
+                } else {
+                    index--;
+                }
             }
 
-            ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm, k0_x_val, k0_y_val );
+            ret.addSpacial( amp, width_x, width_y, pos_x, pos_y, exponent, stype, spol, sbehavior, sm, k0_x_val, k0_y_val, leg_ads_mode, leg_ads_value );
         }
 
         std::cout << PHOENIX::CLIO::prettyPrint( "Added Spacial Component to Envelope '" + key + "'", PHOENIX::CLIO::Control::Success | PHOENIX::CLIO::Control::Secondary ) << std::endl;
@@ -529,6 +563,12 @@ std::string PHOENIX::Envelope::toRunstring( const std::string& key ) const {
             ss << " type " << s_type[i];
             if ( k0_x[i] != 0.0 || k0_y[i] != 0.0 )
                 ss << " momenta " << k0_x[i] << " " << k0_y[i];
+            if ( i < (int)ads_mode.size() ) {
+                if ( ads_mode[i] == AdsMode::Auto )
+                    ss << " ads auto";
+                else if ( ads_mode[i] == AdsMode::Value )
+                    ss << " ads " << ads_value[i];
+            }
         }
 
         // Temporal component for this group
