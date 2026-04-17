@@ -25,7 +25,6 @@ namespace {
 static const char* s_pol_names[]      = { "plus", "minus", "both" };
 static const char* s_behavior_names[] = { "add", "multiply", "replace", "adaptive", "complex" };
 static const char* s_temp_names[]     = { "constant", "gauss", "iexp", "cos" };
-static const char* s_mode_names[]     = { "|.|^2", "|.|", "Re", "Im", "arg" };
 
 std::string envTypeString( const PhoenixGUI::SpatialComponentEdit& c ) {
     std::string s;
@@ -812,9 +811,31 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         if ( ImGui::Button( "Apply to Matrix", ImVec2( btn_w, 0 ) ) )
             applyEnvelopeToMatrix( p );
         ImGui::SameLine();
+        bool live_apply_before = p.live_apply;
         ImGui::Checkbox( "Live##live_apply", &p.live_apply );
         if ( ImGui::IsItemHovered() )
             ImGui::SetTooltip( "When active, every parameter change is immediately applied to the GPU matrix (no revision saved)." );
+        // Warn the user once when they first enable Live Apply
+        if ( p.live_apply && !live_apply_before && !p.live_apply_warned_ )
+            ImGui::OpenPopup( "live_apply_warning##lw" );
+        if ( ImGui::BeginPopupModal( "live_apply_warning##lw", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) ) {
+            ImGui::Text( "Live Apply enabled" );
+            ImGui::Separator();
+            ImGui::TextWrapped( "Every preview rebuild will immediately overwrite the GPU matrix.\n"
+                                "This bypasses the revision history and cannot be undone.\n"
+                                "Disable Live Apply and click 'Apply to Matrix' for a tracked change." );
+            ImGui::Separator();
+            if ( ImGui::Button( "OK, continue##lw_ok", ImVec2( 140, 0 ) ) ) {
+                p.live_apply_warned_ = true;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if ( ImGui::Button( "Cancel##lw_cancel", ImVec2( 100, 0 ) ) ) {
+                p.live_apply = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
     }
     if ( !p.last_apply_status.empty() )
         ImGui::TextDisabled( "%s", p.last_apply_status.c_str() );
@@ -833,13 +854,27 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         const bool has_sel = ( p.selected_revision >= 0
                              && p.selected_revision < (int)p.revisions.size() );
         if ( !has_sel ) ImGui::BeginDisabled();
-        if ( ImGui::Button( "Restore##rev", ImVec2( -1, 0 ) ) && has_sel ) {
+        if ( ImGui::Button( "Preview##rev_prev", ImVec2( -1, 0 ) ) && has_sel ) {
+            // Load the revision's parameters into the editor and rebuild the preview without
+            // applying it to the GPU matrix.  The user can still Restore or discard from there.
             const auto& rev      = p.revisions[p.selected_revision];
             p.components         = rev.components;
             p.temporal           = rev.temporal;
             p.selected_component = p.components.empty() ? -1 : 0;
             p.preview_dirty      = true;
         }
+        if ( ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+            ImGui::SetTooltip( "Load this revision into the editor and rebuild the preview without writing to the GPU" );
+        if ( ImGui::Button( "Restore (Apply)##rev", ImVec2( -1, 0 ) ) && has_sel ) {
+            const auto& rev      = p.revisions[p.selected_revision];
+            p.components         = rev.components;
+            p.temporal           = rev.temporal;
+            p.selected_component = p.components.empty() ? -1 : 0;
+            p.preview_dirty      = true;
+            applyEnvelopeToMatrix( p, /*push_revision=*/true );
+        }
+        if ( ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+            ImGui::SetTooltip( "Load this revision and immediately apply it to the GPU matrix" );
         if ( !has_sel ) ImGui::EndDisabled();
     }
 
@@ -856,16 +891,9 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
     if ( is_complex_target ) {
         ImGui::SetNextItemWidth( 90.f );
         int mode_int = (int)p.preview_mode;
-        if ( ImGui::BeginCombo( "##previewmode", s_mode_names[mode_int] ) ) {
-            for ( int m = 0; m < 5; m++ ) {
-                bool sel = ( mode_int == m );
-                if ( ImGui::Selectable( s_mode_names[m], sel ) ) {
-                    p.preview_mode  = (EnvelopeEditorPanel::PreviewMode)m;
-                    p.preview_dirty = true;
-                }
-                if ( sel ) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
+        if ( displayModeCombo_( "##previewmode", mode_int ) ) {
+            p.preview_mode  = (EnvelopeEditorPanel::PreviewMode)mode_int;
+            p.preview_dirty = true;
         }
         ImGui::SameLine();
     }
@@ -873,18 +901,8 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
     // Colormap combo
     {
         ImGui::SetNextItemWidth( 90.f );
-        const char* cmap_preview = ( p.colormap_idx < 0 || p.colormap_idx >= (int)colormaps_.size() )
-            ? "auto" : colormaps_[p.colormap_idx].name.c_str();
-        if ( ImGui::BeginCombo( "##envpcmap", cmap_preview ) ) {
-            if ( ImGui::Selectable( "auto", p.colormap_idx < 0 ) ) { p.colormap_idx = -1; p.preview_dirty = true; }
-            if ( p.colormap_idx < 0 ) ImGui::SetItemDefaultFocus();
-            for ( int i = 0; i < (int)colormaps_.size(); i++ ) {
-                bool sel = ( p.colormap_idx == i );
-                if ( ImGui::Selectable( colormaps_[i].name.c_str(), sel ) ) { p.colormap_idx = i; p.preview_dirty = true; }
-                if ( sel ) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
+        if ( colormapCombo_( "##envpcmap", p.colormap_idx ) )
+            p.preview_dirty = true;
         ImGui::SameLine();
     }
 
@@ -894,9 +912,13 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         ImGui::SameLine();
         if ( ImGui::Checkbox( "Fix range##envpfr", &p.use_manual_range ) ) p.preview_dirty = true;
         ImGui::SameLine();
-        ImGui::Checkbox( "Sqare##envsq", &p.square_aspect );
+        ImGui::Checkbox( "Square##envsq", &p.square_aspect );
         if ( ImGui::IsItemHovered() )
             ImGui::SetTooltip( "Force square pixels (letterbox to N_c:N_r aspect ratio)" );
+        ImGui::SameLine();
+        if ( ImGui::SmallButton( "Reset view##envrv" ) ) { p.zoom_scale = 1.f; p.pan_u = p.pan_v = 0.f; }
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Reset zoom and pan to default (double-click preview also works)" );
         if ( p.use_manual_range ) {
             ImGui::SameLine();
             ImGui::SetNextItemWidth( 70.f );
@@ -961,34 +983,10 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         const bool   in_image = mp.x >= img_cursor.x && mp.x <= img_p1.x
                              && mp.y >= img_cursor.y && mp.y <= img_p1.y;
 
-        // Scroll-wheel zoom (toward cursor)
-        if ( canvas_hovered && in_image ) {
-            const float wheel = ImGui::GetIO().MouseWheel;
-            if ( wheel != 0.0f ) {
-                const float frac_c = ( mp.x - img_cursor.x ) / img_size.x;
-                const float frac_r = ( mp.y - img_cursor.y ) / img_size.y;
-                const float tex_u_under = p.pan_u + frac_c * uv_size;
-                const float tex_v_under = p.pan_v + frac_r * uv_size;
-                const float factor = ( wheel > 0.f ) ? 1.15f : ( 1.f / 1.15f );
-                p.zoom_scale = std::clamp( p.zoom_scale * factor, 1.0f, 64.0f );
-                const float new_uv = 1.0f / p.zoom_scale;
-                p.pan_u = std::clamp( tex_u_under - frac_c * new_uv, 0.0f, 1.0f - new_uv );
-                p.pan_v = std::clamp( tex_v_under - frac_r * new_uv, 0.0f, 1.0f - new_uv );
-            }
-        }
-
-        // Left-drag to pan (when zoomed)
-        if ( canvas_active && in_image && p.zoom_scale > 1.001f && !ImGui::IsMouseClicked( ImGuiMouseButton_Left ) ) {
-            const ImVec2 delta  = ImGui::GetIO().MouseDelta;
-            const float  cur_uv = 1.0f / p.zoom_scale;
-            p.pan_u = std::clamp( p.pan_u - ( delta.x / img_size.x ) * cur_uv, 0.0f, 1.0f - cur_uv );
-            p.pan_v = std::clamp( p.pan_v - ( delta.y / img_size.y ) * cur_uv, 0.0f, 1.0f - cur_uv );
-        }
-
-        // Double-click to reset zoom
-        if ( canvas_hovered && in_image && ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) ) {
-            p.zoom_scale = 1.f; p.pan_u = 0.f; p.pan_v = 0.f;
-        }
+        // ---- Zoom / pan / reset (shared helper) ----
+        applyZoomPanInteraction( p.zoom_scale, p.pan_u, p.pan_v,
+                                 img_cursor, img_size,
+                                 canvas_hovered, canvas_active, in_image );
 
         // Coordinate helpers (V is screen-top=0, screen-bottom=1; py is physics up=positive)
         const float L_x = (float)sys.p.L_x, L_y = (float)sys.p.L_y;

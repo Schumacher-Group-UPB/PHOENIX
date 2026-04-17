@@ -420,6 +420,49 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
 }
 
 // ============================================================
+// Shared widget helpers
+// ============================================================
+
+// Colormap combo: "auto" entry followed by all named colormaps.
+// Returns true when the value changed.
+bool PhoenixGUI::colormapCombo_( const char* id, int& colormap_idx ) {
+    bool changed = false;
+    const char* preview = ( colormap_idx < 0 || colormap_idx >= (int)colormaps_.size() )
+        ? "auto" : colormaps_[colormap_idx].name.c_str();
+    if ( ImGui::BeginCombo( id, preview ) ) {
+        if ( ImGui::Selectable( "auto", colormap_idx < 0 ) ) { colormap_idx = -1; changed = true; }
+        if ( colormap_idx < 0 ) ImGui::SetItemDefaultFocus();
+        for ( int i = 0; i < (int)colormaps_.size(); i++ ) {
+            bool sel = ( colormap_idx == i );
+            if ( ImGui::Selectable( colormaps_[i].name.c_str(), sel ) ) { colormap_idx = i; changed = true; }
+            if ( sel ) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    if ( ImGui::IsItemHovered() )
+        ImGui::SetTooltip( "Select colormap ('auto' picks vik for amplitude, viko for phase)" );
+    return changed;
+}
+
+// Display-mode combo: |.|^2 / |.| / Re / Im / arg
+// Returns true when the value changed.
+bool PhoenixGUI::displayModeCombo_( const char* id, int& mode_int ) {
+    static const char* s_mode_names[] = { "|.|^2", "|.|", "Re", "Im", "arg" };
+    bool changed = false;
+    if ( ImGui::BeginCombo( id, s_mode_names[std::clamp( mode_int, 0, 4 )] ) ) {
+        for ( int m = 0; m < 5; m++ ) {
+            bool sel = ( mode_int == m );
+            if ( ImGui::Selectable( s_mode_names[m], sel ) ) { mode_int = m; changed = true; }
+            if ( sel ) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    if ( ImGui::IsItemHovered() )
+        ImGui::SetTooltip( "How to visualize the complex matrix" );
+    return changed;
+}
+
+// ============================================================
 // Legacy stubs (unused in SFML_RENDER path, required by header)
 // ============================================================
 

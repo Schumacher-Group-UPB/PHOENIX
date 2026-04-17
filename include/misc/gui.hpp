@@ -21,6 +21,7 @@
     #include "imgui-SFML.h"
     #include "implot.h"
     #include "implot3d.h"
+    #include <algorithm>
     #include <chrono>
     #include <thread>
 #endif
@@ -37,6 +38,82 @@
 #include "resources/grayscale.hpp"
 
 namespace PHOENIX {
+
+// ============================================================
+// Shared ImGui widget helpers (SFML_RENDER builds only)
+// ============================================================
+#ifdef SFML_RENDER
+
+// Apply scroll-wheel zoom, left-drag pan, and double-click reset to a
+// zoom/pan state.  img_cursor/img_size describe the drawn image region in
+// screen space.  is_hovered / is_active / in_image come from the
+// InvisibleButton that covers the canvas.
+inline void applyZoomPanInteraction( float& zoom_scale, float& pan_u, float& pan_v,
+                                      ImVec2 img_cursor, ImVec2 img_size,
+                                      bool is_hovered, bool is_active, bool in_image ) {
+    const float uv_size = 1.0f / zoom_scale;
+
+    // Scroll-wheel zoom toward cursor
+    if ( is_hovered && in_image ) {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if ( wheel != 0.0f ) {
+            const ImVec2 mouse  = ImGui::GetIO().MousePos;
+            const float  frac_c = ( mouse.x - img_cursor.x ) / img_size.x;
+            const float  frac_r = ( mouse.y - img_cursor.y ) / img_size.y;
+            const float  tex_u  = pan_u + frac_c * uv_size;
+            const float  tex_v  = pan_v + frac_r * uv_size;
+            const float  factor = ( wheel > 0.f ) ? 1.15f : ( 1.0f / 1.15f );
+            zoom_scale = std::clamp( zoom_scale * factor, 1.0f, 64.0f );
+            const float new_uv = 1.0f / zoom_scale;
+            pan_u = std::clamp( tex_u - frac_c * new_uv, 0.0f, 1.0f - new_uv );
+            pan_v = std::clamp( tex_v - frac_r * new_uv, 0.0f, 1.0f - new_uv );
+        }
+    }
+
+    // Left-drag pan (skip on the initial click frame to avoid conflict with click handlers)
+    if ( is_active && in_image && zoom_scale > 1.001f && !ImGui::IsMouseClicked( ImGuiMouseButton_Left ) ) {
+        const ImVec2 delta  = ImGui::GetIO().MouseDelta;
+        const float  cur_uv = 1.0f / zoom_scale;
+        pan_u = std::clamp( pan_u - ( delta.x / img_size.x ) * cur_uv, 0.0f, 1.0f - cur_uv );
+        pan_v = std::clamp( pan_v - ( delta.y / img_size.y ) * cur_uv, 0.0f, 1.0f - cur_uv );
+    }
+
+    // Double-click to reset
+    if ( is_hovered && in_image && ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) ) {
+        zoom_scale = 1.0f;
+        pan_u = pan_v = 0.0f;
+    }
+}
+
+// Draw a compact polyline mini-plot with a dark background rectangle and
+// an overlay label in the top-left corner.  p0/p1 are screen-space corners.
+inline void drawMiniHistPlot( ImDrawList* dl, ImVec2 p0, ImVec2 p1,
+                               const float* data, int n, ImU32 line_col,
+                               const char* overlay_text ) {
+    if ( !dl || n < 2 ) return;
+    dl->AddRectFilled( p0, p1, IM_COL32( 0, 0, 0, 80 ) );
+
+    const float pw  = p1.x - p0.x;
+    const float ph  = p1.y - p0.y - ImGui::GetTextLineHeightWithSpacing();
+    float vmin = data[0], vmax = data[0];
+    for ( int i = 1; i < n; ++i ) {
+        if ( data[i] < vmin ) vmin = data[i];
+        if ( data[i] > vmax ) vmax = data[i];
+    }
+    if ( vmax - vmin < 1e-30f ) vmax = vmin + 1.f;
+
+    std::vector<ImVec2> pts( n );
+    for ( int i = 0; i < n; ++i )
+        pts[i] = ImVec2( p0.x + (float)i / (float)( n - 1 ) * pw,
+                         p1.y - ImGui::GetTextLineHeightWithSpacing()
+                             - ( data[i] - vmin ) / ( vmax - vmin ) * ph );
+    dl->AddPolyline( pts.data(), n, line_col, 0, 1.5f );
+
+    if ( overlay_text )
+        dl->AddText( ImVec2( p0.x + 3.f, p0.y + 2.f ), IM_COL32( 200, 200, 200, 220 ), overlay_text );
+}
+
+#endif // SFML_RENDER
 
 class PhoenixGUI {
 public:
@@ -118,6 +195,15 @@ private:
         bool  square_aspect = false; // letterbox so grid pixels appear square
         // fftshift: remap indices so DC (k=0) is at the centre instead of the corners
         bool  fft_shift = false;
+        // ---- Freeze: stop updating this panel while others continue ----
+        bool  frozen = false;
+        // ---- Linked zoom/pan: propagate view changes to other linked panels ----
+        bool  linked_zoom = false;
+        // ---- Optional overlays ----
+        bool  show_colorbar   = true;   // draw a thin colorbar on the right edge
+        bool  show_axis_ticks = false;  // draw physical coordinate tick marks
+        // ---- Save-to-PNG status feedback (shown as tooltip on the Save button) ----
+        std::string save_status_msg;
     };
     std::vector<MatrixPanel> panels_;
     int next_panel_id_ = 1;
@@ -283,11 +369,18 @@ private:
     struct ConfigLoadState {
         bool open          = false;
         char filepath[512];
-        bool load_matrices = false;
         std::string status_msg;
         ConfigLoadState() { std::fill( std::begin( filepath ), std::end( filepath ), '\0' );
                             std::strncpy( filepath, "config.txt", sizeof( filepath ) - 1 ); }
     } config_load_;
+
+    // ---- Shared widget helpers (close over colormaps_) ----
+    // Renders the "auto / vik / viko / …" colormap selector combo.
+    // Returns true when the selection changed.  Width must be set by caller.
+    bool colormapCombo_( const char* id, int& colormap_idx );
+    // Renders the "|.|^2 / |.| / Re / Im / arg" display-mode combo.
+    // Returns true when the selection changed.  Width must be set by caller.
+    bool displayModeCombo_( const char* id, int& mode_int );
 
     // ---- Internal helpers ----
     void buildRegistry();
@@ -415,7 +508,8 @@ public:
         std::string last_apply_status;
 
         // Live apply - every preview rebuild is immediately pushed to the GPU matrix
-        bool live_apply = false;
+        bool live_apply         = false;
+        bool live_apply_warned_ = false;  // set after the user confirms the first-use warning
 
         // ---- Noise overlay (applied on top of envelope in preview & apply) ----
         struct NoiseState {

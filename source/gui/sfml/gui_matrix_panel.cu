@@ -192,6 +192,7 @@ void PhoenixGUI::blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorP
 // ============================================================
 
 void PhoenixGUI::updatePanel( MatrixPanel& p ) {
+    if ( p.frozen ) return;                  // panel is frozen — skip all updates
     if ( p.selected < 0 || p.selected >= (int)matrix_registry_.size() ) return;
     const auto& desc = matrix_registry_[p.selected];
     if ( !desc.available ) return;
@@ -413,11 +414,17 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
     if ( ImGui::BeginCombo( "##matsel", combo_preview ) ) {
         for ( int i = 0; i < (int)matrix_registry_.size(); i++ ) {
             const auto& d = matrix_registry_[i];
-            if ( !d.available ) continue;
+            const bool disabled = !d.available;
+            if ( disabled ) ImGui::BeginDisabled();
             bool sel = ( p.selected == i );
             if ( ImGui::Selectable( d.label.c_str(), sel ) ) {
                 p.selected = i;
                 p.title = d.label + "##view_" + std::to_string( p.panel_id );
+            }
+            if ( disabled ) {
+                ImGui::EndDisabled();
+                if ( ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+                    ImGui::SetTooltip( "Not active in this simulation (enable with matching CLI flag)" );
             }
             if ( sel ) ImGui::SetItemDefaultFocus();
         }
@@ -429,19 +436,9 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
          && matrix_registry_[p.selected].complex_mat != nullptr ) {
         ImGui::SameLine();
         ImGui::SetNextItemWidth( 80.f );
-        static const char* mode_names[] = { "|.|^2", "|.|", "Re", "Im", "arg" };
         int mode_int = (int)p.display_mode;
-        if ( ImGui::BeginCombo( "##dmode", mode_names[mode_int] ) ) {
-            for ( int m = 0; m < 5; m++ ) {
-                bool sel = ( mode_int == m );
-                if ( ImGui::Selectable( mode_names[m], sel ) )
-                    p.display_mode = (MatrixPanel::DisplayMode)m;
-                if ( sel ) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-        if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "How to visualize the complex matrix" );
+        if ( displayModeCombo_( "##dmode", mode_int ) )
+            p.display_mode = (MatrixPanel::DisplayMode)mode_int;
     }
 
     ImGui::SameLine();
@@ -470,9 +467,12 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
             fname += ( sep != std::string::npos ) ? p.title.substr( 0, sep ) : p.title;
         }
         fname += "_t" + std::to_string( (int)sys.p.t );
+        bool ok = false;
+        std::string saved_path;
         if ( p.view_mode == MatrixPanel::ViewMode::Image2D && p.tex ) {
+            saved_path = fname + "_image.png";
             sf::Image img = p.tex->getTexture().copyToImage();
-            img.saveToFile( fname + "_image.png" );
+            ok = img.saveToFile( saved_path );
         } else {
             // For line-cut and 3D views, capture the full window
             auto winSize = window_.window.getSize();
@@ -480,11 +480,17 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
             capTex.create( winSize.x, winSize.y );
             capTex.update( window_.window );
             sf::Image img = capTex.copyToImage();
-            img.saveToFile( fname + ( p.view_mode == MatrixPanel::ViewMode::LineCut ? "_lines.png" : "_volume.png" ) );
+            saved_path = fname + ( p.view_mode == MatrixPanel::ViewMode::LineCut ? "_lines.png" : "_volume.png" );
+            ok = img.saveToFile( saved_path );
         }
+        p.save_status_msg = ok ? ( "Saved: " + saved_path ) : ( "ERROR: could not write " + saved_path );
     }
-    if ( ImGui::IsItemHovered() )
-        ImGui::SetTooltip( "Save current view to PNG (_image / _lines / _volume)" );
+    if ( ImGui::IsItemHovered() ) {
+        if ( p.save_status_msg.empty() )
+            ImGui::SetTooltip( "Save current view to PNG (_image / _lines / _volume)" );
+        else
+            ImGui::SetTooltip( "%s", p.save_status_msg.c_str() );
+    }
 
     // ---- Line-cut component visibility / legend (only in 1D mode, complex matrices) ----
     if ( p.view_mode == MatrixPanel::ViewMode::LineCut
@@ -519,34 +525,17 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth( 80.f );
-    ImGui::SliderInt( "Skip##dl", &p.download_every, 1, 32 );
+    ImGui::SliderInt( "DL rate##dl", &p.download_every, 1, 32 );
     p.download_every = std::max( 1, p.download_every );
     if ( ImGui::IsItemHovered() )
-        ImGui::SetTooltip( "Download every N-th frame (1 = every frame).\nIncrease to reduce GPU-CPU transfer overhead." );
+        ImGui::SetTooltip( "GPU->CPU refresh rate: update display every N-th simulation frame.\n1 = every frame (smoothest), higher = lower bandwidth overhead." );
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth( 100.f );
-    {
-        const char* cmap_preview = ( p.colormap_idx < 0 || p.colormap_idx >= (int)colormaps_.size() )
-            ? "auto" : colormaps_[p.colormap_idx].name.c_str();
-        if ( ImGui::BeginCombo( "##cmap", cmap_preview ) ) {
-            if ( ImGui::Selectable( "auto", p.colormap_idx < 0 ) )
-                p.colormap_idx = -1;
-            if ( p.colormap_idx < 0 ) ImGui::SetItemDefaultFocus();
-            for ( int i = 0; i < (int)colormaps_.size(); i++ ) {
-                bool sel = ( p.colormap_idx == i );
-                if ( ImGui::Selectable( colormaps_[i].name.c_str(), sel ) )
-                    p.colormap_idx = i;
-                if ( sel ) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-        if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Select colormap. 'auto' picks vik for amplitude, viko for phase" );
-    }
+    colormapCombo_( "##cmap", p.colormap_idx );
 
     ImGui::SameLine();
-    ImGui::Checkbox( "Sqare##sq", &p.square_aspect );
+    ImGui::Checkbox( "Square##sq", &p.square_aspect );
     if ( ImGui::IsItemHovered() )
         ImGui::SetTooltip( "Force square pixels (letterbox to N_c:N_r aspect ratio)" );
 
@@ -554,6 +543,14 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
     ImGui::Checkbox( "FFT shift##fftsh", &p.fft_shift );
     if ( ImGui::IsItemHovered() )
         ImGui::SetTooltip( "Remap indices so DC (k=0) is at the centre instead of the corners" );
+
+    ImGui::SameLine();
+    if ( ImGui::SmallButton( "Reset view##rvbtn" ) ) {
+        p.zoom_scale = 1.0f;
+        p.pan_u = p.pan_v = 0.0f;
+    }
+    if ( ImGui::IsItemHovered() )
+        ImGui::SetTooltip( "Reset zoom and pan to default (double-click image also works)" );
 
     if ( p.view_mode != MatrixPanel::ViewMode::LineCut ) {
         ImGui::SameLine();
@@ -563,7 +560,50 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
             ImGui::SetTooltip( "Subsampling stride - display every N-th pixel (1 = full, higher = faster)" );
     }
 
-    // ---- Manual range inputs (Row 3, only when Fix range is active) ----
+    // ---- Row 3: overlay toggles (colorbar | axis ticks | freeze | linked zoom) ----
+    if ( p.view_mode == MatrixPanel::ViewMode::Image2D ) {
+        ImGui::Checkbox( "Colorbar##cb", &p.show_colorbar );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Show a colorbar legend on the right edge of the image" );
+        ImGui::SameLine();
+        ImGui::Checkbox( "Axes##at", &p.show_axis_ticks );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Overlay physical coordinate tick marks along the image edges" );
+        ImGui::SameLine();
+    }
+    {
+        // Freeze button (color turns orange when frozen)
+        if ( p.frozen ) {
+            ImGui::PushStyleColor( ImGuiCol_Button,        ImVec4( 0.75f, 0.45f, 0.10f, 0.9f ) );
+            ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.85f, 0.55f, 0.15f, 1.0f ) );
+            ImGui::PushStyleColor( ImGuiCol_ButtonActive,  ImVec4( 0.65f, 0.35f, 0.08f, 1.0f ) );
+        }
+        if ( ImGui::SmallButton( p.frozen ? "Unfreeze##frz" : "Freeze##frz" ) )
+            p.frozen = !p.frozen;
+        if ( p.frozen ) ImGui::PopStyleColor( 3 );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( p.frozen
+                               ? "Panel frozen: GPU updates paused. Click to resume."
+                               : "Freeze this panel at its current state while others keep updating" );
+        ImGui::SameLine();
+        // Linked zoom toggle
+        const bool is_linked = p.linked_zoom;
+        if ( is_linked ) {
+            ImGui::PushStyleColor( ImGuiCol_Button,        ImVec4( 0.20f, 0.60f, 0.80f, 0.8f ) );
+            ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.25f, 0.70f, 0.90f, 0.9f ) );
+            ImGui::PushStyleColor( ImGuiCol_ButtonActive,  ImVec4( 0.15f, 0.50f, 0.70f, 1.0f ) );
+        }
+        if ( ImGui::SmallButton( "Link view##lnk" ) ) {
+            p.linked_zoom = !p.linked_zoom;
+        }
+        if ( is_linked ) ImGui::PopStyleColor( 3 );
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( p.linked_zoom
+                               ? "Linked: zoom/pan changes propagate to all other linked panels. Click to unlink."
+                               : "Link zoom/pan with other panels that also have this enabled" );
+    }
+
+    // ---- Manual range inputs (Row 4, only when Fix range is active) ----
     if ( p.use_manual_range ) {
         ImGui::SetNextItemWidth( 130.f );
         ImGui::InputDouble( "Min##mn", &p.manual_min, 0, 0, "%.4e" );
@@ -634,38 +674,21 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
             const bool in_image = mouse.x >= img_cursor.x && mouse.x <= img_p1.x
                                 && mouse.y >= img_cursor.y && mouse.y <= img_p1.y;
 
-            // ---- Scroll-wheel zoom (zoom toward cursor) ----
-            if ( is_hovered && in_image ) {
-                const float wheel = ImGui::GetIO().MouseWheel;
-                if ( wheel != 0.0f ) {
-                    const float  frac_c = ( mouse.x - img_cursor.x ) / img_size.x;
-                    const float  frac_r = ( mouse.y - img_cursor.y ) / img_size.y;
+            // ---- Zoom / pan / reset (shared helper) ----
+            const float prev_zoom = p.zoom_scale, prev_u = p.pan_u, prev_v = p.pan_v;
+            applyZoomPanInteraction( p.zoom_scale, p.pan_u, p.pan_v,
+                                     img_cursor, img_size,
+                                     is_hovered, is_active, in_image );
 
-                    // Texture point under cursor in logical UV space
-                    const float tex_u_under = p.pan_u + frac_c * uv_size;
-                    const float tex_v_under = p.pan_v + frac_r * uv_size;
-
-                    const float factor = ( wheel > 0.f ) ? 1.15f : ( 1.0f / 1.15f );
-                    p.zoom_scale = std::clamp( p.zoom_scale * factor, 1.0f, 64.0f );
-
-                    const float new_uv = 1.0f / p.zoom_scale;
-                    p.pan_u = std::clamp( tex_u_under - frac_c * new_uv, 0.0f, 1.0f - new_uv );
-                    p.pan_v = std::clamp( tex_v_under - frac_r * new_uv, 0.0f, 1.0f - new_uv );
+            // ---- Propagate zoom/pan to other linked panels ----
+            if ( p.linked_zoom &&
+                 ( p.zoom_scale != prev_zoom || p.pan_u != prev_u || p.pan_v != prev_v ) ) {
+                for ( auto& other : panels_ ) {
+                    if ( &other == &p || !other.linked_zoom ) continue;
+                    other.zoom_scale = p.zoom_scale;
+                    other.pan_u      = p.pan_u;
+                    other.pan_v      = p.pan_v;
                 }
-            }
-
-            // ---- Left-click drag to pan ----
-            if ( is_active && in_image && p.zoom_scale > 1.001f ) {
-                const ImVec2 delta   = ImGui::GetIO().MouseDelta;
-                const float  cur_uv  = 1.0f / p.zoom_scale;
-                p.pan_u = std::clamp( p.pan_u - ( delta.x / img_size.x ) * cur_uv, 0.0f, 1.0f - cur_uv );
-                p.pan_v = std::clamp( p.pan_v - ( delta.y / img_size.y ) * cur_uv, 0.0f, 1.0f - cur_uv );
-            }
-
-            // ---- Double-click to reset zoom & pan ----
-            if ( is_hovered && in_image && ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) ) {
-                p.zoom_scale = 1.0f;
-                p.pan_u = p.pan_v = 0.0f;
             }
 
             // ---- Cursor hint ----
@@ -764,10 +787,6 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 const int window_h = std::min( p.hist_window, total_h );
                 const int offset_h = total_h - window_h;
                 std::vector<float> maxv( p.hist_max.begin() + offset_h, p.hist_max.end() );
-                const int   n     = (int)maxv.size();
-                float vmin = *std::min_element( maxv.begin(), maxv.end() );
-                float vmax = *std::max_element( maxv.begin(), maxv.end() );
-                if ( vmax - vmin < 1e-30f ) vmax = vmin + 1.f;
 
                 const float mw     = 180.f;
                 const float mh     = 46.f;
@@ -775,24 +794,11 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                 const ImVec2 mp0( img_p1.x - mw - margin, img_cursor.y + margin );
                 const ImVec2 mp1( img_p1.x - margin, mp0.y + mh );
 
-                dl->AddRectFilled( mp0, mp1, IM_COL32( 0, 0, 0, 160 ) );
                 dl->AddRect( mp0, mp1, IM_COL32( 180, 180, 180, 100 ) );
-
-                if ( n >= 2 ) {
-                    const float pw = mp1.x - mp0.x;
-                    const float ph = mp1.y - mp0.y - 14.f;  // leave room for text
-                    std::vector<ImVec2> pts( n );
-                    for ( int i = 0; i < n; ++i )
-                        pts[i] = ImVec2(
-                            mp0.x + (float)i / (float)( n - 1 ) * pw,
-                            mp1.y - ( maxv[i] - vmin ) / ( vmax - vmin ) * ph );
-                    dl->AddPolyline( pts.data(), n, IM_COL32( 80, 220, 170, 220 ), 0, 1.5f );
-                }
-
                 char htxt[64];
                 snprintf( htxt, sizeof( htxt ), "max=%.3e", maxv.back() );
-                dl->AddText( ImVec2( mp0.x + 3.f, mp0.y + 2.f ),
-                             IM_COL32( 200, 200, 200, 220 ), htxt );
+                drawMiniHistPlot( dl, mp0, mp1, maxv.data(), (int)maxv.size(),
+                                  IM_COL32( 80, 220, 170, 220 ), htxt );
             }
 
             // ---- Minimap overlay (visible only when zoomed in) ----
@@ -875,6 +881,96 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                                            ImVec2( tpos.x + tsz.x + 2.f, tpos.y + tsz.y + 1.f ),
                                            IM_COL32( 0, 0, 0, 160 ) );
                         dl->AddText( tpos, col, lbl );
+                    }
+                }
+            }
+
+            // ---- Colorbar overlay (right edge of image) ----
+            if ( p.show_colorbar && !p.hist_min.empty() ) {
+                // Choose the same colormap that blitPanel used
+                int idx = p.colormap_idx;
+                const bool is_phase = ( p.display_mode == MatrixPanel::DisplayMode::Phase );
+                if ( idx < 0 || idx >= (int)colormaps_.size() )
+                    idx = is_phase ? 1 : 0;
+                auto& cp = colormaps_[idx].palette;
+
+                const float bar_w  = 12.f;
+                const float bar_h  = img_size.y;
+                const float margin = 4.f;
+                const ImVec2 bar_p0( img_p1.x + margin, img_cursor.y );
+                const ImVec2 bar_p1( bar_p0.x + bar_w,  bar_p0.y + bar_h );
+                const int n_steps = (int)bar_h;
+                if ( n_steps >= 2 ) {
+                    for ( int si = 0; si < n_steps; ++si ) {
+                        const float t0 = 1.0f - (float)si / (float)n_steps;
+                        const float t1 = 1.0f - (float)( si + 1 ) / (float)n_steps;
+                        const auto& c0 = cp.getColor( (double)t0 );
+                        const auto& c1 = cp.getColor( (double)t1 );
+                        const float y0 = bar_p0.y + (float)si;
+                        const float y1 = y0 + 1.f;
+                        dl->AddRectFilledMultiColor(
+                            ImVec2( bar_p0.x, y0 ), ImVec2( bar_p1.x, y1 ),
+                            IM_COL32( c0.r, c0.g, c0.b, 255 ),
+                            IM_COL32( c0.r, c0.g, c0.b, 255 ),
+                            IM_COL32( c1.r, c1.g, c1.b, 255 ),
+                            IM_COL32( c1.r, c1.g, c1.b, 255 ) );
+                    }
+                }
+                dl->AddRect( bar_p0, bar_p1, IM_COL32( 180, 180, 180, 120 ) );
+
+                // Annotate top (max) and bottom (min)
+                const double cb_vmax = p.use_manual_range ? p.manual_max : (double)p.hist_max.back();
+                const double cb_vmin = p.use_manual_range ? p.manual_min : (double)p.hist_min.back();
+                char vtxt[32];
+                snprintf( vtxt, sizeof( vtxt ), "%.2e", cb_vmax );
+                dl->AddText( ImVec2( bar_p0.x, bar_p0.y - ImGui::GetTextLineHeight() ),
+                             IM_COL32( 200, 200, 200, 220 ), vtxt );
+                snprintf( vtxt, sizeof( vtxt ), "%.2e", cb_vmin );
+                dl->AddText( ImVec2( bar_p0.x, bar_p1.y + 2.f ),
+                             IM_COL32( 200, 200, 200, 220 ), vtxt );
+            }
+
+            // ---- Physical axis tick overlays ----
+            if ( p.show_axis_ticks && p.tex_w > 0 && p.tex_h > 0 ) {
+                const float L_x = (float)sys.p.L_x;
+                const float L_y = (float)sys.p.L_y;
+                const float tick_len = 5.f;
+                const ImU32 tick_col = IM_COL32( 220, 220, 220, 200 );
+
+                // X axis: 5 ticks along the bottom edge
+                {
+                    const int n_ticks = 5;
+                    for ( int ti = 0; ti <= n_ticks; ++ti ) {
+                        const float frac = (float)ti / (float)n_ticks;
+                        // map frac [0,1] through zoom/pan to screen x
+                        const float u     = frac;
+                        const float uv_sz = 1.0f / p.zoom_scale;
+                        const float vis_u = ( u - p.pan_u ) / uv_sz;
+                        if ( vis_u < 0.f || vis_u > 1.f ) continue;
+                        const float sx    = img_cursor.x + vis_u * img_size.x;
+                        const float phys  = frac * L_x - L_x * 0.5f;
+                        dl->AddLine( ImVec2( sx, img_p1.y - tick_len ),
+                                     ImVec2( sx, img_p1.y ), tick_col, 1.f );
+                        char lbl[20]; snprintf( lbl, sizeof( lbl ), "%.1f", phys );
+                        dl->AddText( ImVec2( sx + 2.f, img_p1.y - ImGui::GetTextLineHeight() - 1.f ),
+                                     tick_col, lbl );
+                    }
+                }
+                // Y axis: 5 ticks along the left edge
+                {
+                    const int n_ticks = 5;
+                    for ( int ti = 0; ti <= n_ticks; ++ti ) {
+                        const float frac  = (float)ti / (float)n_ticks;
+                        const float uv_sz = 1.0f / p.zoom_scale;
+                        const float vis_v = ( frac - p.pan_v ) / uv_sz;
+                        if ( vis_v < 0.f || vis_v > 1.f ) continue;
+                        const float sy    = img_cursor.y + vis_v * img_size.y;
+                        const float phys  = ( 1.0f - frac ) * L_y - L_y * 0.5f;  // flip: row 0 = top = -L_y/2
+                        dl->AddLine( ImVec2( img_cursor.x, sy ),
+                                     ImVec2( img_cursor.x + tick_len, sy ), tick_col, 1.f );
+                        char lbl[20]; snprintf( lbl, sizeof( lbl ), "%.1f", phys );
+                        dl->AddText( ImVec2( img_cursor.x + tick_len + 2.f, sy - ImGui::GetTextLineHeight() * 0.5f ),
+                                     tick_col, lbl );
                     }
                 }
             }

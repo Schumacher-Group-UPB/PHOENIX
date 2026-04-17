@@ -49,34 +49,15 @@ void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter 
             ImGui::TableSetColumnIndex( 1 );
             if ( (int)dt_history_.size() >= 2 ) {
                 const std::vector<float> dtv( dt_history_.begin(), dt_history_.end() );
-                const int   n     = (int)dtv.size();
-                float vmin = *std::min_element( dtv.begin(), dtv.end() );
-                float vmax = *std::max_element( dtv.begin(), dtv.end() );
-                if ( vmax - vmin < 1e-30f ) vmax = vmin + 1.f;
-
                 ImDrawList*  dl    = ImGui::GetWindowDrawList();
                 const ImVec2 p0    = ImGui::GetCursorScreenPos();
                 const float  col_w = ImGui::GetContentRegionAvail().x;
                 const float  col_h = 3.f * ImGui::GetTextLineHeightWithSpacing();
                 const ImVec2 p1( p0.x + col_w, p0.y + col_h );
-                const float  text_h = ImGui::GetTextLineHeightWithSpacing();
-
-                dl->AddRectFilled( p0, p1, IM_COL32( 0, 0, 0, 80 ) );
-
-                const float pw = p1.x - p0.x;
-                const float ph = p1.y - p0.y - text_h;
-                std::vector<ImVec2> pts( n );
-                for ( int i = 0; i < n; ++i )
-                    pts[i] = ImVec2(
-                        p0.x + (float)i / (float)( n - 1 ) * pw,
-                        p1.y - text_h - ( dtv[i] - vmin ) / ( vmax - vmin ) * ph );
-                dl->AddPolyline( pts.data(), n, IM_COL32( 137, 224, 180, 220 ), 0, 1.5f );
-
                 char overlay[32];
                 snprintf( overlay, sizeof( overlay ), "dt=%.2e", dtv.back() );
-                dl->AddText( ImVec2( p0.x + 3.f, p0.y + 2.f ),
-                             IM_COL32( 200, 200, 200, 220 ), overlay );
-
+                drawMiniHistPlot( dl, p0, p1, dtv.data(), (int)dtv.size(),
+                                  IM_COL32( 137, 224, 180, 220 ), overlay );
                 ImGui::Dummy( ImVec2( col_w, col_h ) );
             }
 
@@ -162,13 +143,35 @@ void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter 
         }
         bool take_snap    = ImGui::Button( "Snapshot" );
         ImGui::SameLine();
+        const bool has_selection = ( snapshot_selected_ >= 0 && snapshot_selected_ < (int)snapshots_.size() );
+        if ( !has_selection ) ImGui::BeginDisabled();
         bool delete_snap  = ImGui::Button( "Delete" );
+        ImGui::SameLine();
+        if ( ImGui::SmallButton( "Rename##snapren" ) && has_selection )
+            ImGui::OpenPopup( "Rename Snapshot##snpren" );
         bool restore_snap = ImGui::Button( "Restore Selected" );
+        if ( !has_selection ) ImGui::EndDisabled();
         bool restore_initial = ImGui::Button( "Reset to Initial" );
-        if ( snapshot_selected_ < 0 || snapshot_selected_ >= (int)snapshots_.size() ) {
-            restore_snap = false;
-            delete_snap  = false;
+
+        // Snapshot rename popup
+        if ( ImGui::BeginPopupModal( "Rename Snapshot##snpren", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) ) {
+            static char snap_rename_buf[256] = {};
+            if ( ImGui::IsWindowAppearing() && has_selection ) {
+                std::strncpy( snap_rename_buf, snapshots_[snapshot_selected_].label.c_str(),
+                              sizeof( snap_rename_buf ) - 1 );
+                snap_rename_buf[sizeof(snap_rename_buf) - 1] = '\0';
+            }
+            ImGui::SetNextItemWidth( 280.f );
+            ImGui::InputText( "##snaprenin", snap_rename_buf, sizeof( snap_rename_buf ) );
+            if ( ImGui::Button( "OK##snapren_ok" ) ) {
+                if ( has_selection ) snapshots_[snapshot_selected_].label = snap_rename_buf;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if ( ImGui::Button( "Cancel##snapren_can" ) ) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
         }
+
         doHandleSnapshots( take_snap, restore_snap, restore_initial, delete_snap );
 
         ImGui::Separator();
@@ -176,15 +179,24 @@ void PhoenixGUI::renderControlWindow( double sim_t, double elapsed, size_t iter 
         if ( ImGui::Button( "Save matrices now" ) )
             solver_.outputMatrices( 0, sys.p.N_c, 0, sys.p.N_r, 1, "_manual" );
 
-        ImGui::Text( "Out every: %s ps", toScientific( sys.output_every ).c_str() );
-        if ( ImGui::Button( "+##out" ) ) {
-            if ( sys.output_every == 0.0 )
-                sys.output_every = sys.p.dt;
-            sys.output_every *= 2.0;
+        {
+            double out_every_d = sys.output_every;
+            ImGui::SetNextItemWidth( -1.f );
+            if ( ImGui::InputDouble( "##outevery", &out_every_d, 0.0, 0.0, "%.6g" ) )
+                sys.output_every = out_every_d;
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Output matrices every N ps (0 = disabled)" );
+            if ( ImGui::Button( "\xc3\x97 2##out" ) ) {
+                if ( sys.output_every == 0.0 )
+                    sys.output_every = sys.p.dt;
+                sys.output_every *= 2.0;
+            }
+            ImGui::SameLine();
+            if ( ImGui::Button( "\xc3\xb7 2##out" ) )
+                sys.output_every = std::max( (double)sys.p.dt, sys.output_every / 2.0 );
+            ImGui::SameLine();
+            ImGui::TextDisabled( "out every (ps)" );
         }
-        ImGui::SameLine();
-        if ( ImGui::Button( "-##out" ) )
-            sys.output_every /= 2.0;
     }
 
     // ---- Views management ----
@@ -236,7 +248,10 @@ void PhoenixGUI::renderMenuBar() {
                 addEnvelopeEditorPanel();
             ImGui::EndMenu();
         }
-        if ( ImGui::BeginMenu( "Runstring" ) ) {
+        if ( ImGui::BeginMenu( "Config" ) ) {
+            if ( ImGui::MenuItem( "Save Config..." ) ) config_save_.open = true;
+            if ( ImGui::MenuItem( "Load Config..." ) ) config_load_.open = true;
+            ImGui::Separator();
             if ( ImGui::MenuItem( "View Runstring", nullptr, show_runstring_window_ ) ) {
                 show_runstring_window_ = !show_runstring_window_;
                 if ( show_runstring_window_ ) {
@@ -245,11 +260,6 @@ void PhoenixGUI::renderMenuBar() {
                     runstring_buf_.push_back( '\0' );
                 }
             }
-            ImGui::EndMenu();
-        }
-        if ( ImGui::BeginMenu( "Config" ) ) {
-            if ( ImGui::MenuItem( "Save Config..." ) ) config_save_.open = true;
-            if ( ImGui::MenuItem( "Load Config..." ) ) config_load_.open = true;
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
@@ -297,12 +307,19 @@ void PhoenixGUI::renderParametersPanel() {
     if ( ImGui::CollapsingHeader( "Physics" ) ) {
         bool dirty = false;
         dirty |= inputReal( "gamma_c",  p.gamma_c );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Polariton decay rate [ps\xe2\x81\xbb\xc2\xb9], must be \xe2\x89\xa5 0" );
         dirty |= inputReal( "gamma_r",  p.gamma_r );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Reservoir decay rate [ps\xe2\x81\xbb\xc2\xb9], must be \xe2\x89\xa5 0" );
         dirty |= inputReal( "g_c",      p.g_c );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Polariton-polariton interaction strength [ps\xe2\x81\xbb\xc2\xb9 \xce\xbcm\xc2\xb2], can be negative" );
         dirty |= inputReal( "g_r",      p.g_r );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Polariton-reservoir interaction strength [ps\xe2\x81\xbb\xc2\xb9 \xce\xbcm\xc2\xb2]" );
         dirty |= inputReal( "R",        p.R );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Stimulated scattering rate from reservoir to polariton mode [ps\xe2\x81\xbb\xc2\xb9 \xce\xbcm\xc2\xb2]" );
         dirty |= inputReal( "g_pm",     p.g_pm );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "TE-TM cross-polarisation coupling (only active in twin mode)" );
         dirty |= inputReal( "delta_LT", p.delta_LT );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "TE-TM energy splitting [meV] (only active in twin mode)" );
         if ( dirty ) {
             const bool ap = pauseSolverForUpdate();
             solver_.parameters_are_dirty = true;
@@ -312,6 +329,7 @@ void PhoenixGUI::renderParametersPanel() {
 
     if ( ImGui::CollapsingHeader( "Effective Mass" ) ) {
         bool dirty = inputReal( "m_eff", p.m_eff );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Effective mass ratio relative to free exciton-polariton mass (1 = standard), must be \xe2\x89\xa0 0" );
         if ( dirty ) {
             const bool ap = pauseSolverForUpdate();
             solver_.parameters_are_dirty = true;
@@ -323,6 +341,8 @@ void PhoenixGUI::renderParametersPanel() {
         const bool disabled = ( params_saved_.stochastic_amplitude == 0 );
         if ( disabled ) ImGui::BeginDisabled();
         bool dirty = inputReal( "stochastic_amplitude", p.stochastic_amplitude );
+        if ( ImGui::IsItemHovered() && !disabled )
+            ImGui::SetTooltip( "Amplitude of the stochastic noise term added at each timestep; 0 = no noise" );
         if ( disabled ) ImGui::EndDisabled();
         if ( dirty ) {
             const bool ap = pauseSolverForUpdate();
@@ -402,6 +422,8 @@ void PhoenixGUI::renderPlotsPanel() {
 void PhoenixGUI::renderEnvelopePlotWindow() {
     if ( !show_env_window_ ) return;
 
+    auto& sys = solver_.system;
+
     ImGui::SetNextWindowSize( ImVec2( 500, 420 ), ImGuiCond_FirstUseEver );
     ImGui::Begin( "Envelope Temporal", &show_env_window_ );
 
@@ -461,20 +483,34 @@ void PhoenixGUI::renderEnvelopePlotWindow() {
         char overlay[64];
         snprintf( overlay, sizeof( overlay ), "abs=%.3e", abs_v.back() );
         ImGui::TextUnformatted( overlay );
+
+        // Build time vector for the current window
+        std::vector<float> t_v( h.times.begin() + env_offset, h.times.end() );
+        const float t_lo = t_v.empty() ? 0.f : t_v.front();
+        const float t_hi = t_v.empty() ? 1.f : t_v.back();
+        const double t_now = (double)sys.p.t;
+
         const std::string plot_id = "##env_plot_" + h.label;
         if ( ImPlot::BeginPlot( plot_id.c_str(), ImVec2( -1, 80 ),
                                 ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
-            ImPlot::SetupAxes( nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations );
+            ImPlot::SetupAxes( "t (ps)", nullptr, ImPlotAxisFlags_None, ImPlotAxisFlags_NoDecorations );
+            ImPlot::SetupAxisLimits( ImAxis_X1, t_lo, t_hi, ImPlotCond_Always );
             ImPlot::SetupAxisLimits( ImAxis_Y1, gmin, gmax, ImPlotCond_Always );
             ImPlot::SetNextLineStyle( ImVec4( 1.f, 1.f, 1.f, 1.f ) );
-            ImPlot::PlotLine( ( "abs##" + h.label ).c_str(), abs_v.data(), n );
+            ImPlot::PlotLine( ( "abs##" + h.label ).c_str(), t_v.data(), abs_v.data(), n );
             if ( !re_v.empty() ) {
                 ImPlot::SetNextLineStyle( ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
-                ImPlot::PlotLine( ( "re##" + h.label ).c_str(), re_v.data(), n );
+                ImPlot::PlotLine( ( "re##" + h.label ).c_str(), t_v.data(), re_v.data(), n );
             }
             if ( !im_v.empty() ) {
                 ImPlot::SetNextLineStyle( ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
-                ImPlot::PlotLine( ( "im##" + h.label ).c_str(), im_v.data(), n );
+                ImPlot::PlotLine( ( "im##" + h.label ).c_str(), t_v.data(), im_v.data(), n );
+            }
+            // "Now" cursor: vertical dashed line at current simulation time
+            if ( t_now >= t_lo && t_now <= t_hi ) {
+                const double now_d = t_now;
+                ImPlot::SetNextLineStyle( ImVec4( 1.f, 1.f, 0.f, 0.7f ), 1.f );
+                ImPlot::PlotInfLines( ( "##now_" + h.label ).c_str(), &now_d, 1 );
             }
             ImPlot::EndPlot();
         }
@@ -697,9 +733,56 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         ImGui::SameLine();
         ImGui::TextUnformatted( tp.label.c_str() );
         if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "x=%.3f  y=%.3f  col=%d  row=%d\n%s",
+            ImGui::SetTooltip( "x=%.3f  y=%.3f  col=%d  row=%d\n%s\n\nRight-click for options",
                                (double)tp.x_phys, (double)tp.y_phys, tp.col, tp.row,
                                tp.is_complex ? "complex matrix" : "real matrix" );
+
+        // Right-click context menu
+        if ( ImGui::BeginPopupContextItem( "##tp_ctx" ) ) {
+            static char rename_buf[256] = {};
+            static int  rename_idx = -1;
+            if ( ImGui::MenuItem( "Rename..." ) ) {
+                rename_idx = i;
+                std::strncpy( rename_buf, tp.label.c_str(), sizeof( rename_buf ) - 1 );
+                rename_buf[sizeof(rename_buf) - 1] = '\0';
+                ImGui::OpenPopup( "Rename Point##tp_ren" );
+            }
+            if ( ImGui::MenuItem( "Delete" ) )
+                to_delete = i;
+            if ( ImGui::MenuItem( "Go to pixel" ) ) {
+                // Focus the first panel that shows the matrix this point is from
+                for ( auto& pan : panels_ ) {
+                    if ( pan.selected == tp.matrix_idx ) {
+                        // Pan so the tracked pixel is visible
+                        const float u = ( tp.col + 0.5f ) / (float)pan.tex_w;
+                        const float v = ( tp.row + 0.5f ) / (float)pan.tex_h;
+                        const float uv_sz = 1.0f / pan.zoom_scale;
+                        pan.pan_u = std::clamp( u - uv_sz * 0.5f, 0.0f, 1.0f - uv_sz );
+                        pan.pan_v = std::clamp( v - uv_sz * 0.5f, 0.0f, 1.0f - uv_sz );
+                        break;
+                    }
+                }
+            }
+            ImGui::EndPopup();
+
+            // Rename popup (opened above)
+            if ( rename_idx == i && ImGui::BeginPopupModal( "Rename Point##tp_ren", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) ) {
+                ImGui::SetNextItemWidth( 280.f );
+                ImGui::InputText( "##renin", rename_buf, sizeof( rename_buf ) );
+                if ( ImGui::Button( "OK##ren_ok" ) ) {
+                    tracked_points_[rename_idx].label = rename_buf;
+                    rename_idx = -1;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if ( ImGui::Button( "Cancel##ren_can" ) ) {
+                    rename_idx = -1;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+        }
+
         ImGui::SameLine();
         if ( ImGui::SmallButton( "x##tev_del" ) ) to_delete = i;
 
@@ -1095,20 +1178,8 @@ void PhoenixGUI::renderTrackedCutsWindow() {
             ImGui::EndCombo();
         }
         ImGui::SameLine();
-        const char* cmap_preview = ( tc.colormap_idx < 0 || tc.colormap_idx >= (int)colormaps_.size() )
-            ? "auto" : colormaps_[tc.colormap_idx].name.c_str();
         ImGui::SetNextItemWidth( 80.f );
-        if ( ImGui::BeginCombo( "##cmap", cmap_preview ) ) {
-            bool sel_auto = ( tc.colormap_idx < 0 );
-            if ( ImGui::Selectable( "auto", sel_auto ) ) tc.colormap_idx = -1;
-            if ( sel_auto ) ImGui::SetItemDefaultFocus();
-            for ( int k = 0; k < (int)colormaps_.size(); ++k ) {
-                bool sel = ( tc.colormap_idx == k );
-                if ( ImGui::Selectable( colormaps_[k].name.c_str(), sel ) ) tc.colormap_idx = k;
-                if ( sel ) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
+        colormapCombo_( "##cmap", tc.colormap_idx );
         ImGui::SameLine();
         ImGui::Checkbox( "Fix range##fr", &tc.use_manual_range );
         if ( tc.use_manual_range ) {

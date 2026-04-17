@@ -115,12 +115,11 @@ void PhoenixGUI::renderConfigLoadDialog() {
     ImGui::Separator();
 
     ImGui::InputText( "File path##loadpath", config_load_.filepath, sizeof( config_load_.filepath ) );
-    ImGui::Checkbox( "Load matrices from file", &config_load_.load_matrices );
-    if ( config_load_.load_matrices )
-        ImGui::TextColored( ImVec4( 1.0f, 0.65f, 0.0f, 1.0f ),
-                            "Note: matrix loading is not yet supported via GUI.\n"
-                            "Grid/envelope/boundary changes require a full restart\n"
-                            "with --config <file>." );
+    ImGui::TextDisabled( "(i)" );
+    if ( ImGui::IsItemHovered() )
+        ImGui::SetTooltip( "Only updatable parameters (physics, time control) are loaded.\n"
+                           "Grid, boundary, and envelope changes require a full CLI restart\n"
+                           "with --config <file>." );
 
     ImGui::Separator();
 
