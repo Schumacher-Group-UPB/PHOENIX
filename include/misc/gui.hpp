@@ -14,8 +14,8 @@
     #include "misc/sfml_window.hpp"
     #endif
 #include "misc/colormap.hpp"
-#include "resources/vik.hpp"
-#include "resources/viko.hpp"
+#include "../resources/vik.hpp"
+#include "../resources/viko.hpp"
 
 namespace PHOENIX {
 
