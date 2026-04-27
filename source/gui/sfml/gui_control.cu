@@ -554,23 +554,54 @@ static void _fft_inplace( std::vector<std::complex<float>>& x ) {
     }
 }
 
-// Zero-pads signal to next power-of-2, applies Hann window, computes FFT,
+// Build a window function of length n into win[].
+// type: 0=Gaussian, 1=Hann, 2=Blackman, 3=Flat(rectangular)
+// power: super-Gaussian exponent N — formula exp(-(x²)^N); N=1 = standard Gaussian, N>1 = flatter top
+static void buildWindowFn( std::vector<float>& win, int n, int type, float sigma, int power = 1 ) {
+    win.resize( n );
+    const float half = 0.5f * (float)( n - 1 );
+    constexpr float pi = 3.14159265358979f;
+    switch ( type ) {
+    case 1:  // Hann
+        for ( int i = 0; i < n; ++i )
+            win[i] = 0.5f * ( 1.f - std::cos( 2.f * pi * i / (float)( n - 1 ) ) );
+        break;
+    case 2:  // Blackman
+        for ( int i = 0; i < n; ++i ) {
+            const float t = 2.f * pi * i / (float)( n - 1 );
+            win[i] = 0.42f - 0.5f * std::cos( t ) + 0.08f * std::cos( 2.f * t );
+        }
+        break;
+    case 3:  // Flat (rectangular)
+        for ( int i = 0; i < n; ++i ) win[i] = 1.f;
+        break;
+    default: // 0 = Gaussian — super-Gaussian: exp(-(x²)^N)
+        for ( int i = 0; i < n; ++i ) {
+            const float x  = ( (float)i - half ) / ( sigma * half );
+            win[i] = std::exp( -std::pow( x * x, (float)power ) );
+        }
+        break;
+    }
+}
+
+// Zero-pads signal to next power-of-2, applies window, computes FFT,
 // then fills out_freq (1/ps) and out_mag (one-sided magnitude spectrum).
+// custom_win: optional per-sample window coefficients (length n); nullptr → Hann.
 static void computeDisplayFFT( const float* samples, int n, float mean_dt_ps,
                                 std::vector<float>& out_freq,
-                                std::vector<float>& out_mag ) {
+                                std::vector<float>& out_mag,
+                                const float* custom_win = nullptr ) {
     if ( n < 2 || mean_dt_ps <= 0.f ) { out_freq.clear(); out_mag.clear(); return; }
-    // Next power of 2
     int N = 1;
     while ( N < n ) N <<= 1;
     std::vector<std::complex<float>> buf( N, { 0.f, 0.f } );
-    // Hann window + copy
     for ( int i = 0; i < n; ++i ) {
-        float w = 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * i / (float)( n - 1 ) ) );
+        const float w = custom_win
+            ? custom_win[i]
+            : 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * i / (float)( n - 1 ) ) );
         buf[i] = { samples[i] * w, 0.f };
     }
     _fft_inplace( buf );
-    // One-sided spectrum (DC to Nyquist)
     const int half = N / 2 + 1;
     out_freq.resize( half );
     out_mag.resize( half );
@@ -580,17 +611,20 @@ static void computeDisplayFFT( const float* samples, int n, float mean_dt_ps,
         out_mag[k]  = std::abs( buf[k] ) / (float)n;
     }
 }
+
 // Complex FFT: input is (re_s[], im_s[]) → one-sided |FFT(re + i·im)|.
-// Hann-windowed, zero-padded to next power-of-2, same convention as computeDisplayFFT.
 static void computeComplexDisplayFFT( const float* re_s, const float* im_s, int n, float mean_dt_ps,
                                       std::vector<float>& out_freq,
-                                      std::vector<float>& out_mag ) {
+                                      std::vector<float>& out_mag,
+                                      const float* custom_win = nullptr ) {
     if ( n < 2 || mean_dt_ps <= 0.f ) { out_freq.clear(); out_mag.clear(); return; }
     int N = 1;
     while ( N < n ) N <<= 1;
     std::vector<std::complex<float>> buf( N, { 0.f, 0.f } );
     for ( int i = 0; i < n; ++i ) {
-        float w = 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * i / (float)( n - 1 ) ) );
+        const float w = custom_win
+            ? custom_win[i]
+            : 0.5f * ( 1.f - std::cos( 2.f * 3.14159265358979f * i / (float)( n - 1 ) ) );
         buf[i] = { re_s[i] * w, im_s[i] * w };
     }
     _fft_inplace( buf );
@@ -643,6 +677,16 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Autoscale FFT axes (re-enable after manual zoom/pan)" );
     }
     ImGui::SameLine();
+    {
+        const bool was = tracked_show_window_fn_;
+        if ( was ) ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.5f, 0.3f, 0.8f, 0.9f ) );
+        if ( ImGui::Button( "Window Fn##tev_wfn" ) ) tracked_show_window_fn_ = !tracked_show_window_fn_;
+        if ( was ) ImGui::PopStyleColor();
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Show the windowing function panel and apply it to the FFT\n"
+                               "(replaces the default Hann window)" );
+    }
+    ImGui::SameLine();
     if ( ImGui::Button( "Export CSV##tev_exp" ) && !tracked_points_.empty() ) {
         std::string fname = "tracked_t" + std::to_string( (int)sys.p.t ) + ".csv";
         FILE* f = std::fopen( fname.c_str(), "w" );
@@ -678,15 +722,15 @@ void PhoenixGUI::renderTrackedPointsWindow() {
     if ( ImGui::IsItemHovered() )
         ImGui::SetTooltip( "Write all enabled point time series to CSV" );
 
-    // ---- Window slider + max history input ----
+    // ---- Sliders row: Window | Max ----
+    tracked_max_hist_    = std::clamp( tracked_max_hist_,    10, TrackedPoint::kMaxHist );
     tracked_hist_window_ = std::clamp( tracked_hist_window_, 10, tracked_max_hist_ );
     {
         char wlabel[32];
-        if ( tracked_hist_window_ >= tracked_max_hist_ )
-            std::snprintf( wlabel, sizeof(wlabel), "Window: All" );
-        else
-            std::snprintf( wlabel, sizeof(wlabel), "Window: %d", tracked_hist_window_ );
-        ImGui::SetNextItemWidth( -120.f );
+        std::snprintf( wlabel, sizeof(wlabel),
+                       tracked_hist_window_ >= tracked_max_hist_ ? "Window: All" : "Window: %d",
+                       tracked_hist_window_ );
+        ImGui::SetNextItemWidth( -160.f );
         const int prev_win = tracked_hist_window_;
         ImGui::SliderInt( "##tev_win", &tracked_hist_window_, 10, tracked_max_hist_, wlabel );
         if ( tracked_hist_window_ != prev_win ) {
@@ -694,14 +738,71 @@ void PhoenixGUI::renderTrackedPointsWindow() {
             tracked_autoscale_fft_ = true;
         }
         if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Number of samples to display (slide right = all)" );
+            ImGui::SetTooltip( "Samples shown in the plot and used for FFT" );
+
         ImGui::SameLine();
-        ImGui::SetNextItemWidth( 160.f );
-        ImGui::InputInt( "Max##tev_mxh", &tracked_max_hist_, 256, 1024 );
-        tracked_max_hist_ = std::clamp( tracked_max_hist_, 10, TrackedPoint::kMaxHist );
+        ImGui::SetNextItemWidth( 80.f );
+        ImGui::InputInt( "Max##tev_mxh", &tracked_max_hist_, 0, 0 );
         if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Maximum number of samples stored per tracked point\n"
-                               "(reducing this value discards oldest data on the next frame)" );
+            ImGui::SetTooltip( "Maximum samples stored per tracked point\n(FIFO depth; reducing discards oldest data)" );
+    }
+
+    // ---- Window function panel ----
+    if ( tracked_show_window_fn_ ) {
+        ImGui::Separator();
+        static const char* kWinTypeNames[] = { "Gaussian", "Hann", "Blackman", "Flat" };
+
+        // Controls row: type | sigma (Gaussian only) | power (Gaussian only) | Apply buttons
+        ImGui::SetNextItemWidth( 110.f );
+        ImGui::Combo( "##tev_wftype", &tracked_window_fn_type_, kWinTypeNames, 4 );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Window function shape" );
+        if ( tracked_window_fn_type_ == 0 ) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 130.f );
+            ImGui::SliderFloat( "##tev_wfsig", &tracked_window_fn_sigma_, 0.05f, 0.99f, "σ=%.2f" );
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Gaussian width as fraction of half-window (0.4 = standard)" );
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 55.f );
+            ImGui::InputInt( "##tev_wfpow", &tracked_window_fn_power_, 0, 0 );
+            tracked_window_fn_power_ = std::clamp( tracked_window_fn_power_, 1, 20 );
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Super-Gaussian order N: exp(-(x²/σ²)^N)\nN=1: standard Gaussian  N≫1: flat-top" );
+        }
+        ImGui::SameLine();
+        {
+            const bool on = tracked_apply_smoothing_;
+            if ( on ) ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.2f, 0.7f, 0.3f, 0.9f ) );
+            if ( ImGui::Button( "Apply Smoothing##tev_wfapp" ) ) tracked_apply_smoothing_ = !tracked_apply_smoothing_;
+            if ( on ) ImGui::PopStyleColor();
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Apply this window function to the data before computing the FFT" );
+        }
+        ImGui::SameLine();
+        {
+            const bool on = tracked_smooth_preview_;
+            if ( on ) ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.2f, 0.5f, 0.8f, 0.9f ) );
+            if ( ImGui::Button( "Apply to Preview##tev_wfprev" ) ) tracked_smooth_preview_ = !tracked_smooth_preview_;
+            if ( on ) ImGui::PopStyleColor();
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Also multiply the time-series plots by the window function" );
+        }
+
+        // Preview plot: only the window function shape
+        const int  wfn_n = std::max( 2, std::min( tracked_hist_window_, (int)tracked_max_hist_ ) );
+        std::vector<float> wfn_curve, wfn_x( wfn_n );
+        buildWindowFn( wfn_curve, wfn_n, tracked_window_fn_type_, tracked_window_fn_sigma_, tracked_window_fn_power_ );
+        for ( int i = 0; i < wfn_n; ++i ) wfn_x[i] = (float)i;
+
+        if ( ImPlot::BeginPlot( "##tev_wfn_prev", ImVec2( -1.f, 130.f ) ) ) {
+            ImPlot::SetupAxis( ImAxis_X1, "Sample index", ImPlotAxisFlags_None );
+            ImPlot::SetupAxis( ImAxis_Y1, "Weight",       ImPlotAxisFlags_None );
+            ImPlot::SetupAxisLimits( ImAxis_Y1, -0.05, 1.05, ImGuiCond_Always );
+            ImPlot::SetNextLineStyle( ImVec4( 0.9f, 0.7f, 0.2f, 1.f ), 2.f );
+            ImPlot::PlotLine( kWinTypeNames[tracked_window_fn_type_],
+                              wfn_x.data(), wfn_curve.data(), wfn_n );
+            ImPlot::EndPlot();
+        }
     }
 
     ImGui::Separator();
@@ -913,6 +1014,13 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                 const int n = (int)tv.size();
                 if ( n < 1 ) continue;
 
+                std::vector<float> wfn_prev;
+                if ( tracked_smooth_preview_ && n > 0 )
+                    buildWindowFn( wfn_prev, n, tracked_window_fn_type_, tracked_window_fn_sigma_, tracked_window_fn_power_ );
+                auto applyWin = [&]( std::vector<float>& v ) {
+                    for ( int i = 0; i < (int)v.size() && i < (int)wfn_prev.size(); ++i ) v[i] *= wfn_prev[i];
+                };
+
                 auto plotComp = [&]( const std::vector<float>& yv, const CompInfo& ci ) {
                     if ( (int)yv.size() < n ) return;
                     ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
@@ -920,11 +1028,11 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     ImPlot::PlotLine( lbl.c_str(), tv.data(), yv.data(), n );
                 };
 
-                if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); plotComp( v, kComps[0] ); }
-                if ( tp.show_abs2 ) { auto v = sliceAbs2( tp );                                   plotComp( v, kComps[1] ); }
-                if ( tp.show_re   ) { auto v = sliceDeque( tp.values_re,  tracked_hist_window_ ); plotComp( v, kComps[2] ); }
-                if ( tp.show_im   ) { auto v = sliceDeque( tp.values_im,  tracked_hist_window_ ); plotComp( v, kComps[3] ); }
-                if ( tp.show_arg  ) { auto v = sliceDeque( tp.values_arg, tracked_hist_window_ ); plotComp( v, kComps[4] ); }
+                if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[0] ); }
+                if ( tp.show_abs2 ) { auto v = sliceAbs2( tp );                                   applyWin(v); plotComp( v, kComps[1] ); }
+                if ( tp.show_re   ) { auto v = sliceDeque( tp.values_re,  tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[2] ); }
+                if ( tp.show_im   ) { auto v = sliceDeque( tp.values_im,  tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[3] ); }
+                if ( tp.show_arg  ) { auto v = sliceDeque( tp.values_arg, tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[4] ); }
             }
             ImPlot::EndPlot();
         }
@@ -935,26 +1043,39 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                 ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlagsFft );
                 ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
                 if ( ImPlot::IsPlotHovered() ) tracked_fft_hovered_ = true;
+                // Build custom window once per FFT block (shared across all points)
+                std::vector<float> wfn_buf;
+                const float* wfn_ptr = nullptr;
+
                 for ( int idx : active ) {
                     const auto& tp = tracked_points_[idx];
                     const std::string sn = shortName( tp );
-                    auto tv = sliceDeque( tp.times, tracked_hist_window_ );
+                    const int fft_w  = std::min( tracked_hist_window_, (int)tp.times.size() );
+                    auto tv = sliceDeque( tp.times, fft_w );
                     const int n = (int)tv.size();
                     if ( n < 2 ) continue;
                     float mean_dt = ( n >= 2 )
                         ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 )
                         : 0.f;
 
-                    auto abs2src  = sliceAbs2( tp );  // pre-computed
-                    auto absv     = sliceDeque( tp.values_abs, tracked_hist_window_ );
-                    auto rev      = sliceDeque( tp.values_re,  tracked_hist_window_ );
-                    auto imv      = sliceDeque( tp.values_im,  tracked_hist_window_ );
-                    auto argv     = sliceDeque( tp.values_arg, tracked_hist_window_ );
+                    if ( tracked_apply_smoothing_ ) {
+                        if ( (int)wfn_buf.size() != n )
+                            buildWindowFn( wfn_buf, n, tracked_window_fn_type_, tracked_window_fn_sigma_, tracked_window_fn_power_ );
+                        wfn_ptr = wfn_buf.data();
+                    } else {
+                        wfn_ptr = nullptr;
+                    }
+
+                    auto absv     = sliceDeque( tp.values_abs, fft_w );
+                    auto abs2src  = absv; for ( auto& x : abs2src ) x *= x;
+                    auto rev      = sliceDeque( tp.values_re,  fft_w );
+                    auto imv      = sliceDeque( tp.values_im,  fft_w );
+                    auto argv     = sliceDeque( tp.values_arg, fft_w );
 
                     auto doFftLine = [&]( bool show, const std::vector<float>& dat, const CompInfo& ci ) {
                         if ( !show || (int)dat.size() < 2 ) return;
                         std::vector<float> ffreq, fmag;
-                        computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag );
+                        computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag, wfn_ptr );
                         if ( fmag.empty() ) return;
                         ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
                         std::string lbl = sn + " " + ci.suffix;
@@ -967,7 +1088,7 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     doFftLine( tp.fft_show_arg,  argv,    kComps[4] );
                     if ( tp.fft_show_z && (int)rev.size() >= 2 && (int)imv.size() >= 2 ) {
                         std::vector<float> ffreq, fmag;
-                        computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag );
+                        computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag, wfn_ptr );
                         if ( !fmag.empty() ) {
                             ImPlot::SetNextLineStyle( ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f ) );
                             std::string lbl = sn + " " + kComps[5].suffix;
@@ -1006,17 +1127,24 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     auto tv = sliceDeque( tp.times, tracked_hist_window_ );
                     const int n = (int)tv.size();
 
+                    std::vector<float> wfn_prev;
+                    if ( tracked_smooth_preview_ && n > 0 )
+                        buildWindowFn( wfn_prev, n, tracked_window_fn_type_, tracked_window_fn_sigma_, tracked_window_fn_power_ );
+                    auto applyWin = [&]( std::vector<float>& v ) {
+                        for ( int i = 0; i < (int)v.size() && i < (int)wfn_prev.size(); ++i ) v[i] *= wfn_prev[i];
+                    };
+
                     auto plotComp = [&]( const std::vector<float>& yv, const CompInfo& ci ) {
                         if ( n < 1 || (int)yv.size() < n ) return;
                         ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
                         ImPlot::PlotLine( ci.suffix, tv.data(), yv.data(), n );
                     };
 
-                    if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); plotComp( v, kComps[0] ); }
-                    if ( tp.show_abs2 ) { auto v = sliceAbs2( tp );                                   plotComp( v, kComps[1] ); }
-                    if ( tp.show_re   ) { auto v = sliceDeque( tp.values_re,  tracked_hist_window_ ); plotComp( v, kComps[2] ); }
-                    if ( tp.show_im   ) { auto v = sliceDeque( tp.values_im,  tracked_hist_window_ ); plotComp( v, kComps[3] ); }
-                    if ( tp.show_arg  ) { auto v = sliceDeque( tp.values_arg, tracked_hist_window_ ); plotComp( v, kComps[4] ); }
+                    if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[0] ); }
+                    if ( tp.show_abs2 ) { auto v = sliceAbs2( tp );                                   applyWin(v); plotComp( v, kComps[1] ); }
+                    if ( tp.show_re   ) { auto v = sliceDeque( tp.values_re,  tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[2] ); }
+                    if ( tp.show_im   ) { auto v = sliceDeque( tp.values_im,  tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[3] ); }
+                    if ( tp.show_arg  ) { auto v = sliceDeque( tp.values_arg, tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[4] ); }
 
                     ImPlot::EndPlot();
                 }
@@ -1030,21 +1158,29 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     ImPlot::SetupAxisFormat( ImAxis_Y1, "%.2e" );
                     if ( ImPlot::IsPlotHovered() ) tracked_fft_hovered_ = true;
 
-                    auto tv      = sliceDeque( tp.times,          tracked_hist_window_ );
-                    auto absv    = sliceDeque( tp.values_abs,      tracked_hist_window_ );
-                    auto abs2src = sliceAbs2( tp );
-                    auto rev     = sliceDeque( tp.values_re,       tracked_hist_window_ );
-                    auto imv     = sliceDeque( tp.values_im,       tracked_hist_window_ );
-                    auto argv    = sliceDeque( tp.values_arg,      tracked_hist_window_ );
+                    const int fft_w  = std::min( tracked_hist_window_, (int)tp.times.size() );
+                    auto tv      = sliceDeque( tp.times,          fft_w );
+                    auto absv    = sliceDeque( tp.values_abs,      fft_w );
+                    auto abs2src = absv; for ( auto& x : abs2src ) x *= x;
+                    auto rev     = sliceDeque( tp.values_re,       fft_w );
+                    auto imv     = sliceDeque( tp.values_im,       fft_w );
+                    auto argv    = sliceDeque( tp.values_arg,      fft_w );
                     const int n  = (int)tv.size();
                     float mean_dt = ( n >= 2 )
                         ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 )
                         : 0.f;
 
+                    std::vector<float> wfn_ind;
+                    const float* wfn_p = nullptr;
+                    if ( tracked_apply_smoothing_ && n > 0 ) {
+                        buildWindowFn( wfn_ind, n, tracked_window_fn_type_, tracked_window_fn_sigma_, tracked_window_fn_power_ );
+                        wfn_p = wfn_ind.data();
+                    }
+
                     auto doFftLine = [&]( bool show, const std::vector<float>& dat, const CompInfo& ci ) {
                         if ( !show || (int)dat.size() < 2 ) return;
                         std::vector<float> ffreq, fmag;
-                        computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag );
+                        computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag, wfn_p );
                         if ( fmag.empty() ) return;
                         ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
                         ImPlot::PlotLine( ci.suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
@@ -1056,7 +1192,7 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     doFftLine( tp.fft_show_arg,  argv,    kComps[4] );
                     if ( tp.fft_show_z && (int)rev.size() >= 2 && (int)imv.size() >= 2 ) {
                         std::vector<float> ffreq, fmag;
-                        computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag );
+                        computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag, wfn_p );
                         if ( !fmag.empty() ) {
                             ImPlot::SetNextLineStyle( ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f ) );
                             ImPlot::PlotLine( kComps[5].suffix, ffreq.data(), fmag.data(), (int)fmag.size() );

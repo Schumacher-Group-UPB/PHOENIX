@@ -259,15 +259,21 @@ private:
         bool fft_show_arg  = false;
     };
     std::vector<TrackedPoint> tracked_points_;
-    bool show_tracked_window_  = false;
-    bool tracked_overlay_mode_ = true;   // true = all in one graph, false = individual
-    int  tracked_hist_window_  = 1024;   // how many samples to show (slider-controlled)
-    bool tracked_show_fft_     = false;
-    int  tracked_max_hist_     = TrackedPoint::kMaxHist;  // FIFO depth, user-settable
-    bool tracked_autoscale_ts_  = true;   // autoscale time-series plots
-    bool tracked_autoscale_fft_ = true;   // autoscale FFT plots
-    bool tracked_ts_hovered_    = false;  // TS hover state carried across frames
-    bool tracked_fft_hovered_   = false;  // FFT hover state carried across frames
+    bool  show_tracked_window_     = false;
+    bool  tracked_overlay_mode_    = true;    // true = all in one graph, false = individual
+    int   tracked_hist_window_     = 1024;    // how many samples to show and FFT
+    bool  tracked_show_fft_        = false;
+    int   tracked_max_hist_        = 1024;    // FIFO depth, user-settable
+    bool  tracked_autoscale_ts_    = true;
+    bool  tracked_autoscale_fft_   = true;
+    bool  tracked_ts_hovered_      = false;
+    bool  tracked_fft_hovered_     = false;
+    bool  tracked_show_window_fn_  = false;   // show the window-function panel
+    bool  tracked_apply_smoothing_ = false;   // apply custom window to FFT
+    bool  tracked_smooth_preview_  = false;   // also apply window to time-series line plots
+    int   tracked_window_fn_type_  = 3;       // 0=Gaussian 1=Hann 2=Blackman 3=Flat
+    float tracked_window_fn_sigma_ = 0.4f;    // Gaussian sigma (fraction of half-window)
+    int   tracked_window_fn_power_ = 1;       // super-Gaussian exponent N in exp(-(x²)^N)
 
     // ---------------------------------------------------------------
     // TrackedCut: kymograph (space-time) accumulation of a line cut

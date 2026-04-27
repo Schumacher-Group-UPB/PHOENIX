@@ -264,14 +264,14 @@ void PhoenixGUI::updateEnvelopeHistories() {
 void PhoenixGUI::updateTrackedPoints() {
     if ( tracked_points_.empty() ) return;
 
-    auto& sys    = solver_.system;
-    const float  t = (float)sys.p.t;
-    const int    W = (int)sys.p.N_c;
-    const int    H = (int)sys.p.N_r;
-
     auto doSample = [&]() {
+        const float t = (float)solver_.system.p.t;
+        const int   W = (int)solver_.system.p.N_c;
+        const int   H = (int)solver_.system.p.N_r;
+
         for ( auto& tp : tracked_points_ ) {
             if ( !tp.enabled ) continue;
+            if ( !tp.times.empty() && tp.times.back() == t ) continue;
             if ( tp.matrix_idx < 0 || tp.matrix_idx >= (int)matrix_registry_.size() ) continue;
             const auto& desc = matrix_registry_[tp.matrix_idx];
             if ( !desc.available ) continue;
