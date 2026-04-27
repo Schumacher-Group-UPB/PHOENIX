@@ -257,6 +257,7 @@ private:
         bool fft_show_re   = false;
         bool fft_show_im   = false;
         bool fft_show_arg  = false;
+        ImVec4 color = { 1.f, 1.f, 1.f, 1.f };  // per-point display color (overlay mode); auto-assigned, user-editable
     };
     std::vector<TrackedPoint> tracked_points_;
     bool  show_tracked_window_     = false;

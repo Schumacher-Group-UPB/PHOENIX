@@ -637,7 +637,33 @@ static void computeComplexDisplayFFT( const float* re_s, const float* im_s, int 
         out_mag[k]  = std::abs( buf[k] ) / (float)n;
     }
 }
+// Find local maxima above threshold_frac * global_max, sorted by magnitude descending.
+static std::vector<std::pair<float,float>> findSpectralPeaks(
+        const std::vector<float>& freq, const std::vector<float>& mag,
+        float threshold_frac, int max_peaks ) {
+    if ( freq.empty() || mag.empty() ) return {};
+    const float gmax = *std::max_element( mag.begin(), mag.end() );
+    const float thresh = gmax * threshold_frac;
+    std::vector<std::pair<float,float>> peaks;
+    for ( int k = 1; k + 1 < (int)mag.size(); ++k ) {
+        if ( mag[k] > mag[k-1] && mag[k] >= mag[k+1] && mag[k] >= thresh )
+            peaks.push_back( { freq[k], mag[k] } );
+    }
+    std::sort( peaks.begin(), peaks.end(),
+               []( const auto& a, const auto& b ){ return a.second > b.second; } );
+    if ( (int)peaks.size() > max_peaks ) peaks.resize( (size_t)max_peaks );
+    return peaks;
+}
 } // anonymous namespace
+
+struct PeakAnalysisUI {
+    bool  show      = false;
+    float threshold = 0.05f;
+    int   max_peaks = 8;
+    struct Cache { std::vector<float> freq, mag; std::string point_name; ImVec4 col; };
+    std::map<int,Cache> cache;
+};
+static PeakAnalysisUI s_peak_ui;
 
 void PhoenixGUI::renderTrackedPointsWindow() {
     if ( !show_tracked_window_ ) return;
@@ -832,6 +858,14 @@ void PhoenixGUI::renderTrackedPointsWindow() {
 
         ImGui::Checkbox( "##tev_en", &tp.enabled );
         ImGui::SameLine();
+        {
+            float cw[4] = { tp.color.x, tp.color.y, tp.color.z, tp.color.w };
+            if ( ImGui::ColorEdit4( "##tpc", cw,
+                    ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel |
+                    ImGuiColorEditFlags_NoTooltip ) )
+                tp.color = ImVec4( cw[0], cw[1], cw[2], cw[3] );
+        }
+        ImGui::SameLine();
         ImGui::TextUnformatted( tp.label.c_str() );
         if ( ImGui::IsItemHovered() )
             ImGui::SetTooltip( "x=%.3f  y=%.3f  col=%d  row=%d\n%s\n\nRight-click for options",
@@ -1023,7 +1057,8 @@ void PhoenixGUI::renderTrackedPointsWindow() {
 
                 auto plotComp = [&]( const std::vector<float>& yv, const CompInfo& ci ) {
                     if ( (int)yv.size() < n ) return;
-                    ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
+                    // Overlay: use per-point color so multiple points are visually distinct
+                    ImPlot::SetNextLineStyle( ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f ) );
                     std::string lbl = sn + " " + ci.suffix;
                     ImPlot::PlotLine( lbl.c_str(), tv.data(), yv.data(), n );
                 };
@@ -1038,6 +1073,7 @@ void PhoenixGUI::renderTrackedPointsWindow() {
         }
 
         if ( tracked_show_fft_ ) {
+            s_peak_ui.cache.clear();
             if ( ImPlot::BeginPlot( "##tev_fft_ovl", ImVec2( -1.f, fft_height ) ) ) {
                 ImPlot::SetupAxis( ImAxis_X1, "Frequency (1/ps)", kAxisFlagsFft );
                 ImPlot::SetupAxis( ImAxis_Y1, "|Amplitude|",      kAxisFlagsFft );
@@ -1054,9 +1090,11 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     auto tv = sliceDeque( tp.times, fft_w );
                     const int n = (int)tv.size();
                     if ( n < 2 ) continue;
-                    float mean_dt = ( n >= 2 )
-                        ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 )
-                        : 0.f;
+                    // Use full history for mean_dt so the frequency axis stays stable
+                    // regardless of how the window slider is positioned.
+                    float mean_dt = ( tp.times.size() >= 2 )
+                        ? ( tp.times.back() - tp.times.front() ) / (float)( (int)tp.times.size() - 1 )
+                        : ( n >= 2 ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 ) : 0.f );
 
                     if ( tracked_apply_smoothing_ ) {
                         if ( (int)wfn_buf.size() != n )
@@ -1072,14 +1110,20 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     auto imv      = sliceDeque( tp.values_im,  fft_w );
                     auto argv     = sliceDeque( tp.values_arg, fft_w );
 
+                    // Track the first plotted FFT for peak caching (highest-priority component)
+                    bool cached = false;
                     auto doFftLine = [&]( bool show, const std::vector<float>& dat, const CompInfo& ci ) {
                         if ( !show || (int)dat.size() < 2 ) return;
                         std::vector<float> ffreq, fmag;
                         computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag, wfn_ptr );
                         if ( fmag.empty() ) return;
-                        ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
+                        ImPlot::SetNextLineStyle( ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f ) );
                         std::string lbl = sn + " " + ci.suffix;
                         ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size() );
+                        if ( !cached ) {
+                            s_peak_ui.cache[idx] = { ffreq, fmag, sn, tp.color };
+                            cached = true;
+                        }
                     };
                     doFftLine( tp.fft_show_abs,  absv,    kComps[0] );
                     doFftLine( tp.fft_show_abs2, abs2src, kComps[1] );
@@ -1090,13 +1134,35 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         std::vector<float> ffreq, fmag;
                         computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag, wfn_ptr );
                         if ( !fmag.empty() ) {
-                            ImPlot::SetNextLineStyle( ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f ) );
-                            std::string lbl = sn + " " + kComps[5].suffix;
+                            ImPlot::SetNextLineStyle( ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f ) );
+                            std::string lbl = sn + " z";
                             ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size() );
+                            if ( !cached ) {
+                                s_peak_ui.cache[idx] = { ffreq, fmag, sn, tp.color };
+                                cached = true;
+                            }
+                        }
+                    }
+                    // Annotate detected peaks on the plot
+                    if ( s_peak_ui.show && s_peak_ui.cache.count( idx ) ) {
+                        const auto& c = s_peak_ui.cache[idx];
+                        auto peaks = findSpectralPeaks( c.freq, c.mag, s_peak_ui.threshold, s_peak_ui.max_peaks );
+                        for ( auto& [f, a] : peaks ) {
+                            char ann[32]; std::snprintf( ann, sizeof(ann), "%.3f", (double)f );
+                            ImPlot::Annotation( f, a, ImVec4( c.col.x, c.col.y, c.col.z, 1.f ),
+                                                ImVec2( 0.f, -6.f ), true, "%s", ann );
                         }
                     }
                 }
                 ImPlot::EndPlot();
+            }
+            // Peaks toggle button
+            {
+                const bool was = s_peak_ui.show;
+                if ( was ) ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.7f, 0.5f, 0.1f, 0.9f ) );
+                if ( ImGui::Button( "Peaks##tev_pk_ovl" ) ) s_peak_ui.show = !s_peak_ui.show;
+                if ( was ) ImGui::PopStyleColor();
+                if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Show peak analysis window" );
             }
         }
 
@@ -1166,9 +1232,11 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                     auto imv     = sliceDeque( tp.values_im,       fft_w );
                     auto argv    = sliceDeque( tp.values_arg,      fft_w );
                     const int n  = (int)tv.size();
-                    float mean_dt = ( n >= 2 )
-                        ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 )
-                        : 0.f;
+                    // Use full history for mean_dt so the frequency axis stays stable
+                    // regardless of how the window slider is positioned.
+                    float mean_dt = ( tp.times.size() >= 2 )
+                        ? ( tp.times.back() - tp.times.front() ) / (float)( (int)tp.times.size() - 1 )
+                        : ( n >= 2 ? ( tv.back() - tv.front() ) / (float)std::max( 1, n - 1 ) : 0.f );
 
                     std::vector<float> wfn_ind;
                     const float* wfn_p = nullptr;
@@ -1177,13 +1245,19 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         wfn_p = wfn_ind.data();
                     }
 
+                    bool cached_ind = false;
                     auto doFftLine = [&]( bool show, const std::vector<float>& dat, const CompInfo& ci ) {
                         if ( !show || (int)dat.size() < 2 ) return;
                         std::vector<float> ffreq, fmag;
                         computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag, wfn_p );
                         if ( fmag.empty() ) return;
+                        // Individual mode: use component colours (easier to distinguish Re/Im/abs on one graph)
                         ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
                         ImPlot::PlotLine( ci.suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
+                        if ( !cached_ind ) {
+                            s_peak_ui.cache[idx] = { ffreq, fmag, shortName( tp ), tp.color };
+                            cached_ind = true;
+                        }
                     };
                     doFftLine( tp.fft_show_abs,  absv,    kComps[0] );
                     doFftLine( tp.fft_show_abs2, abs2src, kComps[1] );
@@ -1196,14 +1270,72 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         if ( !fmag.empty() ) {
                             ImPlot::SetNextLineStyle( ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f ) );
                             ImPlot::PlotLine( kComps[5].suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
+                            if ( !cached_ind ) {
+                                s_peak_ui.cache[idx] = { ffreq, fmag, shortName( tp ), tp.color };
+                                cached_ind = true;
+                            }
+                        }
+                    }
+                    // Annotate detected peaks
+                    if ( s_peak_ui.show && s_peak_ui.cache.count( idx ) ) {
+                        const auto& c = s_peak_ui.cache[idx];
+                        auto peaks = findSpectralPeaks( c.freq, c.mag, s_peak_ui.threshold, s_peak_ui.max_peaks );
+                        for ( auto& [f, a] : peaks ) {
+                            char ann[32]; std::snprintf( ann, sizeof(ann), "%.3f", (double)f );
+                            ImPlot::Annotation( f, a, ImVec4( c.col.x, c.col.y, c.col.z, 1.f ),
+                                                ImVec2( 0.f, -6.f ), true, "%s", ann );
                         }
                     }
                     ImPlot::EndPlot();
+                }
+                // Peaks toggle (individual mode — shared s_peak_ui.show)
+                {
+                    const bool was = s_peak_ui.show;
+                    if ( was ) ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.7f, 0.5f, 0.1f, 0.9f ) );
+                    char pk_id[32]; std::snprintf( pk_id, sizeof(pk_id), "Peaks##tev_pk_%d", idx );
+                    if ( ImGui::Button( pk_id ) ) s_peak_ui.show = !s_peak_ui.show;
+                    if ( was ) ImGui::PopStyleColor();
                 }
             }
 
             ImGui::PopID();
         }
+    }
+
+    // Peak analysis window — shared between overlay and individual modes
+    if ( s_peak_ui.show ) {
+        ImGui::SetNextWindowSize( ImVec2( 340.f, 260.f ), ImGuiCond_FirstUseEver );
+        if ( ImGui::Begin( "Peak Analysis##pk_win", &s_peak_ui.show ) ) {
+            ImGui::SetNextItemWidth( 180.f );
+            ImGui::SliderFloat( "Threshold##pk_thr", &s_peak_ui.threshold, 0.01f, 0.5f, "%.2f x max" );
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 60.f );
+            ImGui::InputInt( "Max##pk_mx", &s_peak_ui.max_peaks, 0, 0 );
+            s_peak_ui.max_peaks = std::clamp( s_peak_ui.max_peaks, 1, 32 );
+            ImGui::Separator();
+            if ( ImGui::BeginTable( "##pk_tbl", 3,
+                    ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY ) ) {
+                ImGui::TableSetupScrollFreeze( 0, 1 );
+                ImGui::TableSetupColumn( "Point" );
+                ImGui::TableSetupColumn( "Freq (1/ps)" );
+                ImGui::TableSetupColumn( "|Amp|" );
+                ImGui::TableHeadersRow();
+                for ( auto& [entry_idx, c] : s_peak_ui.cache ) {
+                    auto peaks = findSpectralPeaks( c.freq, c.mag, s_peak_ui.threshold, s_peak_ui.max_peaks );
+                    for ( auto& [f, a] : peaks ) {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex( 0 );
+                        ImGui::PushStyleColor( ImGuiCol_Text, c.col );
+                        ImGui::TextUnformatted( c.point_name.c_str() );
+                        ImGui::PopStyleColor();
+                        ImGui::TableSetColumnIndex( 1 ); ImGui::Text( "%.5f", (double)f );
+                        ImGui::TableSetColumnIndex( 2 ); ImGui::Text( "%.3e", (double)a );
+                    }
+                }
+                ImGui::EndTable();
+            }
+        }
+        ImGui::End();
     }
 
     ImGui::End();

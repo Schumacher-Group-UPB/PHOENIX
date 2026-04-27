@@ -777,6 +777,12 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                     tp.label = lbuf;
                 }
                 tp.is_complex = ( matrix_registry_[p.selected].complex_mat != nullptr );
+                {
+                    float r, g, b;
+                    ImGui::ColorConvertHSVtoRGB(
+                        (float)( tracked_points_.size() % 8 ) / 8.0f, 0.85f, 1.0f, r, g, b );
+                    tp.color = ImVec4( r, g, b, 1.f );
+                }
                 tracked_points_.push_back( std::move( tp ) );
                 show_tracked_window_ = true;
             }
