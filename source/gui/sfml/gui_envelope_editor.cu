@@ -36,9 +36,12 @@ std::string envTypeString( const PhoenixGUI::SpatialComponentEdit& c ) {
     return s.empty() ? "gauss" : s;
 }
 
+// Builds an Envelope from all non-noise-layer spatial components.
+// Noise layers are excluded; they are applied separately in rebuildPreview / applyEnvelopeToMatrix.
 Envelope buildEnvelopeFromPanel( const PhoenixGUI::EnvelopeEditorPanel& p ) {
     Envelope tmp;
     for ( const auto& comp : p.components ) {
+        if ( comp.is_noise_layer ) continue;   // noise layers handled separately
         tmp.addSpacial(
             comp.amp, comp.width_x, comp.width_y, comp.x, comp.y, comp.exponent,
             envTypeString( comp ),
@@ -49,7 +52,9 @@ Envelope buildEnvelopeFromPanel( const PhoenixGUI::EnvelopeEditorPanel& p ) {
             static_cast<Envelope::AdsMode>( comp.ads_idx ),
             (Type::real)comp.ads_value
         );
-        tmp.addTemporal( p.temporal.t0, p.temporal.sigma, p.temporal.freq, s_temp_names[p.temporal.type_idx] );
+        // Each component carries its own temporal settings
+        tmp.addTemporal( comp.temporal.t0, comp.temporal.sigma, comp.temporal.freq,
+                         s_temp_names[comp.temporal.type_idx] );
     }
     // Manually initialise cache vector with null pointers so calculate() doesn't go out-of-bounds
     tmp.cache.resize( tmp.amp.size() );
@@ -102,19 +107,22 @@ static void populatePanelFromEnvelope( PhoenixGUI::EnvelopeEditorPanel& p,
                 default:                       c.ads_idx = 0; c.ads_value = 0.f; break;
             }
         }
+        // Temporal: each component maps to a temporal group via group_identifier
+        if ( i < (int)env->group_identifier.size() ) {
+            int g = env->group_identifier[i];
+            if ( g >= 0 && g < env->groupSize() ) {
+                c.temporal.t0    = (float)env->t0[g];
+                c.temporal.sigma = (float)env->sigma[g];
+                c.temporal.freq  = (float)env->freq[g];
+                if      ( env->temporal[g] & Envelope::Temporal::Gauss ) c.temporal.type_idx = 1;
+                else if ( env->temporal[g] & Envelope::Temporal::IExp  ) c.temporal.type_idx = 2;
+                else if ( env->temporal[g] & Envelope::Temporal::Cos   ) c.temporal.type_idx = 3;
+                else                                                       c.temporal.type_idx = 0;
+            }
+        }
         p.components.push_back( c );
     }
     p.selected_component = p.components.empty() ? -1 : 0;
-    // Temporal: read first group (group 0) - t0/sigma/freq are indexed by group
-    if ( env->groupSize() > 0 ) {
-        p.temporal.t0    = (float)env->t0[0];
-        p.temporal.sigma = (float)env->sigma[0];
-        p.temporal.freq  = (float)env->freq[0];
-        if      ( env->temporal[0] & Envelope::Temporal::Gauss ) p.temporal.type_idx = 1;
-        else if ( env->temporal[0] & Envelope::Temporal::IExp  ) p.temporal.type_idx = 2;
-        else if ( env->temporal[0] & Envelope::Temporal::Cos   ) p.temporal.type_idx = 3;
-        else                                                       p.temporal.type_idx = 0;
-    }
     p.preview_dirty = true;
 }
 
@@ -276,8 +284,6 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
         sys.p.L_x, sys.p.L_y, sys.p.dx, sys.p.dy
     };
 
-    Envelope tmp = buildEnvelopeFromPanel( p );
-
     const int N = W * H;
 
     // Choose colormap
@@ -290,32 +296,70 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
         cp = &colormaps_[idx].palette;
     }
 
-    // Resolve noise seed once per rebuild (so apply reuses the same pattern)
-    if ( p.noise.enabled ) {
-        if ( p.noise.seed != 0 )
-            p.noise.last_used_seed = (uint32_t)p.noise.seed;
-        else if ( p.noise.last_used_seed == 0 )
-            p.noise.last_used_seed = (uint32_t)std::random_device{}();
-        // seed=0 + last_used_seed!=0: keep reusing last_used_seed until Re-roll or seed changes
-    }
+    // Helper: resolve a per-component noise seed for this rebuild
+    auto resolveNoiseSeed = []( PhoenixGUI::NoiseState& ns ) {
+        if ( !ns.enabled ) return;
+        if ( ns.seed != 0 )
+            ns.last_used_seed = (uint32_t)ns.seed;
+        else if ( ns.last_used_seed == 0 )
+            ns.last_used_seed = (uint32_t)std::random_device{}();
+    };
+
+    // Resolve seeds for all noise-bearing components
+    for ( auto& comp : p.components )
+        resolveNoiseSeed( comp.noise );
+
+    // Helper: apply per-component noise to a complex buffer
+    auto applyCompNoiseCmplx = [&]( const PhoenixGUI::NoiseState& ns, Type::complex* buf_ptr ) {
+        if ( !ns.enabled ) return;
+        const uint32_t s    = ns.last_used_seed;
+        const Type::real amp = (Type::real)ns.amplitude;
+        switch ( ns.type_idx ) {
+            case 1:  Noise::addGaussianNoise( buf_ptr, N, amp, s ); break;
+            case 2:  Noise::addCorrelatedNoise( buf_ptr, (size_t)W, (size_t)H, amp, s,
+                         (Type::real)ns.correlation_length, sys.p.dx, sys.p.dy ); break;
+            default: Noise::addUniformNoise( buf_ptr, N, amp, s ); break;
+        }
+    };
+    auto applyCompNoiseReal = [&]( const PhoenixGUI::NoiseState& ns, Type::real* buf_ptr ) {
+        if ( !ns.enabled ) return;
+        const uint32_t s    = ns.last_used_seed;
+        const Type::real amp = (Type::real)ns.amplitude;
+        switch ( ns.type_idx ) {
+            case 1:  Noise::addGaussianNoise( buf_ptr, N, amp, s ); break;
+            case 2:  Noise::addCorrelatedNoise( buf_ptr, (size_t)W, (size_t)H, amp, s,
+                         (Type::real)ns.correlation_length, sys.p.dx, sys.p.dy ); break;
+            default: Noise::addUniformNoise( buf_ptr, N, amp, s ); break;
+        }
+    };
+
+    // Check whether any component has noise active (for snapshot fallback logic)
+    bool any_noise = false;
+    for ( const auto& comp : p.components )
+        if ( comp.is_noise_layer || comp.noise.enabled ) { any_noise = true; break; }
+
+    // Build envelope from non-noise-layer components (skip noise layers)
+    Envelope tmp = buildEnvelopeFromPanel( p );
 
     if ( desc.is_complex ) {
         // Complex target: calculate into complex buffer
         std::vector<Type::complex> buf( N, Type::complex{ 0.0, 0.0 } );
-        if ( !p.components.empty() )
+
+        // Spatial envelope (calculate() zeroes the buffer unconditionally, so noise must come after).
+        if ( !p.components.empty() && tmp.amp.size() > 0 )
             tmp.calculate( buf.data(), Envelope::AllGroups, desc.polarization, dim );
-        else if ( !p.matrix_snapshot.empty() && (int)p.matrix_snapshot.size() == N && !p.noise.enabled )
+        else if ( p.components.empty() && !p.matrix_snapshot.empty()
+                  && (int)p.matrix_snapshot.size() == N && !any_noise )
             buf = p.matrix_snapshot;  // show current device data when no components defined
 
-        if ( p.noise.enabled ) {
-            const uint32_t s    = p.noise.last_used_seed;
-            const Type::real amp = (Type::real)p.noise.amplitude;
-            switch ( p.noise.type_idx ) {
-                case 1:  Noise::addGaussianNoise( buf.data(), N, amp, s ); break;
-                case 2:  Noise::addCorrelatedNoise( buf.data(), (size_t)W, (size_t)H, amp, s,
-                             (Type::real)p.noise.correlation_length, sys.p.dx, sys.p.dy ); break;
-                default: Noise::addUniformNoise( buf.data(), N, amp, s ); break;
-            }
+        // Noise layers first, then per-component noise — both after calculate() so they survive.
+        for ( auto& comp : p.components ) {
+            if ( !comp.is_noise_layer ) continue;
+            applyCompNoiseCmplx( comp.noise, buf.data() );
+        }
+        for ( auto& comp : p.components ) {
+            if ( comp.is_noise_layer ) continue;
+            applyCompNoiseCmplx( comp.noise, buf.data() );
         }
 
         const bool is_phase = ( p.preview_mode == EnvelopeEditorPanel::PreviewMode::Phase );
@@ -354,21 +398,23 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
     } else {
         // Real target (pump, potential): calculate into real buffer
         std::vector<Type::real> buf( N, Type::real{ 0.0 } );
-        if ( !p.components.empty() )
+
+        // Spatial envelope (calculate() zeroes the buffer unconditionally, so noise must come after).
+        if ( !p.components.empty() && tmp.amp.size() > 0 )
             tmp.calculate( buf.data(), Envelope::AllGroups, desc.polarization, dim );
-        else if ( !p.matrix_snapshot.empty() && (int)p.matrix_snapshot.size() == N && !p.noise.enabled ) {
+        else if ( p.components.empty() && !p.matrix_snapshot.empty()
+                  && (int)p.matrix_snapshot.size() == N && !any_noise ) {
             for ( int i = 0; i < N; i++ ) buf[i] = CUDA::real( p.matrix_snapshot[i] );
         }
 
-        if ( p.noise.enabled ) {
-            const uint32_t s    = p.noise.last_used_seed;
-            const Type::real amp = (Type::real)p.noise.amplitude;
-            switch ( p.noise.type_idx ) {
-                case 1:  Noise::addGaussianNoise( buf.data(), N, amp, s ); break;
-                case 2:  Noise::addCorrelatedNoise( buf.data(), (size_t)W, (size_t)H, amp, s,
-                             (Type::real)p.noise.correlation_length, sys.p.dx, sys.p.dy ); break;
-                default: Noise::addUniformNoise( buf.data(), N, amp, s ); break;
-            }
+        // Noise layers first, then per-component noise — both after calculate() so they survive.
+        for ( auto& comp : p.components ) {
+            if ( !comp.is_noise_layer ) continue;
+            applyCompNoiseReal( comp.noise, buf.data() );
+        }
+        for ( auto& comp : p.components ) {
+            if ( comp.is_noise_layer ) continue;
+            applyCompNoiseReal( comp.noise, buf.data() );
         }
 
         auto displayVal = [&]( int i ) -> double {
@@ -426,8 +472,7 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
         EnvelopeEditorPanel::Revision rev;
         rev.label      = "Rev " + std::to_string( p.revisions.size() + 1 )
                        + "  (" + desc.label + ", t=" + toScientific( solver_.system.p.t ) + ")";
-        rev.components = p.components;
-        rev.temporal   = p.temporal;
+        rev.components = p.components;  // temporal is embedded per-component
         p.revisions.push_back( std::move( rev ) );
     }
 
@@ -441,24 +486,38 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
 
     const size_t N_apply = (size_t)sys.p.N_c * (size_t)sys.p.N_r;
 
-    // Helper lambda to apply noise to a buffer after envelope calculation
-    auto applyNoise = [&]( Type::complex* ptr ) {
-        if ( !p.noise.enabled ) return;
-        const uint32_t s    = p.noise.last_used_seed;
-        const Type::real amp  = (Type::real)p.noise.amplitude;
-        const Type::real corr = (Type::real)p.noise.correlation_length;
-        switch ( p.noise.type_idx ) {
+    // Determine how many temporal-group matrix slots the target has allocated.
+    // Startup allocates exactly groupSize() slots; if the GUI creates more distinct
+    // temporal groups than available slots, collapse to a single AllGroups group to
+    // prevent the GPU kernel from reading out-of-bounds and producing NaN/inf.
+    int num_slots = 1;
+    if ( desc.real_target  && N_apply > 0 )
+        num_slots = std::max( 1, (int)( desc.real_target->getHostData().size()  / N_apply ) );
+    else if ( desc.cmplx_target && N_apply > 0 )
+        num_slots = std::max( 1, (int)( desc.cmplx_target->getHostData().size() / N_apply ) );
+    const int ng_proposed = tmp.groupSize();
+    // use_per_group: write each temporal group to its own matrix slot (mirrors solver init).
+    // Falls back to false when there are more distinct temporal groups than allocated slots.
+    const bool use_per_group = ( ng_proposed > 0 ) && ( ng_proposed <= num_slots );
+
+    // Per-component noise helpers for apply
+    auto applyCompNoiseCmplx = [&]( const PhoenixGUI::NoiseState& ns, Type::complex* ptr ) {
+        if ( !ns.enabled ) return;
+        const uint32_t s    = ns.last_used_seed;
+        const Type::real amp  = (Type::real)ns.amplitude;
+        const Type::real corr = (Type::real)ns.correlation_length;
+        switch ( ns.type_idx ) {
             case 1:  Noise::addGaussianNoise( ptr, N_apply, amp, s ); break;
             case 2:  Noise::addCorrelatedNoise( ptr, sys.p.N_c, sys.p.N_r, amp, s, corr, sys.p.dx, sys.p.dy ); break;
             default: Noise::addUniformNoise( ptr, N_apply, amp, s ); break;
         }
     };
-    auto applyNoiseReal = [&]( Type::real* ptr ) {
-        if ( !p.noise.enabled ) return;
-        const uint32_t s    = p.noise.last_used_seed;
-        const Type::real amp  = (Type::real)p.noise.amplitude;
-        const Type::real corr = (Type::real)p.noise.correlation_length;
-        switch ( p.noise.type_idx ) {
+    auto applyCompNoiseReal = [&]( const PhoenixGUI::NoiseState& ns, Type::real* ptr ) {
+        if ( !ns.enabled ) return;
+        const uint32_t s    = ns.last_used_seed;
+        const Type::real amp  = (Type::real)ns.amplitude;
+        const Type::real corr = (Type::real)ns.correlation_length;
+        switch ( ns.type_idx ) {
             case 1:  Noise::addGaussianNoise( ptr, N_apply, amp, s ); break;
             case 2:  Noise::addCorrelatedNoise( ptr, sys.p.N_c, sys.p.N_r, amp, s, corr, sys.p.dx, sys.p.dy ); break;
             default: Noise::addUniformNoise( ptr, N_apply, amp, s ); break;
@@ -466,30 +525,62 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
     };
 
     if ( desc.host_target ) {
-        // Initial-state target: write into host_vector, then seed wavefunction from it
-        tmp.calculate( desc.host_target->data(), Envelope::AllGroups, desc.polarization, dim );
-        applyNoise( desc.host_target->data() );
+        // Initial-state target: write into host_vector, then seed wavefunction from it.
+        // calculate() zeroes the buffer first, so all noise must be applied afterwards.
+        if ( tmp.amp.size() > 0 )
+            tmp.calculate( desc.host_target->data(), Envelope::AllGroups, desc.polarization, dim );
+        for ( auto& comp : p.components )
+            if ( comp.is_noise_layer ) applyCompNoiseCmplx( comp.noise, desc.host_target->data() );
+        for ( auto& comp : p.components )
+            if ( !comp.is_noise_layer ) applyCompNoiseCmplx( comp.noise, desc.host_target->data() );
         if ( desc.cmplx_target )
             desc.cmplx_target->setTo( *desc.host_target ).hostToDeviceSync();
     } else if ( desc.real_target ) {
-        auto* ptr = desc.real_target->getHostPtr( 0 );
-        if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; resumeSolverAfterUpdate( auto_paused ); return; }
-        tmp.calculate( ptr, Envelope::AllGroups, desc.polarization, dim );
-        applyNoiseReal( ptr );
-        desc.real_target->hostToDeviceSync( 0 );
+        // Write each temporal group to its own slot (or AllGroups to slot 0 when collapsing).
+        const int ng_write = use_per_group ? ng_proposed : 1;
+        for ( int g = 0; g < ng_write; g++ ) {
+            auto* ptr = desc.real_target->getHostPtr( g );
+            if ( !ptr ) { p.last_apply_status = "Error: matrix slot " + std::to_string( g ) + " is null"; resumeSolverAfterUpdate( auto_paused ); return; }
+            if ( tmp.amp.size() > 0 )
+                tmp.calculate( ptr, use_per_group ? g : Envelope::AllGroups, desc.polarization, dim );
+            // Noise applied AFTER calculate() because calculate() zeroes the buffer unconditionally.
+            for ( auto& comp : p.components )
+                if ( comp.is_noise_layer ) applyCompNoiseReal( comp.noise, ptr );
+            for ( auto& comp : p.components )
+                if ( !comp.is_noise_layer ) applyCompNoiseReal( comp.noise, ptr );
+            desc.real_target->hostToDeviceSync( g );
+        }
     } else if ( desc.cmplx_target ) {
-        auto* ptr = desc.cmplx_target->getHostPtr( 0 );
-        if ( !ptr ) { p.last_apply_status = "Error: matrix slot 0 is null"; resumeSolverAfterUpdate( auto_paused ); return; }
-        tmp.calculate( ptr, Envelope::AllGroups, desc.polarization, dim );
-        applyNoise( ptr );
-        desc.cmplx_target->hostToDeviceSync( 0 );
+        const int ng_write = use_per_group ? ng_proposed : 1;
+        for ( int g = 0; g < ng_write; g++ ) {
+            auto* ptr = desc.cmplx_target->getHostPtr( g );
+            if ( !ptr ) { p.last_apply_status = "Error: matrix slot " + std::to_string( g ) + " is null"; resumeSolverAfterUpdate( auto_paused ); return; }
+            if ( tmp.amp.size() > 0 )
+                tmp.calculate( ptr, use_per_group ? g : Envelope::AllGroups, desc.polarization, dim );
+            for ( auto& comp : p.components )
+                if ( comp.is_noise_layer ) applyCompNoiseCmplx( comp.noise, ptr );
+            for ( auto& comp : p.components )
+                if ( !comp.is_noise_layer ) applyCompNoiseCmplx( comp.noise, ptr );
+            desc.cmplx_target->hostToDeviceSync( g );
+        }
     }
 
     // Update the SystemParameters envelope so temporal updates and file output reflect new state.
     // Rebuild rather than copy-assign (Envelope has non-copyable unique_ptr cache member).
+    // Noise-layer components are GUI-only; they are not written back to source_env.
     if ( desc.source_env ) {
-        *desc.source_env = Envelope{};  // move-assign from temporary (clears all fields)
+        *desc.source_env = Envelope{};  // clears all fields
+
+        // When there are more distinct temporal groups than available matrix slots, all components
+        // must share a single group (using the first component's temporal settings) so that
+        // groupSize() == 1 <= num_slots and the kernel loop stays in bounds.
+        float fb_t0 = 0.f, fb_sigma = 1.f, fb_freq = 0.f; int fb_type = 0;
+        for ( const auto& comp : p.components )
+            if ( !comp.is_noise_layer ) { fb_t0 = comp.temporal.t0; fb_sigma = comp.temporal.sigma;
+                                          fb_freq = comp.temporal.freq; fb_type = comp.temporal.type_idx; break; }
+
         for ( const auto& comp : p.components ) {
+            if ( comp.is_noise_layer ) continue;
             desc.source_env->addSpacial(
                 comp.amp, comp.width_x, comp.width_y, comp.x, comp.y, comp.exponent,
                 envTypeString( comp ),
@@ -500,9 +591,17 @@ void PhoenixGUI::applyEnvelopeToMatrix( EnvelopeEditorPanel& p, bool push_revisi
                 static_cast<Envelope::AdsMode>( comp.ads_idx ),
                 (Type::real)comp.ads_value
             );
-            desc.source_env->addTemporal( p.temporal.t0, p.temporal.sigma, p.temporal.freq, s_temp_names[p.temporal.type_idx] );
+            if ( use_per_group )
+                desc.source_env->addTemporal( comp.temporal.t0, comp.temporal.sigma, comp.temporal.freq,
+                                              s_temp_names[comp.temporal.type_idx] );
+            else
+                // Collapse all components into a single group; addTemporal() deduplicates by key.
+                desc.source_env->addTemporal( fb_t0, fb_sigma, fb_freq, s_temp_names[fb_type] );
         }
-        desc.source_env->temporal_envelope.assign( 1, Type::complex{ 1.0, 0.0 } );
+        // temporal_envelope must have exactly groupSize() entries; updateTemporal() accesses [g] directly.
+        // groupSize() is now guaranteed <= num_slots, preventing out-of-bounds GPU kernel reads.
+        const int ng = desc.source_env->groupSize();
+        desc.source_env->temporal_envelope.assign( ng > 0 ? ng : 1, Type::complex{ 1.0, 0.0 } );
     }
 
     solver_.parameters_are_dirty = true;
@@ -577,8 +676,10 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         if ( ImGui::BeginListBox( "##complist", ImVec2( -1, list_h ) ) ) {
             for ( int i = 0; i < (int)p.components.size(); i++ ) {
                 const auto& c = p.components[i];
-                char buf[80];
-                snprintf( buf, sizeof( buf ), "[%d] amp=%.2f  (%.1f,%.1f)  %.2f×%.2f", i, c.amp, c.x, c.y, c.width_x, c.width_y );
+                char buf[96];
+                const char* prefix = c.is_noise_layer ? "[N]" : ( c.locked ? "[L]" : "   " );
+                snprintf( buf, sizeof( buf ), "%s[%d] amp=%.2f  (%.1f,%.1f)  %.2f×%.2f",
+                          prefix, i, c.amp, c.x, c.y, c.width_x, c.width_y );
                 bool sel = ( p.selected_component == i );
                 if ( ImGui::Selectable( buf, sel ) )
                     p.selected_component = i;
@@ -606,6 +707,13 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         ImGui::TextUnformatted( "Component parameters:" );
 
         auto markDirty = [&]() { p.preview_dirty = true; };
+
+        // -- Lock toggle --
+        if ( ImGui::Checkbox( "Lock##complock", &c.locked ) ) markDirty();
+        if ( ImGui::IsItemHovered() )
+            ImGui::SetTooltip( "Prevent this component from being moved or resized via the preview canvas." );
+
+        if ( c.locked ) ImGui::BeginDisabled();
 
         ImGui::TextUnformatted( "Amplitude" );
         ImGui::SetNextItemWidth( -1.f );
@@ -682,124 +790,76 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
             ImGui::SetNextItemWidth( 100.f );
             if ( ImGui::InputFloat( "##ads_val", &c.ads_value, 0.f, 0.f, "%.4f" ) ) markDirty();
         }
-    }
 
-    // -- Noise overlay --
-    ImGui::Separator();
-    if ( ImGui::CollapsingHeader( "Noise##noise_hdr" ) ) {
-        if ( ImGui::Checkbox( "Enable noise overlay##nen", &p.noise.enabled ) )
-            p.preview_dirty = true;
-
-        if ( !p.noise.enabled ) ImGui::BeginDisabled();
-
-        static const char* noise_type_names[] = { "Uniform", "Gaussian", "Correlated" };
-        ImGui::SetNextItemWidth( 120.f );
-        if ( ImGui::Combo( "Type##ntype", &p.noise.type_idx, noise_type_names, 3 ) )
-            p.preview_dirty = true;
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth( 100.f );
-        if ( ImGui::DragFloat( "Amplitude##namp", &p.noise.amplitude, 1e-4f, 0.f, 1e9f, "%.3e" ) )
-            p.preview_dirty = true;
+        // -- Noise-layer / noise overlay --
+        ImGui::Spacing();
+        if ( ImGui::Checkbox( "Noise layer##isnl", &c.is_noise_layer ) ) markDirty();
         if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Uniform: max absolute value; Gaussian/Correlated: std-dev." );
+            ImGui::SetTooltip( "When enabled this component contributes only noise (no spatial envelope shape).\n"
+                               "Noise layers are applied first so regular envelopes are placed on top." );
 
-        if ( p.noise.type_idx == 2 ) {
-            ImGui::SetNextItemWidth( 140.f );
-            if ( ImGui::DragFloat( "Corr. length##ncorr", &p.noise.correlation_length,
-                                   0.01f, 0.f, 1000.f, "%.2f" ) )
-                p.preview_dirty = true;
+        // Show noise controls for noise layers (always) and regular components (when noise enabled)
+        const bool show_noise_controls = c.is_noise_layer || c.noise.enabled;
+        if ( !c.is_noise_layer ) {
+            if ( ImGui::Checkbox( "Add noise##cnoise", &c.noise.enabled ) ) markDirty();
             if ( ImGui::IsItemHovered() )
-                ImGui::SetTooltip( "Spatial correlation length (same units as L_x / L_y).\n"
-                                   "Separable real-space Gaussian convolution." );
+                ImGui::SetTooltip( "Add noise on top of this envelope component." );
         }
-
-        ImGui::SetNextItemWidth( 120.f );
-        if ( ImGui::InputInt( "Seed##nseed", &p.noise.seed ) ) {
-            if ( p.noise.seed < 0 ) p.noise.seed = 0;
-            p.noise.last_used_seed = 0;  // force new seed on next rebuild
-            p.preview_dirty = true;
-        }
-        if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "0 = new random seed each preview rebuild.\n"
-                               "Non-zero = reproducible; same seed used when applying." );
-        ImGui::SameLine();
-        if ( ImGui::Button( "Re-roll##nreroll" ) ) {
-            p.noise.last_used_seed = 0;
-            p.preview_dirty = true;
-        }
-        if ( p.noise.enabled && p.noise.last_used_seed != 0 )
-            ImGui::TextDisabled( "active seed: %u", p.noise.last_used_seed );
-
-        if ( !p.noise.enabled ) ImGui::EndDisabled();
-    }
-
-    // -- Temporal section --
-    ImGui::Separator();
-    if ( ImGui::CollapsingHeader( "Temporal" ) ) {
-        auto& t = p.temporal;
-        auto markDirty = [&]() { p.preview_dirty = true; };
-        ImGui::TextUnformatted( "Type:" );
-        for ( int ti = 0; ti < 4; ti++ ) {
-            if ( ti > 0 ) ImGui::SameLine();
-            if ( ImGui::RadioButton( s_temp_names[ti], t.type_idx == ti ) ) {
-                t.type_idx = ti; markDirty();
+        if ( show_noise_controls || c.noise.enabled ) {
+            static const char* noise_type_names[] = { "Uniform", "Gaussian", "Correlated" };
+            ImGui::SetNextItemWidth( 120.f );
+            if ( ImGui::Combo( "Type##cntype", &c.noise.type_idx, noise_type_names, 3 ) ) markDirty();
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 100.f );
+            if ( ImGui::DragFloat( "Amp##cnamp", &c.noise.amplitude, 1e-4f, 0.f, 1e9f, "%.3e" ) ) markDirty();
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Uniform: max absolute value; Gaussian/Correlated: std-dev." );
+            if ( c.noise.type_idx == 2 ) {
+                ImGui::SetNextItemWidth( 140.f );
+                if ( ImGui::DragFloat( "Corr.##cncorr", &c.noise.correlation_length, 0.01f, 0.f, 1000.f, "%.2f" ) ) markDirty();
+                if ( ImGui::IsItemHovered() )
+                    ImGui::SetTooltip( "Spatial correlation length (same units as L_x / L_y)." );
             }
+            ImGui::SetNextItemWidth( 100.f );
+            if ( ImGui::InputInt( "Seed##cnseed", &c.noise.seed ) ) {
+                if ( c.noise.seed < 0 ) c.noise.seed = 0;
+                c.noise.last_used_seed = 0;
+                markDirty();
+            }
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "0 = new random seed each preview rebuild." );
+            ImGui::SameLine();
+            if ( ImGui::Button( "Re-roll##cnreroll" ) ) { c.noise.last_used_seed = 0; markDirty(); }
+            if ( c.noise.last_used_seed != 0 )
+                ImGui::TextDisabled( "seed: %u", c.noise.last_used_seed );
         }
-        const bool is_const = ( t.type_idx == 0 );
-        if ( is_const ) ImGui::BeginDisabled();
-        ImGui::TextUnformatted( "t0" );
-        ImGui::SetNextItemWidth( -1.f );
-        if ( ImGui::InputFloat( "##temp_t0",  &t.t0,    0.f, 0.f, "%.4f" ) ) markDirty();
-        ImGui::TextUnformatted( "sigma" );
-        ImGui::SetNextItemWidth( -1.f );
-        if ( ImGui::InputFloat( "##temp_s",   &t.sigma, 0.f, 0.f, "%.4f" ) ) markDirty();
-        ImGui::TextUnformatted( "freq" );
-        ImGui::SetNextItemWidth( -1.f );
-        if ( ImGui::InputFloat( "##temp_f",   &t.freq,  0.f, 0.f, "%.4f" ) ) markDirty();
-        if ( is_const ) ImGui::EndDisabled();
 
-        // Live plot for non-constant temporal types
-        if ( !is_const ) {
-            const int N_plot = 256;
-            const float abs_sigma = std::abs( t.sigma ) < 1e-9f ? 1.f : std::abs( t.sigma );
-            const float t_lo = t.t0 - 4.f * abs_sigma;
-            const float t_hi = t.t0 + 4.f * abs_sigma;
-            std::vector<float> vals_re( N_plot, 0.f ), vals_im( N_plot, 0.f ), vals_abs( N_plot, 0.f );
-            for ( int k = 0; k < N_plot; k++ ) {
-                float tk = t_lo + ( t_hi - t_lo ) * k / float( N_plot - 1 );
-                if ( t.type_idx == 1 ) {
-                    // gauss
-                    float v = (float)gaussian_envelope( (Type::real)tk, (Type::real)t.t0, (Type::real)t.sigma, (Type::real)t.freq );
-                    vals_re[k] = v; vals_abs[k] = std::abs( v );
-                } else if ( t.type_idx == 2 ) {
-                    // iexp
-                    Type::complex v = gaussian_complex_oscillator( (Type::real)tk, (Type::real)t.t0, (Type::real)t.sigma, (Type::real)t.freq );
-                    vals_re[k]  = (float)CUDA::real( v );
-                    vals_im[k]  = (float)CUDA::imag( v );
-                    vals_abs[k] = (float)CUDA::sqrt( CUDA::abs2( v ) );
-                } else if ( t.type_idx == 3 ) {
-                    // cos
-                    float v = (float)gaussian_oscillator( (Type::real)tk, (Type::real)t.t0, (Type::real)t.sigma, (Type::real)t.freq );
-                    vals_re[k] = v; vals_abs[k] = std::abs( v );
+        // -- Temporal section (per component) --
+        ImGui::Spacing();
+        if ( ImGui::CollapsingHeader( "Temporal##ctmp" ) ) {
+            auto& t = c.temporal;
+            ImGui::TextUnformatted( "Type:" );
+            for ( int ti = 0; ti < 4; ti++ ) {
+                if ( ti > 0 ) ImGui::SameLine();
+                if ( ImGui::RadioButton( s_temp_names[ti], t.type_idx == ti ) ) {
+                    t.type_idx = ti; markDirty();
                 }
             }
-            // Draw temporal envelope using ImPlot
-            if ( ImPlot::BeginPlot( "##tenv_plot", ImVec2( -1, 60 ),
-                                    ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
-                                    ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
-                ImPlot::SetupAxes( nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations );
-                ImPlot::SetupAxisLimits( ImAxis_Y1, -1.1, 1.1, ImPlotCond_Always );
-                ImPlot::SetNextLineStyle( ImVec4( 0.9f, 0.9f, 0.9f, 0.9f ) );
-                ImPlot::PlotLine( "##tabs", vals_abs.data(), N_plot );
-                if ( t.type_idx == 2 ) {
-                    ImPlot::SetNextLineStyle( ImVec4( 0.3f, 1.0f, 0.3f, 0.9f ) );
-                    ImPlot::PlotLine( "##tre", vals_re.data(), N_plot );
-                    ImPlot::SetNextLineStyle( ImVec4( 1.0f, 0.6f, 0.1f, 0.9f ) );
-                    ImPlot::PlotLine( "##tim", vals_im.data(), N_plot );
-                }
-                ImPlot::EndPlot();
-            }
+            const bool is_const = ( t.type_idx == 0 );
+            if ( is_const ) ImGui::BeginDisabled();
+            ImGui::TextUnformatted( "t0" );
+            ImGui::SetNextItemWidth( -1.f );
+            if ( ImGui::InputFloat( "##ctmp_t0", &t.t0,    0.f, 0.f, "%.4f" ) ) markDirty();
+            ImGui::TextUnformatted( "sigma" );
+            ImGui::SetNextItemWidth( -1.f );
+            if ( ImGui::InputFloat( "##ctmp_s",  &t.sigma, 0.f, 0.f, "%.4f" ) ) markDirty();
+            ImGui::TextUnformatted( "freq" );
+            ImGui::SetNextItemWidth( -1.f );
+            if ( ImGui::InputFloat( "##ctmp_f",  &t.freq,  0.f, 0.f, "%.4f" ) ) markDirty();
+            if ( is_const ) ImGui::EndDisabled();
         }
+
+        if ( c.locked ) ImGui::EndDisabled();
     }
 
     ImGui::Separator();
@@ -858,8 +918,7 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
             // Load the revision's parameters into the editor and rebuild the preview without
             // applying it to the GPU matrix.  The user can still Restore or discard from there.
             const auto& rev      = p.revisions[p.selected_revision];
-            p.components         = rev.components;
-            p.temporal           = rev.temporal;
+            p.components         = rev.components;  // temporal is embedded per-component
             p.selected_component = p.components.empty() ? -1 : 0;
             p.preview_dirty      = true;
         }
@@ -867,8 +926,7 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
             ImGui::SetTooltip( "Load this revision into the editor and rebuild the preview without writing to the GPU" );
         if ( ImGui::Button( "Restore (Apply)##rev", ImVec2( -1, 0 ) ) && has_sel ) {
             const auto& rev      = p.revisions[p.selected_revision];
-            p.components         = rev.components;
-            p.temporal           = rev.temporal;
+            p.components         = rev.components;  // temporal is embedded per-component
             p.selected_component = p.components.empty() ? -1 : 0;
             p.preview_dirty      = true;
             applyEnvelopeToMatrix( p, /*push_revision=*/true );
@@ -887,46 +945,203 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
     const bool is_complex_target = ( p.selected_target >= 0 && p.selected_target < (int)envelope_registry_.size() )
                                     ? envelope_registry_[p.selected_target].is_complex : false;
 
-    // Controls row
-    if ( is_complex_target ) {
-        ImGui::SetNextItemWidth( 90.f );
-        int mode_int = (int)p.preview_mode;
-        if ( displayModeCombo_( "##previewmode", mode_int ) ) {
-            p.preview_mode  = (EnvelopeEditorPanel::PreviewMode)mode_int;
-            p.preview_dirty = true;
+    // ---- Tab bar: Spatial / Temporal ----
+    {
+        static const char* tab_labels[] = { "Spatial", "Temporal" };
+        int tab_int = (int)p.active_preview_tab;
+        for ( int ti = 0; ti < 2; ti++ ) {
+            if ( ti > 0 ) ImGui::SameLine();
+            if ( ImGui::RadioButton( tab_labels[ti], tab_int == ti ) )
+                p.active_preview_tab = (EnvelopeEditorPanel::PreviewTab)ti;
+        }
+    }
+    ImGui::SameLine();
+
+    if ( p.active_preview_tab == EnvelopeEditorPanel::PreviewTab::Spatial ) {
+        // Controls row for spatial view
+        if ( is_complex_target ) {
+            ImGui::SetNextItemWidth( 90.f );
+            int mode_int = (int)p.preview_mode;
+            if ( displayModeCombo_( "##previewmode", mode_int ) ) {
+                p.preview_mode  = (EnvelopeEditorPanel::PreviewMode)mode_int;
+                p.preview_dirty = true;
+            }
+            ImGui::SameLine();
+        }
+        {
+            ImGui::SetNextItemWidth( 90.f );
+            if ( colormapCombo_( "##envpcmap", p.colormap_idx ) )
+                p.preview_dirty = true;
+            ImGui::SameLine();
+        }
+        {
+            if ( ImGui::Checkbox( "Log##envplog", &p.log_scale ) ) p.preview_dirty = true;
+            ImGui::SameLine();
+            if ( ImGui::Checkbox( "Fix range##envpfr", &p.use_manual_range ) ) p.preview_dirty = true;
+            ImGui::SameLine();
+            ImGui::Checkbox( "Square##envsq", &p.square_aspect );
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Force square pixels (letterbox to N_c:N_r aspect ratio)" );
+            ImGui::SameLine();
+            if ( ImGui::SmallButton( "Reset view##envrv" ) ) { p.zoom_scale = 1.f; p.pan_u = p.pan_v = 0.f; }
+            if ( ImGui::IsItemHovered() )
+                ImGui::SetTooltip( "Reset zoom and pan to default (double-click preview also works)" );
+            if ( p.use_manual_range ) {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth( 70.f );
+                if ( ImGui::InputDouble( "##envpmin", &p.manual_min, 0, 0, "%.2e" ) ) p.preview_dirty = true;
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth( 70.f );
+                if ( ImGui::InputDouble( "##envpmax", &p.manual_max, 0, 0, "%.2e" ) ) p.preview_dirty = true;
+            }
+        }
+    } else {
+        // Controls row for temporal view
+        ImGui::Checkbox( "Auto##tpauto", &p.temporal_auto_range );
+        if ( ImGui::IsItemHovered() ) ImGui::SetTooltip( "Auto-fit time axis to component extents" );
+        if ( !p.temporal_auto_range ) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 60.f );
+            ImGui::InputFloat( "t_lo##tplo", &p.temporal_t_lo, 0.f, 0.f, "%.2f" );
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 60.f );
+            ImGui::InputFloat( "t_hi##tphi", &p.temporal_t_hi, 0.f, 0.f, "%.2f" );
         }
         ImGui::SameLine();
-    }
-
-    // Colormap combo
-    {
-        ImGui::SetNextItemWidth( 90.f );
-        if ( colormapCombo_( "##envpcmap", p.colormap_idx ) )
-            p.preview_dirty = true;
+        ImGui::Checkbox( "|A|##tpabs", &p.temporal_show_abs ); ImGui::SameLine();
+        ImGui::Checkbox( "Re##tpre",   &p.temporal_show_re  ); ImGui::SameLine();
+        ImGui::Checkbox( "Im##tpim",   &p.temporal_show_im  );
         ImGui::SameLine();
-    }
-
-    // Log scale & manual range
-    {
-        if ( ImGui::Checkbox( "Log##envplog", &p.log_scale ) ) p.preview_dirty = true;
-        ImGui::SameLine();
-        if ( ImGui::Checkbox( "Fix range##envpfr", &p.use_manual_range ) ) p.preview_dirty = true;
-        ImGui::SameLine();
-        ImGui::Checkbox( "Square##envsq", &p.square_aspect );
-        if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Force square pixels (letterbox to N_c:N_r aspect ratio)" );
-        ImGui::SameLine();
-        if ( ImGui::SmallButton( "Reset view##envrv" ) ) { p.zoom_scale = 1.f; p.pan_u = p.pan_v = 0.f; }
-        if ( ImGui::IsItemHovered() )
-            ImGui::SetTooltip( "Reset zoom and pan to default (double-click preview also works)" );
-        if ( p.use_manual_range ) {
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth( 70.f );
-            if ( ImGui::InputDouble( "##envpmin", &p.manual_min, 0, 0, "%.2e" ) ) p.preview_dirty = true;
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth( 70.f );
-            if ( ImGui::InputDouble( "##envpmax", &p.manual_max, 0, 0, "%.2e" ) ) p.preview_dirty = true;
+        {
+            const int n_steps_max = ( sys.p.dt > 0.0 )
+                ? std::max( 200, (int)( ( sys.t_max - sys.p.t ) / sys.p.dt ) )
+                : 2000;
+            ImGui::SetNextItemWidth( 150.f );
+            if ( ImGui::SliderInt( "Steps##tmpsteps", &p.temporal_n_steps, 10, n_steps_max ) )
+                p.temporal_n_steps = std::clamp( p.temporal_n_steps, 10, n_steps_max );
         }
+    }
+
+    // ---- Temporal preview (shown when Temporal tab active) ----
+    if ( p.active_preview_tab == EnvelopeEditorPanel::PreviewTab::Temporal ) {
+        // Determine time range
+        float t_lo = p.temporal_t_lo, t_hi = p.temporal_t_hi;
+        if ( p.temporal_auto_range ) {
+            bool any = false;
+            for ( const auto& comp : p.components ) {
+                if ( comp.is_noise_layer || comp.temporal.type_idx == 0 ) continue;
+                const float abs_s = std::abs( comp.temporal.sigma ) < 1e-9f ? 1.f : std::abs( comp.temporal.sigma );
+                const float lo = comp.temporal.t0 - 4.f * abs_s;
+                const float hi = comp.temporal.t0 + 4.f * abs_s;
+                if ( !any ) { t_lo = lo; t_hi = hi; any = true; }
+                else { t_lo = std::min( t_lo, lo ); t_hi = std::max( t_hi, hi ); }
+            }
+            if ( !any ) { t_lo = 0.f; t_hi = 10.f; }
+            if ( t_hi - t_lo < 1e-6f ) t_hi = t_lo + 1.f;
+        }
+
+        const float cur_t = (float)sys.p.t;
+        const int N_plot = std::max( 2, p.temporal_n_steps );
+        const ImVec2 avail_tp = ImGui::GetContentRegionAvail();
+
+        // Color palette for components (cycle through a few distinct colors)
+        static const ImVec4 comp_colors[] = {
+            { 0.3f, 0.8f, 1.0f, 1.f }, { 1.0f, 0.6f, 0.1f, 1.f },
+            { 0.4f, 1.0f, 0.4f, 1.f }, { 1.0f, 0.3f, 0.5f, 1.f },
+            { 0.8f, 0.5f, 1.0f, 1.f }, { 1.0f, 1.0f, 0.3f, 1.f },
+        };
+        constexpr int n_colors = (int)( sizeof( comp_colors ) / sizeof( comp_colors[0] ) );
+
+        if ( ImPlot::BeginPlot( "##tenv_main", avail_tp, ImPlotFlags_NoTitle ) ) {
+            ImPlot::SetupAxes( "t (ps)", "amplitude" );
+            ImPlot::SetupAxisLimits( ImAxis_X1, t_lo, t_hi, ImPlotCond_Always );
+            ImPlot::SetupAxisLimits( ImAxis_Y1, -1.15, 1.15, ImPlotCond_Always );
+
+            for ( int ci = 0; ci < (int)p.components.size(); ci++ ) {
+                auto& comp = p.components[ci];
+                if ( comp.is_noise_layer || comp.temporal.type_idx == 0 ) continue;
+                auto& t = comp.temporal;
+                std::vector<float> xs( N_plot ), yre( N_plot ), yim( N_plot ), yabs( N_plot );
+                for ( int k = 0; k < N_plot; k++ ) {
+                    float tk = t_lo + ( t_hi - t_lo ) * k / float( N_plot - 1 );
+                    xs[k] = tk;
+                    if ( t.type_idx == 1 ) {
+                        float v = (float)gaussian_envelope( (Type::real)tk, (Type::real)t.t0, (Type::real)t.sigma, (Type::real)t.freq );
+                        yre[k] = v; yabs[k] = std::abs( v );
+                    } else if ( t.type_idx == 2 ) {
+                        Type::complex v = gaussian_complex_oscillator( (Type::real)tk, (Type::real)t.t0, (Type::real)t.sigma, (Type::real)t.freq );
+                        yre[k]  = (float)CUDA::real( v );
+                        yim[k]  = (float)CUDA::imag( v );
+                        yabs[k] = (float)CUDA::sqrt( CUDA::abs2( v ) );
+                    } else if ( t.type_idx == 3 ) {
+                        float v = (float)gaussian_oscillator( (Type::real)tk, (Type::real)t.t0, (Type::real)t.sigma, (Type::real)t.freq );
+                        yre[k] = v; yabs[k] = std::abs( v );
+                    }
+                }
+                const ImVec4& col = comp_colors[ci % n_colors];
+                char lbl[40];
+
+                if ( p.temporal_show_abs ) {
+                    snprintf( lbl, sizeof(lbl), "[%d] |A|", ci );
+                    ImPlot::SetNextLineStyle( ImVec4( col.x * 0.7f, col.y * 0.7f, col.z * 0.7f, 0.7f ), 1.2f );
+                    ImPlot::PlotLine( lbl, xs.data(), yabs.data(), N_plot );
+                }
+                if ( p.temporal_show_re ) {
+                    snprintf( lbl, sizeof(lbl), "[%d] Re", ci );
+                    ImPlot::SetNextLineStyle( col, 1.5f );
+                    ImPlot::PlotLine( lbl, xs.data(), yre.data(), N_plot );
+                }
+                if ( p.temporal_show_im && t.type_idx == 2 ) {
+                    snprintf( lbl, sizeof(lbl), "[%d] Im", ci );
+                    ImPlot::SetNextLineStyle( ImVec4( col.x * 0.6f, col.y + 0.3f * ( 1.f - col.y ), col.z * 0.6f, 0.85f ), 1.2f );
+                    ImPlot::PlotLine( lbl, xs.data(), yim.data(), N_plot );
+                }
+
+                // ---- Interactive drag handles ----
+                // Only draw drag handles when this component is selected
+                if ( ci == p.selected_component && !comp.locked ) {
+                    double t0_d      = (double)t.t0;
+                    double sigma_lo  = (double)( t.t0 - std::abs( t.sigma ) );
+                    double sigma_hi  = (double)( t.t0 + std::abs( t.sigma ) );
+
+                    // t0 handle: solid line in component color
+                    bool changed = ImPlot::DragLineX( ci * 3 + 0, &t0_d, col, 2.f );
+                    if ( changed ) {
+                        const double shift = t0_d - (double)t.t0;
+                        t.t0    = (float)t0_d;
+                        // Keep sigma_lo/hi relative to t0
+                        sigma_lo += shift; sigma_hi += shift;
+                        p.preview_dirty = true;
+                    }
+
+                    // sigma left handle: dashed dimmed line
+                    ImVec4 sigma_col( col.x, col.y, col.z, 0.55f );
+                    bool sl = ImPlot::DragLineX( ci * 3 + 1, &sigma_lo, sigma_col, 1.5f );
+                    if ( sl ) {
+                        t.sigma = (float)( (double)t.t0 - sigma_lo );
+                        if ( t.sigma < 0.001f ) t.sigma = 0.001f;
+                        p.preview_dirty = true;
+                    }
+                    bool sr = ImPlot::DragLineX( ci * 3 + 2, &sigma_hi, sigma_col, 1.5f );
+                    if ( sr ) {
+                        t.sigma = (float)( sigma_hi - (double)t.t0 );
+                        if ( t.sigma < 0.001f ) t.sigma = 0.001f;
+                        p.preview_dirty = true;
+                    }
+                }
+            }
+
+            // Current simulation time indicator (red, non-draggable)
+            double t_now_d = (double)cur_t;
+            ImPlot::SetNextLineStyle( ImVec4( 1.f, 0.2f, 0.2f, 0.9f ), 1.5f );
+            ImPlot::PlotInfLines( "t_now", &t_now_d, 1 );
+
+            ImPlot::EndPlot();
+        }
+
+        ImGui::EndChild(); // right column
+        ImGui::End();
+        return;  // skip spatial preview when temporal tab is active
     }
 
     // Preview image (same zoom/pan logic as MatrixPanel)
@@ -984,9 +1199,11 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
                              && mp.y >= img_cursor.y && mp.y <= img_p1.y;
 
         // ---- Zoom / pan / reset (shared helper) ----
+        // Suppress panning while a component drag is active so the two interactions are exclusive.
         applyZoomPanInteraction( p.zoom_scale, p.pan_u, p.pan_v,
                                  img_cursor, img_size,
-                                 canvas_hovered, canvas_active, in_image );
+                                 canvas_hovered, canvas_active, in_image,
+                                 /*allow_pan=*/ p.drag_mode == EnvelopeEditorPanel::DragMode::None );
 
         // Coordinate helpers (V is screen-top=0, screen-bottom=1; py is physics up=positive)
         const float L_x = (float)sys.p.L_x, L_y = (float)sys.p.L_y;
@@ -1016,6 +1233,7 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
                 };
                 for ( int ci = (int)p.components.size() - 1; ci >= 0; ci-- ) {
                     auto& comp = p.components[ci];
+                    if ( comp.locked ) continue;  // locked components cannot be dragged
                     ImVec2 center = physToScreen( comp.x, comp.y );
                     ImVec2 hx     = physToScreen( comp.x + comp.width_x, comp.y );
                     ImVec2 hy     = physToScreen( comp.x, comp.y + comp.width_y );
@@ -1094,9 +1312,13 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
             );
             r = std::max( 3.f, std::min( r, 80.f ) );
 
-            const bool is_sel = ( ci == p.selected_component );
-            ImU32 col_circle  = is_sel ? IM_COL32( 255, 220, 50, 200 ) : IM_COL32( 180, 180, 255, 140 );
-            ImU32 col_handle  = is_sel ? IM_COL32( 255, 100, 100, 220 ) : IM_COL32( 150, 200, 150, 180 );
+            const bool is_sel    = ( ci == p.selected_component );
+            const bool is_locked = comp.locked;
+            // Locked: grey out handles to signal they can't be dragged
+            ImU32 col_circle = is_locked ? IM_COL32( 140, 140, 140, 130 )
+                             : ( is_sel ? IM_COL32( 255, 220, 50, 200 ) : IM_COL32( 180, 180, 255, 140 ) );
+            ImU32 col_handle = is_locked ? IM_COL32( 110, 110, 110, 130 )
+                             : ( is_sel ? IM_COL32( 255, 100, 100, 220 ) : IM_COL32( 150, 200, 150, 180 ) );
 
             dl->AddCircle( center, r, col_circle, 32, 1.5f );
             dl->AddLine( center, hx, col_circle, 1.0f );

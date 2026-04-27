@@ -48,9 +48,11 @@ namespace PHOENIX {
 // zoom/pan state.  img_cursor/img_size describe the drawn image region in
 // screen space.  is_hovered / is_active / in_image come from the
 // InvisibleButton that covers the canvas.
+// allow_pan: set to false to suppress panning (e.g. when a component drag is active).
 inline void applyZoomPanInteraction( float& zoom_scale, float& pan_u, float& pan_v,
                                       ImVec2 img_cursor, ImVec2 img_size,
-                                      bool is_hovered, bool is_active, bool in_image ) {
+                                      bool is_hovered, bool is_active, bool in_image,
+                                      bool allow_pan = true ) {
     const float uv_size = 1.0f / zoom_scale;
 
     // Scroll-wheel zoom toward cursor
@@ -70,8 +72,9 @@ inline void applyZoomPanInteraction( float& zoom_scale, float& pan_u, float& pan
         }
     }
 
-    // Left-drag pan (skip on the initial click frame to avoid conflict with click handlers)
-    if ( is_active && in_image && zoom_scale > 1.001f && !ImGui::IsMouseClicked( ImGuiMouseButton_Left ) ) {
+    // Left-drag pan (skip on the initial click frame to avoid conflict with click handlers;
+    // also suppressed when allow_pan=false, e.g. while a component drag is active)
+    if ( allow_pan && is_active && in_image && zoom_scale > 1.001f && !ImGui::IsMouseClicked( ImGuiMouseButton_Left ) ) {
         const ImVec2 delta  = ImGui::GetIO().MouseDelta;
         const float  cur_uv = 1.0f / zoom_scale;
         pan_u = std::clamp( pan_u - ( delta.x / img_size.x ) * cur_uv, 0.0f, 1.0f - cur_uv );
@@ -426,6 +429,22 @@ public:
     // Envelope Editor (public so anonymous-namespace helpers in gui.cu can use them)
     // ---------------------------------------------------------------
 
+    // Single temporal group editing state (defined first so it can be embedded per-component)
+    struct TemporalComponentEdit {
+        int   type_idx = 0;   // 0=constant, 1=gauss, 2=iexp, 3=cos
+        float t0 = 0.f, sigma = 1.f, freq = 0.f;
+    };
+
+    // Noise overlay settings (defined before SpatialComponentEdit so it can be embedded per-component)
+    struct NoiseState {
+        bool     enabled            = false; // include noise in preview & apply
+        float    amplitude          = 0.1f;
+        int      type_idx           = 0;     // 0=Uniform, 1=Gaussian, 2=Correlated
+        float    correlation_length = 1.0f;  // same units as L_x / L_y
+        int      seed               = 0;     // 0 = new random each rebuild
+        uint32_t last_used_seed     = 0;     // stored after each preview; apply reuses it
+    };
+
     // Per-component spatial editing state
     struct SpatialComponentEdit {
         float amp = 1.f, width_x = 1.f, width_y = 1.f;
@@ -445,12 +464,14 @@ public:
         // Pseudo-adaptive timestep: 0=none, 1=auto, 2=value
         int   ads_idx   = 0;
         float ads_value = 0.0f;
-    };
-
-    // Single temporal group editing state
-    struct TemporalComponentEdit {
-        int   type_idx = 0;   // 0=constant, 1=gauss, 2=iexp, 3=cos
-        float t0 = 0.f, sigma = 1.f, freq = 0.f;
+        // Per-component temporal settings
+        TemporalComponentEdit temporal;
+        // Lock: prevent editing and dragging this component via the UI
+        bool  locked = false;
+        // Noise layer: static noise applied first (before envelope components)
+        bool  is_noise_layer = false;
+        // Per-component noise overlay
+        NoiseState noise;
     };
 
     // Registry entry for a targetable matrix slot
@@ -477,7 +498,6 @@ public:
 
         std::vector<SpatialComponentEdit> components;
         int  selected_component = -1;
-        TemporalComponentEdit temporal;
 
         // Preview texture (CPU-computed via Envelope::calculate)
         std::unique_ptr<sf::RenderTexture> preview_tex;
@@ -497,6 +517,20 @@ public:
         float zoom_scale = 1.f, pan_u = 0.f, pan_v = 0.f;
         bool  square_aspect = false; // letterbox so grid pixels appear square
 
+        // ---- Right-panel preview tab ----
+        enum class PreviewTab { Spatial = 0, Temporal = 1 };
+        PreviewTab active_preview_tab = PreviewTab::Spatial;
+        // Temporal preview time-range controls
+        bool  temporal_auto_range = true;
+        float temporal_t_lo = 0.f;
+        float temporal_t_hi = 10.f;
+        // Temporal preview curve visibility toggles
+        bool temporal_show_abs = true;
+        bool temporal_show_re  = true;
+        bool temporal_show_im  = true;
+        // Number of sample points per curve in the temporal preview
+        int  temporal_n_steps  = 200;
+
         // Interactive drag state
         enum class DragMode { None, Move, ResizeX, ResizeY };
         DragMode drag_mode        = DragMode::None;
@@ -511,26 +545,15 @@ public:
         bool live_apply         = false;
         bool live_apply_warned_ = false;  // set after the user confirms the first-use warning
 
-        // ---- Noise overlay (applied on top of envelope in preview & apply) ----
-        struct NoiseState {
-            bool     enabled            = false; // include noise in preview & apply
-            float    amplitude          = 0.1f;
-            int      type_idx           = 0;     // 0=Uniform, 1=Gaussian, 2=Correlated
-            float    correlation_length = 1.0f;  // same units as L_x / L_y
-            int      seed               = 0;     // 0 = new random each rebuild
-            uint32_t last_used_seed     = 0;     // stored after each preview; apply reuses it
-        };
-        NoiseState noise;
-
         // ---- Matrix snapshot (current device data, loaded when no source envelope) ----
         std::vector<Type::complex> matrix_snapshot;
         bool                       matrix_snapshot_is_real = false;
 
         // ---- Revision history (one entry per Apply) ----
+        // temporal is stored per-component inside SpatialComponentEdit, so no separate temporal field needed.
         struct Revision {
             std::string                       label;       // "Rev N  (t=X ps)"
             std::vector<SpatialComponentEdit> components;
-            TemporalComponentEdit             temporal;
         };
         std::vector<Revision> revisions;
         int selected_revision = -1;
