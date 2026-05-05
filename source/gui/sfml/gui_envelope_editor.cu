@@ -242,7 +242,7 @@ void PhoenixGUI::addEnvelopeEditorPanel() {
     p.preview_w     = W;
     p.preview_h     = H;
     p.preview_tex   = std::make_unique<sf::RenderTexture>();
-    p.preview_tex->create( W, H );
+    (void)p.preview_tex->resize( { (unsigned)W, (unsigned)H } );
     p.preview_pix.resize( W * H );
     for ( int r = 0; r < H; r++ )
         for ( int c = 0; c < W; c++ )
@@ -442,7 +442,7 @@ void PhoenixGUI::rebuildPreview( EnvelopeEditorPanel& p ) {
     }
 
     p.preview_tex->clear( sf::Color::Black );
-    p.preview_tex->draw( p.preview_pix.data(), N, sf::Points );
+    p.preview_tex->draw( p.preview_pix.data(), N, sf::PrimitiveType::Points );
     p.preview_tex->display();
 }
 
@@ -1083,18 +1083,18 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
 
                 if ( p.temporal_show_abs ) {
                     snprintf( lbl, sizeof(lbl), "[%d] |A|", ci );
-                    ImPlot::SetNextLineStyle( ImVec4( col.x * 0.7f, col.y * 0.7f, col.z * 0.7f, 0.7f ), 1.2f );
-                    ImPlot::PlotLine( lbl, xs.data(), yabs.data(), N_plot );
+                    ImPlotSpec _s; _s.LineColor = ImVec4( col.x * 0.7f, col.y * 0.7f, col.z * 0.7f, 0.7f ); _s.LineWeight = 1.2f;
+                    ImPlot::PlotLine( lbl, xs.data(), yabs.data(), N_plot, _s );
                 }
                 if ( p.temporal_show_re ) {
                     snprintf( lbl, sizeof(lbl), "[%d] Re", ci );
-                    ImPlot::SetNextLineStyle( col, 1.5f );
-                    ImPlot::PlotLine( lbl, xs.data(), yre.data(), N_plot );
+                    ImPlotSpec _s; _s.LineColor = col; _s.LineWeight = 1.5f;
+                    ImPlot::PlotLine( lbl, xs.data(), yre.data(), N_plot, _s );
                 }
                 if ( p.temporal_show_im && t.type_idx == 2 ) {
                     snprintf( lbl, sizeof(lbl), "[%d] Im", ci );
-                    ImPlot::SetNextLineStyle( ImVec4( col.x * 0.6f, col.y + 0.3f * ( 1.f - col.y ), col.z * 0.6f, 0.85f ), 1.2f );
-                    ImPlot::PlotLine( lbl, xs.data(), yim.data(), N_plot );
+                    ImPlotSpec _s; _s.LineColor = ImVec4( col.x * 0.6f, col.y + 0.3f * ( 1.f - col.y ), col.z * 0.6f, 0.85f ); _s.LineWeight = 1.2f;
+                    ImPlot::PlotLine( lbl, xs.data(), yim.data(), N_plot, _s );
                 }
 
                 // ---- Interactive drag handles ----
@@ -1133,8 +1133,8 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
 
             // Current simulation time indicator (red, non-draggable)
             double t_now_d = (double)cur_t;
-            ImPlot::SetNextLineStyle( ImVec4( 1.f, 0.2f, 0.2f, 0.9f ), 1.5f );
-            ImPlot::PlotInfLines( "t_now", &t_now_d, 1 );
+            { ImPlotSpec _s; _s.LineColor = ImVec4( 1.f, 0.2f, 0.2f, 0.9f ); _s.LineWeight = 1.5f;
+              ImPlot::PlotInfLines( "t_now", &t_now_d, 1, _s ); }
 
             ImPlot::EndPlot();
         }
@@ -1180,7 +1180,7 @@ void PhoenixGUI::renderEnvelopeEditorPanel( EnvelopeEditorPanel& p ) {
         ImVec2 img_cursor( pre_cursor.x + off_x, pre_cursor.y + off_y );
         ImVec2 img_p1( img_cursor.x + img_size.x, img_cursor.y + img_size.y );
 
-        ImTextureID tex_id = nullptr;
+        ImTextureID tex_id = 0;
         if ( p.preview_tex ) {
             const unsigned int gl_handle = p.preview_tex->getTexture().getNativeHandle();
             std::memcpy( &tex_id, &gl_handle, sizeof( unsigned int ) );

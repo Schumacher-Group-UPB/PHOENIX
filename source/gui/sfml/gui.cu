@@ -56,7 +56,7 @@ void PhoenixGUI::init() {
 
     buildColormaps();
 
-    ImGui::SFML::Init( window_.window );
+    (void)ImGui::SFML::Init( window_.window );
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     // --- Modern dark IDE theme ---
@@ -280,24 +280,24 @@ bool PhoenixGUI::update( double simulation_time, double elapsed_time, size_t ite
         // --- Event handling ---
         window_.updateMouseState();
         bool kb_snapshot = false, kb_tile = false, kb_new_panel = false, kb_env_editor = false;
-        sf::Event event;
-        while ( window_.window.pollEvent( event ) ) {
-            ImGui::SFML::ProcessEvent( event );
-            if ( event.type == sf::Event::Closed )
+        while ( const auto event = window_.window.pollEvent() ) {
+            ImGui::SFML::ProcessEvent( window_.window, *event );
+            if ( event->getIf<sf::Event::Closed>() )
                 window_.window.close();
-            if ( event.type == sf::Event::KeyPressed
-                 && !ImGui::GetIO().WantCaptureKeyboard ) {
-                switch ( event.key.code ) {
-                    case sf::Keyboard::Space:
-                        paused_ = !paused_;
-                        st.paused.store( paused_ );
-                        if ( !paused_ ) st.pause_cv.notify_all();
-                        break;
-                    case sf::Keyboard::S:     kb_snapshot    = true;     break;
-                    case sf::Keyboard::T:     kb_tile        = true;     break;
-                    case sf::Keyboard::N:     kb_new_panel   = true;     break;
-                    case sf::Keyboard::E:     kb_env_editor  = true;     break;
-                    default: break;
+            if ( const auto* kp = event->getIf<sf::Event::KeyPressed>() ) {
+                if ( !ImGui::GetIO().WantCaptureKeyboard ) {
+                    switch ( kp->code ) {
+                        case sf::Keyboard::Key::Space:
+                            paused_ = !paused_;
+                            st.paused.store( paused_ );
+                            if ( !paused_ ) st.pause_cv.notify_all();
+                            break;
+                        case sf::Keyboard::Key::S:     kb_snapshot    = true;     break;
+                        case sf::Keyboard::Key::T:     kb_tile        = true;     break;
+                        case sf::Keyboard::Key::N:     kb_new_panel   = true;     break;
+                        case sf::Keyboard::Key::E:     kb_env_editor  = true;     break;
+                        default: break;
+                    }
                 }
             }
         }

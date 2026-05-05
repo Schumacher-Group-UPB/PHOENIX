@@ -42,7 +42,7 @@ void PhoenixGUI::addPanel( int initial_selected ) {
     p.saved_dock_id  = default_dock_id_;   // auto-dock into the right-side node
     p.subsample_3d   = std::max( 1, std::max( W, H ) / 200 );  // ≈100×100 initial display
     p.tex      = std::make_unique<sf::RenderTexture>();
-    p.tex->create( W, H );
+    (void)p.tex->resize( { (unsigned)W, (unsigned)H } );
     p.pix.resize( W * H );
     for ( int r = 0; r < H; r++ )
         for ( int c = 0; c < W; c++ )
@@ -183,7 +183,7 @@ void PhoenixGUI::blitPanel( MatrixPanel& p, const MatrixDescriptor& desc, ColorP
     }
 
     p.tex->clear( sf::Color::Black );
-    p.tex->draw( p.pix.data(), W * H, sf::Points );
+    p.tex->draw( p.pix.data(), W * H, sf::PrimitiveType::Points );
     p.tex->display();
 }
 
@@ -477,7 +477,7 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
             // For line-cut and 3D views, capture the full window
             auto winSize = window_.window.getSize();
             sf::Texture capTex;
-            capTex.create( winSize.x, winSize.y );
+            (void)capTex.resize( { winSize.x, winSize.y } );
             capTex.update( window_.window );
             sf::Image img = capTex.copyToImage();
             saved_path = fname + ( p.view_mode == MatrixPanel::ViewMode::LineCut ? "_lines.png" : "_volume.png" );
@@ -647,7 +647,7 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
 
             // ImTextureID encoding matches imgui-SFML's internal memcpy technique
             const unsigned int gl_handle = p.tex->getTexture().getNativeHandle();
-            ImTextureID tex_id = nullptr;
+            ImTextureID tex_id = 0;
             std::memcpy( &tex_id, &gl_handle, sizeof(unsigned int) );
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -1090,21 +1090,21 @@ void PhoenixGUI::renderMatrixPanel( MatrixPanel& p ) {
                     ImPlot::SetupAxes( nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations );
                     ImPlot::SetupAxisLimits( ImAxis_Y1, gmin, gmax, ImPlotCond_Always );
                     if ( p.show_abs_curve ) {
-                        ImPlot::SetNextLineStyle( ImVec4( 1.f, 1.f, 1.f, 1.f ) );
-                        ImPlot::PlotLine( "##sl_abs", abs_v.data(), slice_len );
+                        ImPlotSpec _s; _s.LineColor = ImVec4( 1.f, 1.f, 1.f, 1.f );
+                        ImPlot::PlotLine( "##sl_abs", abs_v.data(), slice_len, 1.0, 0.0, _s );
                     }
                     if ( is_cmplx ) {
                         if ( p.show_re_curve ) {
-                            ImPlot::SetNextLineStyle( ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
-                            ImPlot::PlotLine( "##sl_re", re_v.data(), slice_len );
+                            ImPlotSpec _s; _s.LineColor = ImVec4( 0.3f, 1.f, 0.3f, 1.f );
+                            ImPlot::PlotLine( "##sl_re", re_v.data(), slice_len, 1.0, 0.0, _s );
                         }
                         if ( p.show_im_curve ) {
-                            ImPlot::SetNextLineStyle( ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
-                            ImPlot::PlotLine( "##sl_im", im_v.data(), slice_len );
+                            ImPlotSpec _s; _s.LineColor = ImVec4( 1.f, 0.5f, 0.1f, 1.f );
+                            ImPlot::PlotLine( "##sl_im", im_v.data(), slice_len, 1.0, 0.0, _s );
                         }
                         if ( p.show_arg_curve ) {
-                            ImPlot::SetNextLineStyle( ImVec4( 0.4f, 0.8f, 1.f, 1.f ) );
-                            ImPlot::PlotLine( "##sl_arg", arg_v.data(), slice_len );
+                            ImPlotSpec _s; _s.LineColor = ImVec4( 0.4f, 0.8f, 1.f, 1.f );
+                            ImPlot::PlotLine( "##sl_arg", arg_v.data(), slice_len, 1.0, 0.0, _s );
                         }
                     }
                     if ( ImPlot::IsPlotHovered() && ImGui::IsMouseReleased( ImGuiMouseButton_Right ) )
@@ -1245,11 +1245,12 @@ void PhoenixGUI::renderMatrixPanel3D( MatrixPanel& p ) {
     if ( ImPlot3D::BeginPlot( "##surf3d", plot_sz ) ) {
         ImPlot3D::SetupAxes( "x (µm)", "y (µm)", "z" );
         ImPlot3D::SetupAxisLimits( ImAxis3D_Z, zmin, zmax, ImPlot3DCond_Always );
+        ImPlot3DSpec _s3d; _s3d.Flags = ImPlot3DSurfaceFlags_NoLines;
         ImPlot3D::PlotSurface( "##surface",
             xs.data(), ys.data(), zs.data(),
             cols_3d, rows_3d,
             zmin, zmax,
-            ImPlot3DSurfaceFlags_NoLines );
+            _s3d );
         ImPlot3D::EndPlot();
     }
     ImPlot3D::PopColormap();

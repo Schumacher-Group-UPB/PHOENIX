@@ -4,6 +4,7 @@
 #include <SFML/Window.hpp>
 #include <omp.h>
 #include <iostream>
+#include <optional>
 #include "misc/colormap.hpp"
 #include "cuda/typedef.cuh"
 
@@ -41,43 +42,43 @@ class BasicWindow {
     static inline auto COLOR_RED = sf::Color( 255, 0, 0 );
     static inline auto COLOR_BLUE = sf::Color( 0, 0, 255 );
 
-    // Keys
-    static inline auto KEY_a = sf::Keyboard::A;
-    static inline auto KEY_b = sf::Keyboard::B;
-    static inline auto KEY_c = sf::Keyboard::C;
-    static inline auto KEY_d = sf::Keyboard::D;
-    static inline auto KEY_e = sf::Keyboard::E;
-    static inline auto KEY_f = sf::Keyboard::F;
-    static inline auto KEY_g = sf::Keyboard::G;
-    static inline auto KEY_h = sf::Keyboard::H;
-    static inline auto KEY_i = sf::Keyboard::I;
-    static inline auto KEY_j = sf::Keyboard::J;
-    static inline auto KEY_k = sf::Keyboard::K;
-    static inline auto KEY_l = sf::Keyboard::L;
-    static inline auto KEY_m = sf::Keyboard::M;
-    static inline auto KEY_n = sf::Keyboard::N;
-    static inline auto KEY_o = sf::Keyboard::O;
-    static inline auto KEY_p = sf::Keyboard::P;
-    static inline auto KEY_q = sf::Keyboard::Q;
-    static inline auto KEY_r = sf::Keyboard::R;
-    static inline auto KEY_s = sf::Keyboard::S;
-    static inline auto KEY_t = sf::Keyboard::T;
-    static inline auto KEY_u = sf::Keyboard::U;
-    static inline auto KEY_v = sf::Keyboard::V;
-    static inline auto KEY_w = sf::Keyboard::W;
-    static inline auto KEY_x = sf::Keyboard::X;
-    static inline auto KEY_y = sf::Keyboard::Y;
-    static inline auto KEY_z = sf::Keyboard::Z;
-    static inline auto KEY_UP = sf::Keyboard::Up;
-    static inline auto KEY_DOWN = sf::Keyboard::Down;
-    static inline auto KEY_LEFT = sf::Keyboard::Left;
-    static inline auto KEY_RIGHT = sf::Keyboard::Right;
-    static inline auto KEY_SPACE = sf::Keyboard::Space;
-    static inline auto KEY_LSHIFT = sf::Keyboard::LShift;
-    static inline auto KEY_RSHIFT = sf::Keyboard::RShift;
-    static inline auto KEY_ESCAPE = sf::Keyboard::Escape;
-    static inline auto KEY_PLUS = sf::Keyboard::Add;
-    static inline auto KEY_MINUS = sf::Keyboard::Subtract;
+    // Keys (SFML 3: scoped sf::Keyboard::Key enum)
+    static inline auto KEY_a = sf::Keyboard::Key::A;
+    static inline auto KEY_b = sf::Keyboard::Key::B;
+    static inline auto KEY_c = sf::Keyboard::Key::C;
+    static inline auto KEY_d = sf::Keyboard::Key::D;
+    static inline auto KEY_e = sf::Keyboard::Key::E;
+    static inline auto KEY_f = sf::Keyboard::Key::F;
+    static inline auto KEY_g = sf::Keyboard::Key::G;
+    static inline auto KEY_h = sf::Keyboard::Key::H;
+    static inline auto KEY_i = sf::Keyboard::Key::I;
+    static inline auto KEY_j = sf::Keyboard::Key::J;
+    static inline auto KEY_k = sf::Keyboard::Key::K;
+    static inline auto KEY_l = sf::Keyboard::Key::L;
+    static inline auto KEY_m = sf::Keyboard::Key::M;
+    static inline auto KEY_n = sf::Keyboard::Key::N;
+    static inline auto KEY_o = sf::Keyboard::Key::O;
+    static inline auto KEY_p = sf::Keyboard::Key::P;
+    static inline auto KEY_q = sf::Keyboard::Key::Q;
+    static inline auto KEY_r = sf::Keyboard::Key::R;
+    static inline auto KEY_s = sf::Keyboard::Key::S;
+    static inline auto KEY_t = sf::Keyboard::Key::T;
+    static inline auto KEY_u = sf::Keyboard::Key::U;
+    static inline auto KEY_v = sf::Keyboard::Key::V;
+    static inline auto KEY_w = sf::Keyboard::Key::W;
+    static inline auto KEY_x = sf::Keyboard::Key::X;
+    static inline auto KEY_y = sf::Keyboard::Key::Y;
+    static inline auto KEY_z = sf::Keyboard::Key::Z;
+    static inline auto KEY_UP = sf::Keyboard::Key::Up;
+    static inline auto KEY_DOWN = sf::Keyboard::Key::Down;
+    static inline auto KEY_LEFT = sf::Keyboard::Key::Left;
+    static inline auto KEY_RIGHT = sf::Keyboard::Key::Right;
+    static inline auto KEY_SPACE = sf::Keyboard::Key::Space;
+    static inline auto KEY_LSHIFT = sf::Keyboard::Key::LShift;
+    static inline auto KEY_RSHIFT = sf::Keyboard::Key::RShift;
+    static inline auto KEY_ESCAPE = sf::Keyboard::Key::Escape;
+    static inline auto KEY_PLUS = sf::Keyboard::Key::Add;
+    static inline auto KEY_MINUS = sf::Keyboard::Key::Subtract;
 
     int width;
     int height;
@@ -90,10 +91,10 @@ class BasicWindow {
     sf::Font font;
     sf::RenderTexture mainTexture;
     std::vector<sf::Vertex> pixMat;
-    sf::Text printtext;
+    std::optional<sf::Text> printtext;
     sf::Clock clock;
     float textheight;
-    int keyDown = -1;
+    sf::Keyboard::Key keyDown = sf::Keyboard::Key::Unknown;
     bool maintexture_has_changed = true;
     bool mouseLB_old = false;
     bool mouseRB_old = false;
@@ -110,15 +111,14 @@ class BasicWindow {
         texture_w = tx_w;
         texture_h = tx_h;
         name = n;
-        mainTexture.create( tx_w, tx_h );
+        (void)mainTexture.resize( { (unsigned)tx_w, (unsigned)tx_h } );
         pixMat.clear();
         pixMat.reserve( ( tx_w + 1 ) * ( tx_h + 1 ) );
-        font.loadFromMemory( PHOENIX::Misc::Resources::font_ttf.data(), PHOENIX::Misc::Resources::font_ttf.size() );
+        (void)font.openFromMemory( PHOENIX::Misc::Resources::font_ttf.data(), PHOENIX::Misc::Resources::font_ttf.size() );
         textheight = 25;
-        printtext.setFont( font );
-        printtext.setCharacterSize( textheight );
-        printtext.setOutlineColor( COLOR_BLACK );
-        printtext.setOutlineThickness( 1.0f );
+        printtext.emplace( font, "", (unsigned int)textheight );
+        printtext->setOutlineColor( COLOR_BLACK );
+        printtext->setOutlineThickness( 1.0f );
         for ( int i = 0; i < tx_w; i++ ) {
             for ( int j = 0; j < tx_h; j++ ) {
                 pixMat.push_back( sf::Vertex( sf::Vector2f( i + .5f, j + .5f ), sf::Color( 0, 0, 0 ) ) );
@@ -128,33 +128,33 @@ class BasicWindow {
     }
 
     void init() {
-        window.create( sf::VideoMode( width, height, 32 ), name, sf::Style::Default, sf::ContextSettings( 0, 0, 1, 2, 0 ) );
+        window.create( sf::VideoMode( { (unsigned)width, (unsigned)height } ), name,
+                       sf::Style::Default, sf::State::Windowed, sf::ContextSettings( 0, 0, 1, 2, 0 ) );
         window.setVerticalSyncEnabled( true );
         mainTexture.setSmooth( true );
     }
 
     bool run() {
-        keyDown = -1;
+        keyDown = sf::Keyboard::Key::Unknown;
         window.clear();
         updateMouseState();
         if ( maintexture_has_changed ) {
-            mainTexture.draw( pixMat.data(), texture_w * texture_h, sf::Points );
+            mainTexture.draw( pixMat.data(), texture_w * texture_h, sf::PrimitiveType::Points );
             maintexture_has_changed = false;
         }
         sf::Sprite mainSprite( mainTexture.getTexture() );
-        mainSprite.setScale( (float)width / texture_w, (float)height / texture_h );
+        mainSprite.setScale( { (float)width / texture_w, (float)height / texture_h } );
         window.draw( mainSprite );
 
         // Time, FPS
         frametime = clock.restart().asMilliseconds();
         fps = (int)( 1000.0 / frametime );
 
-        sf::Event event;
-        while ( window.pollEvent( event ) ) {
-            if ( event.type == sf::Event::Closed )
+        while ( const auto event = window.pollEvent() ) {
+            if ( event->getIf<sf::Event::Closed>() )
                 window.close();
-            if ( event.type == sf::Event::KeyPressed )
-                keyDown = event.key.code;
+            if ( const auto* kp = event->getIf<sf::Event::KeyPressed>() )
+                keyDown = kp->code;
         }
 
         return window.isOpen();
@@ -216,12 +216,12 @@ class BasicWindow {
     }
 
     void print( int x, int y, float h, std::string text, sf::Color textcolor = COLOR_WHITE, int background = 0, sf::Color backgroundcolor = COLOR_BLACK ) {
-        printtext.setFillColor( textcolor );
-        printtext.setPosition( (float)x, (float)y );
-        printtext.setString( text );
+        printtext->setFillColor( textcolor );
+        printtext->setPosition( { (float)x, (float)y } );
+        printtext->setString( text );
         if ( h > 0 )
-            printtext.setCharacterSize( h );
-        window.draw( printtext );
+            printtext->setCharacterSize( (unsigned int)h );
+        window.draw( *printtext );
     }
 
     void scaledPrint( int x, int y, std::string text, sf::Color textcolor = COLOR_WHITE, int background = 0, sf::Color backgroundcolor = COLOR_BLACK ) {
@@ -233,21 +233,21 @@ class BasicWindow {
         float y_scale = (float)height / texture_h;
         x = x * x_scale;
         y = y * y_scale;
-        printtext.setFillColor( textcolor );
-        printtext.setPosition( (float)x, (float)y );
-        printtext.setString( text );
+        printtext->setFillColor( textcolor );
+        printtext->setPosition( { (float)x, (float)y } );
+        printtext->setString( text );
         if ( h > 0 )
-            printtext.setCharacterSize( h );
-        window.draw( printtext ); // std::cout << "Test " << text << std::endl;
+            printtext->setCharacterSize( (unsigned int)h );
+        window.draw( *printtext ); // std::cout << "Test " << text << std::endl;
     }
 
-    bool keyPressed( int key ) {
+    bool keyPressed( sf::Keyboard::Key key ) {
         return keyDown == key;
     }
 
     void updateMouseState() {
-        mouseLB = sf::Mouse::isButtonPressed( sf::Mouse::Left );
-        mouseRB = sf::Mouse::isButtonPressed( sf::Mouse::Right );
+        mouseLB = sf::Mouse::isButtonPressed( sf::Mouse::Button::Left );
+        mouseRB = sf::Mouse::isButtonPressed( sf::Mouse::Button::Right );
         sf::Vector2i position = sf::Mouse::getPosition( window );
         mouseX = position.x;
         mouseY = position.y;
@@ -307,7 +307,7 @@ class BasicWindow {
         sf::RectangleShape line( sf::Vector2f( y1 - y0, 1.0f ) );
         line.setPosition( sf::Vector2f( x0, y0 ) );
         line.setFillColor( color );
-        line.rotate( 90 );
+        line.rotate( sf::degrees( 90 ) );
         window.draw( line );
     }
 
@@ -322,7 +322,7 @@ class BasicWindow {
             y1 = height;
         if ( filled ) {
             sf::RectangleShape rect( sf::Vector2f( x1 - x0, y1 - y0 ) );
-            rect.setPosition( x0, y0 );
+            rect.setPosition( { (float)x0, (float)y0 } );
             rect.setFillColor( color );
             window.draw( rect );
             return;
@@ -377,9 +377,9 @@ class CheckBox : public WindowObject {
         sf::RectangleShape rect_outer( sf::Vector2f( w, h ) );
         sf::RectangleShape rect_inner( sf::Vector2f( w - 4, h - 4 ) );
         sf::RectangleShape rect( sf::Vector2f( w - 8, h - 8 ) );
-        rect_outer.setPosition( x, y );
-        rect_inner.setPosition( x + 2, y + 2 );
-        rect.setPosition( x + 4, y + 4 );
+        rect_outer.setPosition( { (float)x, (float)y } );
+        rect_inner.setPosition( { (float)( x + 2 ), (float)( y + 2 ) } );
+        rect.setPosition( { (float)( x + 4 ), (float)( y + 4 ) } );
 
         rect_outer.setFillColor( sf::Color::White );
         rect_inner.setFillColor( sf::Color::Black );
@@ -420,8 +420,8 @@ class Button : public WindowObject {
             return false;
         sf::RectangleShape rect_outer( sf::Vector2f( w, h ) );
         sf::RectangleShape rect_inner( sf::Vector2f( w - 4, h - 4 ) );
-        rect_outer.setPosition( x, y );
-        rect_inner.setPosition( x + 2, y + 2 );
+        rect_outer.setPosition( { (float)x, (float)y } );
+        rect_inner.setPosition( { (float)( x + 2 ), (float)( y + 2 ) } );
 
         rect_outer.setFillColor( sf::Color::Black );
         rect_inner.setFillColor( sf::Color( 50, 50, 50 ) );

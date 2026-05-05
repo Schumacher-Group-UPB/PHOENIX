@@ -185,8 +185,8 @@ void PhoenixGUI::renderBenchmarkWindow() {
                                         ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect ) ) {
                     ImPlot::SetupAxes( "sample", "ms" );
                     ImPlot::SetupAxisLimits( ImAxis_Y1, s_min * 0.9, s_max * 1.1, ImPlotCond_Always );
-                    ImPlot::SetNextLineStyle( ImVec4( 0.980f, 0.706f, 0.537f, 0.9f ) );
-                    ImPlot::PlotLine( "##bench_line", samples.data(), n );
+                    { ImPlotSpec _s; _s.LineColor = ImVec4( 0.980f, 0.706f, 0.537f, 0.9f );
+                      ImPlot::PlotLine( "##bench_line", samples.data(), n, 1.0, 0.0, _s ); }
                     ImPlot::EndPlot();
                 }
             }

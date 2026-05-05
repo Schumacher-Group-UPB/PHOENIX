@@ -496,21 +496,21 @@ void PhoenixGUI::renderEnvelopePlotWindow() {
             ImPlot::SetupAxes( "t (ps)", nullptr, ImPlotAxisFlags_None, ImPlotAxisFlags_NoDecorations );
             ImPlot::SetupAxisLimits( ImAxis_X1, t_lo, t_hi, ImPlotCond_Always );
             ImPlot::SetupAxisLimits( ImAxis_Y1, gmin, gmax, ImPlotCond_Always );
-            ImPlot::SetNextLineStyle( ImVec4( 1.f, 1.f, 1.f, 1.f ) );
-            ImPlot::PlotLine( ( "abs##" + h.label ).c_str(), t_v.data(), abs_v.data(), n );
+            { ImPlotSpec _s; _s.LineColor = ImVec4( 1.f, 1.f, 1.f, 1.f );
+              ImPlot::PlotLine( ( "abs##" + h.label ).c_str(), t_v.data(), abs_v.data(), n, _s ); }
             if ( !re_v.empty() ) {
-                ImPlot::SetNextLineStyle( ImVec4( 0.3f, 1.f, 0.3f, 1.f ) );
-                ImPlot::PlotLine( ( "re##" + h.label ).c_str(), t_v.data(), re_v.data(), n );
+                ImPlotSpec _s; _s.LineColor = ImVec4( 0.3f, 1.f, 0.3f, 1.f );
+                ImPlot::PlotLine( ( "re##" + h.label ).c_str(), t_v.data(), re_v.data(), n, _s );
             }
             if ( !im_v.empty() ) {
-                ImPlot::SetNextLineStyle( ImVec4( 1.f, 0.5f, 0.1f, 1.f ) );
-                ImPlot::PlotLine( ( "im##" + h.label ).c_str(), t_v.data(), im_v.data(), n );
+                ImPlotSpec _s; _s.LineColor = ImVec4( 1.f, 0.5f, 0.1f, 1.f );
+                ImPlot::PlotLine( ( "im##" + h.label ).c_str(), t_v.data(), im_v.data(), n, _s );
             }
             // "Now" cursor: vertical dashed line at current simulation time
             if ( t_now >= t_lo && t_now <= t_hi ) {
                 const double now_d = t_now;
-                ImPlot::SetNextLineStyle( ImVec4( 1.f, 1.f, 0.f, 0.7f ), 1.f );
-                ImPlot::PlotInfLines( ( "##now_" + h.label ).c_str(), &now_d, 1 );
+                ImPlotSpec _s; _s.LineColor = ImVec4( 1.f, 1.f, 0.f, 0.7f ); _s.LineWeight = 1.f;
+                ImPlot::PlotInfLines( ( "##now_" + h.label ).c_str(), &now_d, 1, _s );
             }
             ImPlot::EndPlot();
         }
@@ -824,9 +824,9 @@ void PhoenixGUI::renderTrackedPointsWindow() {
             ImPlot::SetupAxis( ImAxis_X1, "Sample index", ImPlotAxisFlags_None );
             ImPlot::SetupAxis( ImAxis_Y1, "Weight",       ImPlotAxisFlags_None );
             ImPlot::SetupAxisLimits( ImAxis_Y1, -0.05, 1.05, ImGuiCond_Always );
-            ImPlot::SetNextLineStyle( ImVec4( 0.9f, 0.7f, 0.2f, 1.f ), 2.f );
-            ImPlot::PlotLine( kWinTypeNames[tracked_window_fn_type_],
-                              wfn_x.data(), wfn_curve.data(), wfn_n );
+            { ImPlotSpec _s; _s.LineColor = ImVec4( 0.9f, 0.7f, 0.2f, 1.f ); _s.LineWeight = 2.f;
+              ImPlot::PlotLine( kWinTypeNames[tracked_window_fn_type_],
+                                wfn_x.data(), wfn_curve.data(), wfn_n, _s ); }
             ImPlot::EndPlot();
         }
     }
@@ -1058,9 +1058,9 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                 auto plotComp = [&]( const std::vector<float>& yv, const CompInfo& ci ) {
                     if ( (int)yv.size() < n ) return;
                     // Overlay: use per-point color so multiple points are visually distinct
-                    ImPlot::SetNextLineStyle( ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f ) );
+                    ImPlotSpec _s; _s.LineColor = ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f );
                     std::string lbl = sn + " " + ci.suffix;
-                    ImPlot::PlotLine( lbl.c_str(), tv.data(), yv.data(), n );
+                    ImPlot::PlotLine( lbl.c_str(), tv.data(), yv.data(), n, _s );
                 };
 
                 if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[0] ); }
@@ -1117,9 +1117,9 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         std::vector<float> ffreq, fmag;
                         computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag, wfn_ptr );
                         if ( fmag.empty() ) return;
-                        ImPlot::SetNextLineStyle( ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f ) );
+                        ImPlotSpec _s; _s.LineColor = ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f );
                         std::string lbl = sn + " " + ci.suffix;
-                        ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size() );
+                        ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size(), _s );
                         if ( !cached ) {
                             s_peak_ui.cache[idx] = { ffreq, fmag, sn, tp.color };
                             cached = true;
@@ -1134,9 +1134,9 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         std::vector<float> ffreq, fmag;
                         computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag, wfn_ptr );
                         if ( !fmag.empty() ) {
-                            ImPlot::SetNextLineStyle( ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f ) );
+                            ImPlotSpec _s; _s.LineColor = ImVec4( tp.color.x, tp.color.y, tp.color.z, 0.9f );
                             std::string lbl = sn + " z";
-                            ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size() );
+                            ImPlot::PlotLine( lbl.c_str(), ffreq.data(), fmag.data(), (int)fmag.size(), _s );
                             if ( !cached ) {
                                 s_peak_ui.cache[idx] = { ffreq, fmag, sn, tp.color };
                                 cached = true;
@@ -1202,8 +1202,8 @@ void PhoenixGUI::renderTrackedPointsWindow() {
 
                     auto plotComp = [&]( const std::vector<float>& yv, const CompInfo& ci ) {
                         if ( n < 1 || (int)yv.size() < n ) return;
-                        ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
-                        ImPlot::PlotLine( ci.suffix, tv.data(), yv.data(), n );
+                        ImPlotSpec _s; _s.LineColor = ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f );
+                        ImPlot::PlotLine( ci.suffix, tv.data(), yv.data(), n, _s );
                     };
 
                     if ( tp.show_abs  ) { auto v = sliceDeque( tp.values_abs, tracked_hist_window_ ); applyWin(v); plotComp( v, kComps[0] ); }
@@ -1252,8 +1252,8 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         computeDisplayFFT( dat.data(), (int)dat.size(), mean_dt, ffreq, fmag, wfn_p );
                         if ( fmag.empty() ) return;
                         // Individual mode: use component colours (easier to distinguish Re/Im/abs on one graph)
-                        ImPlot::SetNextLineStyle( ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f ) );
-                        ImPlot::PlotLine( ci.suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
+                        ImPlotSpec _s; _s.LineColor = ImVec4( ci.col.x, ci.col.y, ci.col.z, 0.9f );
+                        ImPlot::PlotLine( ci.suffix, ffreq.data(), fmag.data(), (int)fmag.size(), _s );
                         if ( !cached_ind ) {
                             s_peak_ui.cache[idx] = { ffreq, fmag, shortName( tp ), tp.color };
                             cached_ind = true;
@@ -1268,8 +1268,8 @@ void PhoenixGUI::renderTrackedPointsWindow() {
                         std::vector<float> ffreq, fmag;
                         computeComplexDisplayFFT( rev.data(), imv.data(), (int)rev.size(), mean_dt, ffreq, fmag, wfn_p );
                         if ( !fmag.empty() ) {
-                            ImPlot::SetNextLineStyle( ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f ) );
-                            ImPlot::PlotLine( kComps[5].suffix, ffreq.data(), fmag.data(), (int)fmag.size() );
+                            ImPlotSpec _s; _s.LineColor = ImVec4( kComps[5].col.x, kComps[5].col.y, kComps[5].col.z, 0.9f );
+                            ImPlot::PlotLine( kComps[5].suffix, ffreq.data(), fmag.data(), (int)fmag.size(), _s );
                             if ( !cached_ind ) {
                                 s_peak_ui.cache[idx] = { ffreq, fmag, shortName( tp ), tp.color };
                                 cached_ind = true;

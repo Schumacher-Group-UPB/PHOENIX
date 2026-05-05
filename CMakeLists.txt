@@ -43,10 +43,12 @@ option(SFML "Enable SFML+ImGui renderer" OFF)
 option(SFML_STATIC "Use static linking for sfml" OFF)
 
 if(SFML)
+    # Optimize SFML Build by disabling peripheral components
     set(SFML_BUILD_EXAMPLES   OFF CACHE BOOL "" FORCE)
     set(SFML_BUILD_DOC        OFF CACHE BOOL "" FORCE)
     set(SFML_BUILD_TEST_SUITE OFF CACHE BOOL "" FORCE)
     set(SFML_USE_STATIC_STD_LIBS OFF CACHE BOOL "" FORCE)
+    
     if(SFML_STATIC)
         set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
         set(SFML_STATIC_LIBRARIES  ON  CACHE BOOL "" FORCE)
@@ -54,16 +56,19 @@ if(SFML)
         set(BUILD_SHARED_LIBS      ON  CACHE BOOL "" FORCE)
         set(SFML_STATIC_LIBRARIES  OFF CACHE BOOL "" FORCE)
     endif()
+
+    # Core Foundation: SFML 3.1.0
     FetchContent_Declare(SFML
         GIT_REPOSITORY https://github.com/SFML/SFML.git
-        GIT_TAG        2.6.2
+        GIT_TAG        3.1.0
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(SFML)
 
+    # Core UI: Dear ImGui
     FetchContent_Declare(imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG        v1.89.9-docking
+        GIT_TAG        v1.91.9-docking
         GIT_SHALLOW    TRUE
     )
     FetchContent_GetProperties(imgui)
@@ -71,24 +76,27 @@ if(SFML)
         FetchContent_Populate(imgui)
     endif()
 
+    # Architecture Override: Enable 32-bit indices for high-density plotting
     file(READ "${imgui_SOURCE_DIR}/imconfig.h" _imconfig)
     string(REPLACE "//#define ImDrawIdx unsigned int"
-                    "#define ImDrawIdx unsigned int"
+                   "#define ImDrawIdx unsigned int"
                    _imconfig "${_imconfig}")
     file(WRITE "${imgui_SOURCE_DIR}/imconfig.h" "${_imconfig}")
 
+    # Binding Layer: ImGui-SFML 3.0
     set(IMGUI_DIR          ${imgui_SOURCE_DIR} CACHE PATH "" FORCE)
     set(IMGUI_SFML_FIND_SFML OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(imgui-sfml
         GIT_REPOSITORY https://github.com/SFML/imgui-sfml.git
-        GIT_TAG        v2.6
+        GIT_TAG        v3.0
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(imgui-sfml)
 
+    # Visualization Layer: ImPlot3D v0.4
     FetchContent_Declare(implot3d
-        GIT_REPOSITORY https://github.com/brenocq/implot3d
-        GIT_TAG        v0.3
+        GIT_REPOSITORY https://github.com/brenocq/implot3d.git
+        GIT_TAG        v0.4
         GIT_SHALLOW    TRUE
     )
     FetchContent_GetProperties(implot3d)
@@ -97,9 +105,10 @@ if(SFML)
     endif()
     include_directories("${implot3d_SOURCE_DIR}")
 
+    # Visualization Layer: ImPlot v1.0
     FetchContent_Declare(implot
         GIT_REPOSITORY https://github.com/epezent/implot.git
-        GIT_TAG        v0.16
+        GIT_TAG        v1.0
         GIT_SHALLOW    TRUE
     )
     FetchContent_GetProperties(implot)
