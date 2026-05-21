@@ -273,6 +273,7 @@ add_custom_target(FinalMessage ALL
     COMMAND ${CMAKE_COMMAND} -E echo "   -  GUI (SFML+ImGui): ${SFML} $<$<BOOL:${SFML_STATIC}>:[static]>"
     COMMAND ${CMAKE_COMMAND} -E echo "Phoenix is now ready!"
     COMMENT "Final build summary"
+    VERBATIM
 )
 
 # Conditionally add optional messages
